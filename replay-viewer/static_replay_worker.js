@@ -51,21 +51,12 @@ function reportFailure(error) {
   });
 }
 
-function callsJsonText() {
-  // SEASON 2 observability: the play-call ("flash") records JSON the runtime
-  // serialized at load (bc_replay.nim, ctf_calls_ptr/len). Null on a replay
-  // with no calls, or under an OLDER wasm bundle without the export — both
-  // degrade to "no calls payload", never an error.
-  try {
-    var length = Module._bc_calls_len ? Module._bc_calls_len() : 0;
-    if (!length) return null;
-    var pointer = Module._bc_calls_ptr();
-    return new TextDecoder().decode(
-      Module.HEAPU8.slice(pointer, pointer + length));
-  } catch (ignored) {
-    return null;
-  }
-}
+// The starter's worker also forwarded a SEASON 2 "play call" payload here
+// (Module._ctf_calls_ptr/_len). This coworld has no play calls and does not
+// export those symbols, so the block is REMOVED rather than left calling
+// through a capability guard: an optional call that is never satisfied is
+// indistinguishable, at a glance, from the stale mismatch-export rename
+// that shipped a bundle which drew a board and then threw.
 
 function copyIntoRuntime(bytes, callback) {
   var pointer = Module._malloc(bytes.length);
@@ -150,13 +141,7 @@ async function start() {
     ingestPacket();
     postMessage({
       type: 'loaded',
-      // Flash observability: the decoded play-call records ride to the PAGE
-      // (comms feed) here; the page resolves each seat's roster index and
-      // hands enriched calls BACK over the 'flashCalls' message below for
-      // the in-arena pulse ring. Either side missing the capability is
-      // fine — both degrade to "no flash chrome".
-      calls: callsJsonText(),
-      mismatchTick: Module._bc_mismatch_tick(),
+      mismatchTick: Module._bc_mismatch_round(),
       // The page needs this to schedule its own scoreboard-reveal delay, but
       // it never loads broadcast_core.js (only this Worker does, via
       // importScripts) — so hand over the module's own constant once, here,
@@ -183,7 +168,7 @@ function applyInputNow() {
     ingestPacket();
     postMessage({
       type: 'inputApplied',
-      mismatchTick: Module._bc_mismatch_tick()
+      mismatchTick: Module._bc_mismatch_round()
     });
   } catch (error) {
     reportFailure(error);
@@ -211,7 +196,7 @@ function advance(frames) {
     }
     postMessage({
       type: 'advanced',
-      mismatchTick: Module._bc_mismatch_tick(),
+      mismatchTick: Module._bc_mismatch_round(),
       // Presentation stat for the page (the core draws over here, a thread
       // away): total frames blitted, so the page can read draws-per-second.
       draws: core ? core.getPaceStats().draws : 0
@@ -244,11 +229,6 @@ self.onmessage = function (event) {
       start();
     } else if (message.type === 'advance') {
       advance(message.frames);
-    } else if (message.type === 'flashCalls' && core) {
-      // Enriched flash records from the page (seat -> roster index resolved
-      // there) for the in-arena pulse ring — see broadcast_core.js
-      // setFlashCalls.
-      if (core.setFlashCalls) core.setFlashCalls(message.calls);
     } else if (message.type === 'command' && core) {
       core.sendCommand(message.text || '');
       applyInputNow();

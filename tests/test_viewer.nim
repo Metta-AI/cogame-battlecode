@@ -46,6 +46,18 @@ check("and imports the emitted module LAST",
     "importScripts('./wire_constants.js', './broadcast_core.js', " &
     "'./bc_replay.js');"))
 
+## EVERY `Module._bc_*` the worker calls must be an export the link flags
+## actually emit. The rename from the starter's `ctf_*` names went through a
+## sed, and one stale `_bc_mismatch_tick` reached a real browser as
+## "Module._bc_mismatch_tick is not a function" — after the board had already
+## drawn, so the file-presence checks were all green.
+for call in worker.split("Module._bc_")[1 .. ^1]:
+  var name = "_bc_"
+  for ch in call:
+    if ch in {'a' .. 'z', '_', '0' .. '9'}: name.add(ch) else: break
+  check("the link flags export " & name & ", which the worker calls",
+    name in config)
+
 let adapter = readFile("replay-viewer/static_replay.js")
 check("the adapter sets data-replay-loaded on the first drawn frame",
   "data-replay-loaded" in adapter)
