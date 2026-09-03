@@ -12,12 +12,18 @@
 const fs = require('fs');
 const path = require('path');
 
-const bundle = process.argv[2];
-const replayPath = process.argv[3];
-if (!bundle || !replayPath) {
+const bundle = path.resolve(process.argv[2] || '');
+const replayPath = path.resolve(process.argv[3] || '');
+if (!process.argv[2] || !process.argv[3]) {
   console.error('usage: node tools/wasm_replay_smoke.cjs <bundle> <replay.json>');
   process.exit(2);
 }
+
+// The emitted glue's data-package loader resolves `bc_replay.data` against
+// the PROCESS working directory under node, not through Module.locateFile,
+// so the smoke runs from inside the bundle. Both paths above are absolute
+// for exactly that reason.
+process.chdir(bundle);
 
 // The emitted glue is a plain script that populates a GLOBAL `Module` and
 // calls Module.onRuntimeInitialized — the SAME bootstrap the worker uses. It
@@ -25,6 +31,8 @@ if (!bundle || !replayPath) {
 global.Module = {
   locateFile: (file) => path.join(bundle, file)
 };
+global.Module.print = (text) => console.log('  [wasm] ' + text);
+global.Module.printErr = (text) => console.error('  [wasm] ' + text);
 
 global.Module.onRuntimeInitialized = () => {
   const Module = global.Module;
