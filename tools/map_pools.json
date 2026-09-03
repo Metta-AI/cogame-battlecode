@@ -1,0 +1,6 @@
+{
+  "small": ["DefaultSmall", "arrows", "closeup", "toomuchcheese", "cheesefarm", "dirtfulcat"],
+  "mixed": ["DefaultSmall", "arrows", "closeup", "toomuchcheese", "cheesefarm", "dirtfulcat",
+            "ZeroDay", "knifefight", "whatsthecatdoin", "thunderdome", "DefaultMedium", "mercifullattice"],
+  "large": ["DefaultLarge", "Nofreecheese", "averystrangespace", "safelycontained", "streetsofnewyork", "uneruesansfin"]
+}

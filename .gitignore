@@ -1,0 +1,17 @@
+# Build outputs
+/battlecode
+/battlecode-player
+/dist/
+/replay-viewer/dist/
+/static-replay-viewer/
+nimcache/
+*.exe
+
+# The committed nim.cfg pins the AUTHOR's package paths and is wrong on every
+# other host; the Dockerfile and ci.yml both regenerate it from the synced
+# ~/.nimby/pkgs tree, so it is never committed.
+nim.cfg
+
+# Local scratch
+/tmp/
+*.log

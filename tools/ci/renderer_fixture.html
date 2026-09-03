@@ -1,0 +1,166 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>battlecode renderer fixture — full-cap doctrine text</title>
+<!--
+  The text a CI replay never carries.
+
+  Every replay CI produces is scripted, so its `notes` and `motto` are the
+  short strings baselines.nim emits. A hosted episode carries whatever an LLM
+  wrote, up to the full rune caps — and a caption with nowhere to go is
+  invisible to the load signal and to the screenshot (the cogchemists
+  2026-08-24 scar: four speech bubbles drawn at a negative y and clipped to
+  slivers).
+
+  `--strict-text-bounds` is the flag that would catch that on a FIXED arena.
+  This coworld's board is pannable and zoomable (#viewpanel is kept, because a
+  60x60 board renders wider than a 360 px featured-match frame), which is the
+  exact case that flag's own documentation excludes. So this fixture stands in
+  its place: it lays out BOTH seats' readouts at their full caps, in the same
+  CSS the page uses, at several canvas widths, and reports whether anything
+  overflowed its box.
+
+  Driven by the `wasm-viewer` job. `window.__fixtureOverflow` is the verdict
+  and `data-fixture-drawn="true"` on <html> is the ready signal.
+-->
+<style>
+  :root { --ash: #e8a33d; --basil: #b06fd0; --band: 76px; }
+  html, body { margin: 0; background: #16100b; color: #cbbfae;
+               font: 12px/1.35 system-ui, sans-serif; }
+  #frame { position: relative; width: 100%; height: 100vh; overflow: hidden; }
+
+  /* The same rules the appended game block ships. */
+  #scorebug { display: flex; gap: 8px; padding: 6px; align-items: center; }
+  #scorebug .plate { display: flex; align-items: center; gap: 6px;
+                     max-width: 46%; overflow: hidden; }
+  #scorebug .plate-name { flex: 1 1 auto; min-width: 3.2em; }
+  #scorebug .plate-sub { opacity: .72; font-size: 11px;
+                         white-space: nowrap; overflow: hidden;
+                         text-overflow: ellipsis; }
+  #scorebug .plate-pts { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+  #doctrines { position: absolute; left: 8px;
+               bottom: calc(var(--band, 0px) + 8px); max-width: 44%;
+               font-size: 10px; background: rgba(11,7,4,.6);
+               padding: 5px 8px; border-radius: 6px; overflow: hidden; }
+  #doctrines .dname { color: #f2e8d8; font-weight: 600; }
+
+  #econ { position: absolute; right: 8px;
+          bottom: calc(var(--band, 0px) + 8px); display: grid;
+          grid-template-columns: auto auto auto; gap: 1px 8px;
+          font-size: 10px; background: rgba(11,7,4,.6);
+          padding: 5px 8px; border-radius: 6px; }
+
+  #coopchip { position: absolute; top: 6px; left: 50%;
+              transform: translateX(-50%); padding: 2px 10px;
+              border-radius: 999px; font-size: 11px; letter-spacing: .12em;
+              background: rgba(11,7,4,.72); color: #e0523a;
+              border: 1px solid #e0523a; white-space: nowrap; }
+
+  @media (max-width: 640px) {
+    #econ, #doctrines { font-size: 9px; }
+    #scorebug .plate-sub { display: none; }
+  }
+</style>
+<div id="frame">
+  <div id="scorebug">
+    <div class="plate ash">
+      <span class="plate-name" id="n0"></span>
+      <span class="plate-sub" id="s0"></span>
+      <span class="plate-pts">73</span>
+    </div>
+    <div class="plate basil">
+      <span class="plate-name" id="n1"></span>
+      <span class="plate-sub" id="s1"></span>
+      <span class="plate-pts">26</span>
+    </div>
+  </div>
+  <div id="coopchip"></div>
+  <div id="doctrines"></div>
+  <div id="econ"></div>
+</div>
+<script>
+(function () {
+  'use strict';
+
+  // The caps from src/battlecode/sim_types.nim, in RUNES. Astral-plane
+  // characters are used on purpose: they are the ones a byte-slice would cut
+  // in half, and a broken codepoint is exactly what makes a replay unreadable
+  // to everything except one lenient viewer.
+  var MAX_NOTE_RUNES = 280;
+  var MAX_MOTTO_RUNES = 48;
+
+  function repeatRunes(text, count) {
+    var out = '';
+    for (var i = 0; i < count; i++) out += text;
+    return out;
+  }
+  function runeLen(text) { return Array.from(text).length; }
+
+  var notes = repeatRunes('\u{1F400} betray at 700 then take the crowns ', 20);
+  notes = Array.from(notes).slice(0, MAX_NOTE_RUNES).join('');
+  var motto = Array.from(repeatRunes('\u{1F9C0} Trust, briefly. ', 10))
+    .slice(0, MAX_MOTTO_RUNES).join('');
+
+  if (runeLen(notes) !== MAX_NOTE_RUNES || runeLen(motto) !== MAX_MOTTO_RUNES) {
+    throw new Error('the fixture did not build full-cap strings');
+  }
+
+  var ALIASES = ['CLAN ASH', 'CLAN BASIL'];
+  var NAMES = ['daveey', 'daveey-1'];
+  var WORDS = [
+    'retaliates only, hunts cats, steady spawning, keeps 3 kings, ' +
+      '60 rat traps, 40 cat traps, 50% ferrying, walls its kings in',
+    'betrays at round 700, feeds rats to cats, swarm spawning, keeps 5 kings, ' +
+      '120 rat traps, 0 cat traps, 90% ferrying, walls the chokepoints, ' +
+      'throws rats to cats'
+  ];
+
+  for (var slot = 0; slot < 2; slot++) {
+    document.getElementById('n' + slot).textContent = ALIASES[slot];
+    document.getElementById('s' + slot).textContent = NAMES[slot] + ' · ' + motto;
+  }
+  document.getElementById('coopchip').textContent =
+    'BACKSTAB — Clan Basil, round 1612';
+
+  var html = '';
+  for (var i = 0; i < 2; i++) {
+    html += '<div class="dline"><span class="dname">' + ALIASES[i] +
+      '</span> — ' + WORDS[i] + '<br><i>' + notes + '</i></div>';
+  }
+  document.getElementById('doctrines').innerHTML = html;
+
+  var rows = [['kings built', 4, 2], ['cheese delivered', 12480, 9310],
+              ['cats damaged', 8000, 6120], ['traps laid', 106, 34],
+              ['dirt placed', 218, 96]];
+  var econ = '<span></span><b>Clan Ash</b><b>Clan Basil</b>';
+  rows.forEach(function (r) {
+    econ += '<span>' + r[0] + '</span><span>' + r[1] + '</span><span>' +
+      r[2] + '</span>';
+  });
+  document.getElementById('econ').innerHTML = econ;
+
+  // The verdict: did any readout escape the frame?
+  function overflows() {
+    var frame = document.getElementById('frame').getBoundingClientRect();
+    var ids = ['scorebug', 'coopchip', 'doctrines', 'econ'];
+    for (var i = 0; i < ids.length; i++) {
+      var box = document.getElementById(ids[i]).getBoundingClientRect();
+      if (box.left < frame.left - 1 || box.right > frame.right + 1 ||
+          box.top < frame.top - 1 || box.bottom > frame.bottom + 1) {
+        return ids[i];
+      }
+    }
+    return null;
+  }
+
+  requestAnimationFrame(function () {
+    window.__fixtureOverflow = overflows();
+    document.documentElement.setAttribute('data-fixture-drawn', 'true');
+    // The harness also accepts the standard replay signals, so this page can
+    // be driven by tools/ci/viewer_smoke.mjs unchanged.
+    document.documentElement.setAttribute(
+      window.__fixtureOverflow ? 'data-replay-error' : 'data-replay-loaded',
+      window.__fixtureOverflow || 'true');
+  });
+})();
+</script>

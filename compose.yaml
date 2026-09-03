@@ -1,0 +1,19 @@
+# Service names are LOAD-BEARING: the manifest placeholders derive from them
+# (`game` -> {{GAME_IMAGE}}, `player` -> {{PLAYER_IMAGE}}), the lantern 0.1.0
+# scar. One image, two entrypoints.
+services:
+  game:
+    image: cogame-battlecode-game:latest
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+  player:
+    image: cogame-battlecode-player:latest
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: player
+      network: host

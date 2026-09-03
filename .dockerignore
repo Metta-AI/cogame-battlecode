@@ -1,0 +1,6 @@
+.git
+.github
+dist
+docs
+replay-viewer/dist
+static-replay-viewer

@@ -1,0 +1,222 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Metta-AI/metta/main/coworld/schema/coworld_manifest.schema.json",
+  "tags": ["battlecode", "strategy", "mixed-motive", "wasm"],
+  "episode_timeout_minutes": 20,
+  "game": {
+    "name": "battlecode",
+    "description": "Battlecode 2026 \"Uneasy Alliances\", played by doctrine. Two cogs each command a clan of robot rats on a symmetric grid; neither moves a rat. At t=0 each writes a sealed JSON doctrine and a deterministic Nim port of the official rule set plays a best-of-three match from those two sheets. Both clans start in COOPERATION against neutral NPC cats and the points formula is cat-damage weighted; the moment either clan bites, ratnaps, throws at or traps the other, the world flips to BACKSTAB and the weights swing to king survival. Losing every rat king loses the game outright.",
+    "image": "{{GAME_IMAGE}}",
+    "runnable": {
+      "type": "game",
+      "run": ["/bin/battlecode"],
+      "env": {
+        "ANTHROPIC_API_KEY_URI": "secret://coworld/battlecode/anthropic_api_key"
+      },
+      "resources": {
+        "limits": {"cpu": "2", "memory": "4Gi"}
+      }
+    },
+    "replay_viewer": {"bundle": "static-replay-viewer"},
+    "protocols": {
+      "player": {
+        "type": "uri",
+        "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/PROTOCOL.md"
+      },
+      "global": {
+        "type": "uri",
+        "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/PROTOCOL.md"
+      }
+    },
+    "docs": {
+      "readme": {
+        "type": "uri",
+        "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/README.md"
+      },
+      "pages": [
+        {
+          "id": "rules.md",
+          "title": "Rules, knobs and deliberate divergences",
+          "content": {
+            "type": "uri",
+            "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/RULES.md"
+          }
+        },
+        {
+          "id": "replay.md",
+          "title": "Replay format",
+          "content": {
+            "type": "uri",
+            "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/REPLAY.md"
+          }
+        },
+        {
+          "id": "parity.md",
+          "title": "The Java oracle and what it proves",
+          "content": {
+            "type": "uri",
+            "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/PARITY.md"
+          }
+        }
+      ]
+    },
+    "config_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "year": {"type": "string", "enum": ["bc26"]},
+        "pool": {"type": "string", "enum": ["small", "mixed", "large"]},
+        "seed": {"type": "integer", "minimum": 0},
+        "gamesPerMatch": {"type": "integer", "minimum": 1, "maximum": 3},
+        "maxRounds": {"type": "integer", "minimum": 50, "maximum": 2000},
+        "num_agents": {"type": "integer", "minimum": 2, "maximum": 2},
+        "players": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {"name": {"type": "string"}}
+          }
+        },
+        "attempt1Ms": {"type": "integer", "minimum": 1000, "maximum": 60000},
+        "retryMs": {"type": "integer", "minimum": 1000, "maximum": 60000},
+        "doctrineBudgetMs": {"type": "integer", "minimum": 1000, "maximum": 120000},
+        "perGameBudgetSeconds": {"type": "integer", "minimum": 5, "maximum": 300},
+        "matchBudgetSeconds": {"type": "integer", "minimum": 5, "maximum": 600},
+        "connectTimeoutMs": {"type": "integer", "minimum": 1000, "maximum": 120000},
+        "model": {"type": "string"},
+        "maxOutputTokens": {"type": "integer", "minimum": 64, "maximum": 8192}
+      }
+    },
+    "results_schema": {
+      "type": "object",
+      "required": [
+        "names", "aliases", "scores", "wins", "points", "games", "seed",
+        "year", "policy_kind", "sheet_defaults_applied", "fallbacks",
+        "decision_ms", "sim_seconds", "reason", "wall_clock_seconds",
+        "game_version"
+      ],
+      "properties": {
+        "names": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string"}},
+        "aliases": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string"}},
+        "scores": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}},
+        "wins": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}},
+        "points": {"type": "array", "minItems": 2, "maxItems": 2,
+                   "items": {"type": "array", "minItems": 0, "maxItems": 3,
+                             "items": {"type": "integer"}}},
+        "games": {
+          "type": "array", "minItems": 0, "maxItems": 3,
+          "items": {
+            "type": "object",
+            "required": [
+              "map", "side", "rounds_played", "winner", "end_reason",
+              "cooperation_at_end", "backstab_round", "backstab_by",
+              "cat_damage", "cheese_transferred", "kings_alive",
+              "kings_built", "rats_built", "rats_alive", "traps_placed",
+              "dirt_placed"
+            ],
+            "properties": {
+              "map": {"type": "string"},
+              "side": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string"}},
+              "rounds_played": {"type": "integer"},
+              "winner": {"type": "integer"},
+              "end_reason": {"type": "string",
+                             "enum": ["kings_destroyed", "cats_cleared", "round_limit", "abandoned"]},
+              "cooperation_at_end": {"type": "boolean"},
+              "backstab_round": {"type": "integer"},
+              "backstab_by": {"type": "integer"},
+              "cat_damage": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}},
+              "cheese_transferred": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}},
+              "kings_alive": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}},
+              "kings_built": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}},
+              "rats_built": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}},
+              "rats_alive": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}},
+              "traps_placed": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}},
+              "dirt_placed": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}}
+            }
+          }
+        },
+        "seed": {"type": "integer"},
+        "year": {"type": "string"},
+        "policy_kind": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string"}},
+        "sheet_defaults_applied": {
+          "type": "array", "minItems": 2, "maxItems": 2,
+          "items": {"type": "array", "minItems": 0, "maxItems": 16, "items": {"type": "string"}}
+        },
+        "fallbacks": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}},
+        "decision_ms": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}},
+        "sim_seconds": {"type": "number"},
+        "reason": {"type": "string", "enum": ["complete", "deadline", "fault"]},
+        "wall_clock_seconds": {"type": "number"},
+        "game_version": {"type": "string"}
+      }
+    },
+    "variants": [
+      {
+        "id": "bc26",
+        "name": "Battlecode 2026 — Uneasy Alliances (2 seats)",
+        "description": "Best of three on the mixed pool. Both clans start allied against the cats; either can betray at any moment, and the points formula swings when they do.",
+        "game_config": {
+          "year": "bc26",
+          "pool": "mixed",
+          "gamesPerMatch": 3,
+          "seed": 0,
+          "maxRounds": 2000,
+          "num_agents": 2,
+          "attempt1Ms": 20000,
+          "retryMs": 12000,
+          "doctrineBudgetMs": 45000,
+          "perGameBudgetSeconds": 90,
+          "matchBudgetSeconds": 330,
+          "connectTimeoutMs": 25000,
+          "players": [{"name": "Clan Ash"}, {"name": "Clan Basil"}]
+        }
+      }
+    ],
+    "certification": {
+      "players": [{"player_id": "awu"}, {"player_id": "scaffold"}],
+      "game_config": {
+        "players": [{"name": "Clan Ash"}, {"name": "Clan Basil"}],
+        "num_agents": 2,
+        "year": "bc26",
+        "pool": "small",
+        "seed": 1,
+        "gamesPerMatch": 1,
+        "maxRounds": 400,
+        "attempt1Ms": 4000,
+        "retryMs": 2000,
+        "doctrineBudgetMs": 9000,
+        "perGameBudgetSeconds": 40,
+        "matchBudgetSeconds": 45,
+        "connectTimeoutMs": 15000
+      }
+    }
+  },
+  "player": [
+    {
+      "id": "awu",
+      "name": "awu",
+      "description": "distilled-awubot baseline on its default doctrine",
+      "image": "{{PLAYER_IMAGE}}",
+      "runnable": {
+        "type": "player",
+        "run": ["/bin/battlecode-player"],
+        "env": {"PLAYER_SCRIPTED": "awu", "PLAYER_POLICY_LABEL": "awu"},
+        "resources": {"limits": {"cpu": "1", "memory": "512Mi"}}
+      }
+    },
+    {
+      "id": "scaffold",
+      "name": "scaffold",
+      "description": "scaffold baseline — the ported example bot, weak",
+      "image": "{{PLAYER_IMAGE}}",
+      "runnable": {
+        "type": "player",
+        "run": ["/bin/battlecode-player"],
+        "env": {"PLAYER_SCRIPTED": "scaffold", "PLAYER_POLICY_LABEL": "scaffold"},
+        "resources": {"limits": {"cpu": "1", "memory": "512Mi"}}
+      }
+    }
+  ]
+}
