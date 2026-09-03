@@ -100,6 +100,19 @@ for zoom in ["id=\"viewpanel\"", "id=\"minimap\"", "id=\"minimap-canvas\"",
   check("the zoom bar and minimap are kept: " & zoom, zoom in page)
 check("and ?viewpanel=0 still drops the panel", "viewpanel=0" in page)
 
+## The inherited page loads the starter's bitmap font by relative URL; ship it
+## or every bundle logs a 404 for it.
+check("the chrome font ships with the bundle", fileExists("client/font.ttf"))
+check("and the bundle build copies it",
+  "cp client/font.ttf replay-viewer/dist/font.ttf" in
+    readFile("Dockerfile.replay-viewer"))
+
+## getAppDir() is not a data-root candidate: under emscripten it raises
+## before the atlas is ever opened. See the comment in maps.nim.
+check("dataRoot does not call getAppDir",
+  "getAppDir()" notin readFile("src/battlecode/years/bc26/maps.nim").
+    replace("`getAppDir()` is DELIBERATELY not a candidate", ""))
+
 ## The battlecode game block's own elements.
 for added in ["id=\"coopchip\"", "id=\"bars\"", "id=\"econ\"",
               "id=\"gamechips\"", "id=\"doctrines\""]:

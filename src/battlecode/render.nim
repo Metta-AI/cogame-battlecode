@@ -57,7 +57,17 @@ type
     terrainGame: int
 
 proc loadAtlas(): Atlas =
+  ## The atlas rides in the wasm bundle's preloaded `data/`. When that package
+  ## has not mounted, say so plainly: the alternative is whatever error the
+  ## image decoder happens to raise on a missing file, several frames from
+  ## the real cause.
   let root = dataRoot()
+  for asset in ["atlas.png", "atlas.json"]:
+    if not fileExists(root / asset):
+      raise newException(IOError,
+        "the sprite atlas is missing: no " & (root / asset) &
+        " (in the wasm bundle this means the preloaded data package did " &
+        "not mount)")
   result = Atlas(image: readImage(root / "atlas.png"),
                  cells: initTable[string, tuple[x, y, w, h: int]]())
   let doc = parseJson(readFile(root / "atlas.json"))

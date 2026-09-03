@@ -77,9 +77,15 @@ proc bcLoadReplay(data: ptr uint8, length: cint): cint
     lastError = ""
     stampStage("parse replay")
     doc = parseReplay(data.bytesFromPointer(int(length)))
-    stampStage("initialize replay runtime")
+    ## One stamp per phase, not one for the lot: the stage note is the only
+    ## thing that survives an ABORTING_MALLOC abort, and a single "initialize
+    ## replay runtime" covering four different phases costs a whole CI round
+    ## to bisect.
+    stampStage("build the deriver")
     deriver = newDeriver(doc)
+    stampStage("load the sprite atlas")
     renderer = newRenderer()
+    stampStage("collect the scrubber beats")
     viewer = initViewerState()
     beats = beatsFor(doc, frameOfGameRound)
     gameChips = buildGameChips()

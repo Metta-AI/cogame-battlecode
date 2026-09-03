@@ -33,8 +33,13 @@ proc poolNames*(pool: string): seq[string] =
 proc dataRoot*(): string =
   ## `/data` is where emscripten mounts the preloaded directory in the wasm
   ## bundle; `data` is the repo layout the container and the tests use.
-  for candidate in ["data", "/data", "/workspace/battlecode/data",
-                    getAppDir() / "data"]:
+  ##
+  ## `getAppDir()` is DELIBERATELY not a candidate. Under emscripten it walks
+  ## `os.getApplAux`, whose `readlink("/proc/self/exe")` returns -1 and whose
+  ## next line is `setLen(result, len)` — a `Natural` conversion that raises
+  ## "value out of range: -1 notin 0 .. 2147483647" before the atlas is ever
+  ## opened. It cost one CI round; it is not coming back.
+  for candidate in ["data", "/data", "/workspace/battlecode/data"]:
     if dirExists(candidate / "maps" / "bc26"):
       return candidate
   "data"
