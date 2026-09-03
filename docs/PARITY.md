@@ -59,9 +59,15 @@ the ported rule set is the same rule set.
 
 Tiers A and B are the phase-30 gate.
 
+## The five pairs
+
+`DefaultSmall`, `arrows`, `closeup`, `toomuchcheese` and `cheesefarm` — the
+`small` pool minus `dirtfulcat`, which is measured locally but kept out of the
+job so five maps of Java engine time fit the runner comfortably.
+
 ## The Tier C baseline
 
-Measured at `GameVersion` GV01 against `engine.1.2.5`:
+Measured by the job at `GameVersion` GV01 against `engine.1.2.5`:
 
 | map | first divergent round (2000-round game) |
 | --- | --- |
@@ -70,13 +76,16 @@ Measured at `GameVersion` GV01 against `engine.1.2.5`:
 | `toomuchcheese` | none — identical |
 | `cheesefarm` | none — identical |
 | `arrows` | 915 |
-| `dirtfulcat` | 453 |
 
-Four of six maps re-derive an entire 2000-round game bit for bit. The two that
-drift do so inside the cat state machine, hundreds of rounds in, and the
-divergence is a single cat choosing a different facing on one round. That is
-what Tier C exists to trend: a regression that moves any of these numbers
-DOWN is visible in the job summary even though it does not fail the build.
+and, measured locally on the sixth small-pool map, `dirtfulcat` diverges at
+round 453.
+
+Four of the five gated maps re-derive an ENTIRE 2000-round game bit for bit —
+every robot, every field, every round, including ids. The ones that drift do
+so inside the cat state machine, hundreds of rounds in, and the divergence is
+a single cat choosing a different facing on one round. That is what Tier C
+exists to trend: a number that moves DOWN is visible in the job summary even
+though it does not fail the build.
 
 Every accepted divergence is listed in `docs/RULES.md` §Divergences with its
 reason.
