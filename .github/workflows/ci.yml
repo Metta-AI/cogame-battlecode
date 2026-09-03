@@ -326,8 +326,11 @@ jobs:
               --schema "$BC_ENGINE_DIR/schema/python" --rounds 2000 \
               --out "/tmp/oracle/$MAP.java2000"
             /tmp/parity_trace --map:"$MAP" --rounds:2000 --out:"/tmp/oracle/$MAP.nim2000"
+            # `diff` exits 1 when the files differ and `grep` exits 1 when
+            # they do not, so BOTH outcomes are a non-zero pipeline under
+            # `bash -e`. Neither is a failure here: this tier only reports.
             first="$(diff "/tmp/oracle/$MAP.java2000" "/tmp/oracle/$MAP.nim2000" \
-              | grep -m1 '^[<>]' | awk '{print $3}')"
+              | grep -m1 '^[<>]' | awk '{print $3}' || true)"
             if [ -z "$first" ]; then first="none (identical)"; fi
             echo "TIER C $MAP: $first"
             echo "| \`$MAP\` | $first |" >> "$GITHUB_STEP_SUMMARY"
@@ -516,31 +519,36 @@ jobs:
       - name: Smoke the emitted wasm module under node
         run: node tools/wasm_replay_smoke.cjs dist/static-replay-viewer "${{ github.workspace }}/dist/smoke/replay.json"
 
-      # The text the CI replay never carries: both seats at their full rune
-      # caps, at several canvas sizes, through the same harness.
-      - name: Render the full-cap text fixture
+      # The text the CI replay never carries. Every replay CI produces is
+      # SCRIPTED, so its notes and motto are the short strings baselines.nim
+      # emits; a hosted episode carries whatever an LLM wrote, up to the full
+      # rune caps. This fixture lays both seats out at those caps, in the
+      # page's own CSS, at three widths including the 360 px featured-match
+      # frame, and fails if any readout escapes its box. It stands in for
+      # --strict-text-bounds, which a pannable board cannot use.
+      - name: Render the full-cap doctrine-text fixture
         run: |
           set -euo pipefail
-          cp tools/ci/renderer_fixture.html dist/static-replay-viewer/renderer_fixture.html
-          node tools/ci/viewer_smoke.mjs \
-            --bundle dist/static-replay-viewer \
-            --replay dist/smoke/replay.json \
-            --url "file://${PWD}/dist/static-replay-viewer/renderer_fixture.html" \
-            --timeout 60 || \
+          cp tools/ci/renderer_fixture.html dist/static-replay-viewer/
           node -e "
             const { chromium } = require('playwright');
             (async () => {
               const browser = await chromium.launch();
               const page = await browser.newPage();
+              page.on('console', (m) => console.log('  [page] ' + m.text()));
               for (const size of [[360, 640], [720, 900], [1280, 720]]) {
                 await page.setViewportSize({ width: size[0], height: size[1] });
                 await page.goto('file://' + process.cwd() +
                   '/dist/static-replay-viewer/renderer_fixture.html');
-                await page.waitForSelector('[data-fixture-drawn=\"true\"]', { timeout: 20000 });
+                await page.waitForSelector('html[data-fixture-drawn=\"true\"]',
+                  { timeout: 20000 });
                 const overflow = await page.evaluate(() => window.__fixtureOverflow);
                 console.log('renderer fixture at ' + size[0] + 'x' + size[1] +
                   ': overflow=' + overflow);
-                if (overflow) { throw new Error('full-cap text overflowed at ' + size[0] + 'px'); }
+                if (overflow) {
+                  throw new Error('full-cap doctrine text overflowed #' +
+                    overflow + ' at ' + size[0] + 'px');
+                }
               }
               await browser.close();
             })().catch((e) => { console.error(e); process.exit(1); });

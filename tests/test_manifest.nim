@@ -18,6 +18,11 @@ import battlecode/years/registry
 
 let manifest = parseJson(readFile("coworld_manifest_template.json"))
 let game = manifest["game"]
+## `variants` and `certification` are TOP LEVEL, not under `game`:
+## `docker_smoke.sh` reads `manifest["certification"]["game_config"]` and the
+## platform schema puts them there too.
+let variants = manifest["variants"]
+let cert = manifest["certification"]
 
 # --- the closed results key set ---------------------------------------------
 block:
@@ -59,8 +64,10 @@ block:
 
 # --- num_agents -------------------------------------------------------------
 block:
-  checkEq("exactly one variant ships in v1", game["variants"].len, 1)
-  for variant in game["variants"]:
+  checkEq("exactly one variant ships in v1", variants.len, 1)
+  check("variants are TOP LEVEL", not game.hasKey("variants"))
+  check("and so is certification", not game.hasKey("certification"))
+  for variant in variants:
     let id = variant["id"].getStr()
     check(id & " has no variant-level num_agents",
       not variant.hasKey("num_agents"))
@@ -76,7 +83,6 @@ block:
     checkEq("the variant id IS the year",
       id, variant["game_config"]["year"].getStr())
 
-  let cert = game["certification"]
   check("the certification fixture carries num_agents",
     cert["game_config"].hasKey("num_agents"))
   checkEq("and it is 2", cert["game_config"]["num_agents"].getInt(), 2)
@@ -114,17 +120,17 @@ block:
     not game["config_schema"]["additionalProperties"].getBool())
   check("config_schema has no tokens property",
     not game["config_schema"]["properties"].hasKey("tokens"))
-  for variant in game["variants"]:
+  for variant in variants:
     check("no tokens in " & variant["id"].getStr() & "'s game_config",
       not variant["game_config"].hasKey("tokens"))
   check("no tokens in the certification game_config",
-    not game["certification"]["game_config"].hasKey("tokens"))
+    not cert["game_config"].hasKey("tokens"))
   ## Every game_config key must be in the schema, or the platform rejects it.
-  for variant in game["variants"]:
+  for variant in variants:
     for key, _ in variant["game_config"]:
       check("config_schema declares " & key,
         game["config_schema"]["properties"].hasKey(key))
-  for key, _ in game["certification"]["game_config"]:
+  for key, _ in cert["game_config"]:
     check("config_schema declares the certification key " & key,
       game["config_schema"]["properties"].hasKey(key))
 
@@ -170,6 +176,8 @@ block:
   checkEq("the game runnable type", game["runnable"]["type"].getStr(), "game")
   checkEq("the game entrypoint", game["runnable"]["run"][0].getStr(),
     "/bin/battlecode")
+  checkEq("the game image lives on the runnable",
+    game["runnable"]["image"].getStr(), "{{GAME_IMAGE}}")
   checkEq("the server-side LLM secret",
     game["runnable"]["env"]["ANTHROPIC_API_KEY_URI"].getStr(),
     "secret://coworld/battlecode/anthropic_api_key")
@@ -178,13 +186,13 @@ block:
   checkEq("both players are declared", manifest["player"].len, 2)
   for p in manifest["player"]:
     checkEq(p["id"].getStr() & " runs the player entrypoint",
-      p["runnable"]["run"][0].getStr(), "/bin/battlecode-player")
+      p["run"][0].getStr(), "/bin/battlecode-player")
     checkEq(p["id"].getStr() & " gets one cpu",
-      p["runnable"]["resources"]["limits"]["cpu"].getStr(), "1")
+      p["resources"]["limits"]["cpu"].getStr(), "1")
     checkEq(p["id"].getStr() & " uses the player image",
       p["image"].getStr(), "{{PLAYER_IMAGE}}")
-  checkEq("the game uses the game image", game["image"].getStr(),
-    "{{GAME_IMAGE}}")
+    checkEq(p["id"].getStr() & " is typed as a player",
+      p["type"].getStr(), "player")
 
 # --- the policy set ---------------------------------------------------------
 block:
