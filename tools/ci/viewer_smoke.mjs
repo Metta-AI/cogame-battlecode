@@ -443,9 +443,30 @@ const READOUT_SCRIPT = `(() => {
 
 // The scrubber element the scrub readouts click: #scrub (parley lineage),
 // #seek (moba lineage), else any range input.
-const SCRUB_SELECTOR = '#scrub, #seek, input[type="range"]';
+//
+// TRIED IN PRIORITY ORDER, one selector at a time. A comma list handed to
+// Playwright resolves in DOCUMENT order, not list order, so on a page that
+// carries an unrelated `input[type=range]` above the scrubber -- a zoom
+// slider in a kept #viewpanel -- `.first()` returned the SLIDER and every
+// "seek" in this section clicked the zoom bar instead. The clock still moved
+// (free-running playback), so the three-differing-readouts gate passed while
+// nothing was ever seeked.
+const SCRUB_SELECTORS = ['#scrub', '#seek', 'input[type="range"]'];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// The first selector in SCRUB_SELECTORS that matches something, with the
+// element's box. Returns null when the page has no scrubber at all.
+async function scrubTarget(page) {
+  for (const selector of SCRUB_SELECTORS) {
+    let box = null;
+    try {
+      box = await page.locator(selector).first().boundingBox();
+    } catch { box = null; }
+    if (box) return { selector, box };
+  }
+  return null;
+}
 
 async function main() {
   const chromium = await loadChromium();
@@ -576,12 +597,15 @@ async function main() {
   // and 100 % and the three must differ.
   // ------------------------------------------------------------------
   const scrub = [];
+  let scrubSelector = null;
   if (loaded && readout && readout.has_scrub) {
     scrub.push({ at: "0%", clock: readout.clock });
     for (const fraction of [0.5, 1.0]) {
       try {
-        const box = await page.locator(SCRUB_SELECTOR).first().boundingBox();
-        if (!box) break;
+        const target = await scrubTarget(page);
+        if (!target) break;
+        scrubSelector = target.selector;
+        const box = target.box;
         const x = box.x + Math.max(1, Math.min(box.width - 1, box.width * fraction));
         await page.mouse.click(x, box.y + box.height / 2);
         await sleep(700);
@@ -637,6 +661,7 @@ async function main() {
       bridge_error: bridge.filter((e) => e.type === "error").map((e) => e.message),
     },
     scrub,
+    scrub_selector: scrubSelector,
     soak,
     canvas_text: canvasText,
     failure: failure || boundsFailure || null,
@@ -692,7 +717,8 @@ async function main() {
       `${JSON.stringify(soak.after && soak.after.tick)})`);
   }
   if (scrub.length) {
-    console.log("scrub readouts: " + scrub.map((s) => `${s.at}=${JSON.stringify(s.clock)}`).join("  "));
+    console.log(`scrub readouts (${scrubSelector || "no scrubber"}): ` +
+      scrub.map((s) => `${s.at}=${JSON.stringify(s.clock)}`).join("  "));
   }
   if (canvasText) {
     console.log(`canvas text: ${canvasText.total} drawn, ${canvasText.never_inside} never inside ` +

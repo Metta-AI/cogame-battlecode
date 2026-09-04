@@ -513,6 +513,19 @@ jobs:
             --replay "${replay}" \
             --timeout 90 \
             --soak 10
+          # The scrub readouts have to come from the SCRUBBER. This page keeps
+          # #viewpanel, whose zoom slider is an input[type=range] ABOVE #scrub
+          # in the document; a comma-list selector resolves in document order,
+          # so the gate used to click the zoom bar and never seek at all while
+          # free-running playback supplied three differing clocks.
+          selector="$(jq -r '.scrub_selector // "none"' viewer-smoke.json)"
+          echo "scrub selector: ${selector}"
+          if [ "${selector}" != "#scrub" ]; then
+            echo "::error::the scrub gate clicked '${selector}', not #scrub --"
+            echo "::error::no seek was exercised. See tools/ci/viewer_smoke.mjs"
+            echo "::error::SCRUB_SELECTORS."
+            exit 1
+          fi
 
       # The wasm module itself, under node: wasm32-only failures (int overflow
       # traps, address-space exhaustion) are invisible to the native tests.
