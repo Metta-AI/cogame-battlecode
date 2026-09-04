@@ -24,9 +24,9 @@ type
     prompt*: string
     scripted*: string
       ## The raw `PLAYER_SCRIPTED` value. Resolved to a `Baseline` PER YEAR at
-      ## episode time, because `bowl-of-chowder` means nothing to bc26 and
-      ## `awu` means nothing to bc20.
-    baseline*: Baseline
+      ## episode time by `baselineForSeat`, because `bowl-of-chowder` means
+      ## nothing to bc26 and `awu` means nothing to bc20. Storing a parsed
+      ## `Baseline` on the seat would be resolving it before the year is known.
     label*: string
     registered*: bool
 
