@@ -526,6 +526,25 @@ jobs:
             echo "::error::SCRUB_SELECTORS."
             exit 1
           fi
+          # THE SCORE SCREEN IS ACTUALLY SHOWN. Seeking to 100 % runs the
+          # replay off the end, which is the one state that raises #endcard.
+          # The card was being raised with a class the stylesheet does not
+          # style, so it was filled in and left at display:none for the whole
+          # replay; nothing in CI saw it, because nothing in CI ever reached
+          # the end of a replay (r1-B1). This reads the computed display.
+          shown="$(jq -r '[.scrub[] | select(.at == "100%")] | last | .endcard.shown' viewer-smoke.json)"
+          card="$(jq -r '[.scrub[] | select(.at == "100%")] | last | .endcard.text' viewer-smoke.json)"
+          echo "endcard after the 100% seek: shown=${shown} text=${card}"
+          if [ "${shown}" != "true" ]; then
+            echo "::error::#endcard is not displayed after seeking to the end"
+            echo "::error::(computed display: $(jq -r '[.scrub[] | select(.at == "100%")] | last | .endcard.display' viewer-smoke.json))."
+            echo "::error::The score screen is drawn into the DOM and never seen."
+            exit 1
+          fi
+          if ! printf '%s' "${card}" | grep -qi 'clan'; then
+            echo "::error::#endcard is displayed but carries no clan line: ${card}"
+            exit 1
+          fi
 
       # The wasm module itself, under node: wasm32-only failures (int overflow
       # traps, address-space exhaustion) are invisible to the native tests.

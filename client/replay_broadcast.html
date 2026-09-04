@@ -2953,7 +2953,7 @@ button.beat-marker { border: 0; padding: 0; cursor: pointer; }
   function dismissEndcard() {
     if (!endcardShown) return;
     endcardShown = false;
-    $('endcard').classList.remove('show');
+    $('endcard').classList.remove('on');
   }
 
   function renderEndcard(s) {
@@ -2994,7 +2994,10 @@ button.beat-marker { border: 0; padding: 0; cursor: pointer; }
         esc(s.names[slot]) + '<br>' + esc((d.words || []).join(', ')) + '</div>';
     }
     $('ec-teams').innerHTML = teams;
-    $('endcard').classList.add('show');
+    // `.on` is the class the INHERITED rule uses (#endcard.on { display: flex }
+    // at the top of this page). There is no #endcard.show rule anywhere, so a
+    // card added with `.show` stays display:none for the whole replay.
+    $('endcard').classList.add('on');
   }
 
   // ---- layout -----------------------------------------------------------

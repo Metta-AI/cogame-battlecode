@@ -157,6 +157,24 @@ check("the scorebug stays legible at 360 px",
   ".plate-name { flex: 1 1 auto; min-width: 3.2em; }" in page)
 check("and labels drop under 640 px", "@media (max-width: 640px)" in page)
 check("every seek dismisses the endcard", "dismissEndcard" in page)
+
+## B1: the endcard is TOGGLED WITH THE CLASS ITS OWN RULE USES. The inherited
+## sheet styles `#endcard.on`; there is no `#endcard.show` rule and no bare
+## `.show` rule anywhere in the page, so a card raised with `.show` is filled
+## in and then left at `display: none` for the whole replay — the score screen
+## exists in the DOM and is never seen. Grepping for `dismissEndcard` cannot
+## see that; these three checks can.
+check("the inherited rule shows the endcard on .on",
+  "#endcard.on { display: flex;" in page)
+check("renderEndcard raises the card with that class",
+  "$('endcard').classList.add('on');" in page)
+check("dismissEndcard takes it down with the same class",
+  "$('endcard').classList.remove('on');" in page)
+check("and nothing toggles the endcard with a class that has no rule",
+  "$('endcard').classList.add('show')" notin page and
+  "$('endcard').classList.remove('show')" notin page)
+check("there is no #endcard.show rule to justify one",
+  "#endcard.show {" notin page)
 check("the page uses the renamed static-replay adapter",
   "BcStaticReplay" in page)
 

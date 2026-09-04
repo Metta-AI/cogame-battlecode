@@ -428,7 +428,20 @@ const READOUT_SCRIPT = `(() => {
   // #seek (2026-08-28, cogame-derks-gym check 8: loaded:true but every
   // readout null because only the parley ids were probed).
   const feed = document.querySelector('#feed, .feed, #log, #killfeed, [id$="-feed"]');
+  // The score screen. Reported, never gated here: a shell is free to have no
+  // endcard at all, and mid-replay it is legitimately hidden. What it makes
+  // visible to CI is the difference between a card that is FILLED IN and one
+  // that is DISPLAYED -- a card raised with a class its stylesheet does not
+  // style is drawn into the DOM and stays display:none forever (battlecode
+  // r1-B1, 2026-09-04).
+  const endcardEl = document.querySelector("#endcard, .endcard, [id$='-endcard']");
+  const endcard = endcardEl ? {
+    display: getComputedStyle(endcardEl).display,
+    shown: getComputedStyle(endcardEl).display !== "none",
+    text: (endcardEl.innerText || endcardEl.textContent || "").replace(/\s+/g, " ").trim().slice(0, 400),
+  } : null;
   return {
+    endcard,
     clock: text('#clock, [id$="-clock"]'),
     tick: text("#tick-clock, #tick, .tick-clock, #tickinfo"),
     scorebug: text('#scorebug, [id$="-scorebug"]'),
@@ -610,7 +623,7 @@ async function main() {
         await page.mouse.click(x, box.y + box.height / 2);
         await sleep(700);
         const now = await page.evaluate(READOUT_SCRIPT);
-        scrub.push({ at: `${Math.round(fraction * 100)}%`, clock: now.clock });
+        scrub.push({ at: `${Math.round(fraction * 100)}%`, clock: now.clock, endcard: now.endcard });
       } catch (error) {
         scrub.push({ at: `${Math.round(fraction * 100)}%`, clock: null, error: String(error && error.message) });
       }
@@ -650,6 +663,7 @@ async function main() {
     replay: args.replay || null,
     clock: readout ? readout.clock : null,
     scorebug: readout ? readout.scorebug : null,
+    endcard: readout ? readout.endcard : null,
     status: readout ? readout.status : null,
     loading_text: readout ? readout.loading : null,
     feed_lines: readout ? readout.feed_lines : 0,
