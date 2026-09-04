@@ -71,6 +71,14 @@ block:
   checkEq("muckraker C=10", convictionAtSpawn(rtMuckraker, 10), 7)
   checkEq("muckraker C=11", convictionAtSpawn(rtMuckraker, 11), 8)
   checkEq("muckraker C=100", convictionAtSpawn(rtMuckraker, 100), 70)
+  ## And the product is Java's FLOAT one, not a double one: `convictionRatio`
+  ## is a `float` and `influence` an `int`, so JLS 5.6.2 makes the product a
+  ## float and only `Math.ceil` widens it (`InternalRobot.java:67` at the
+  ## pinned battlecode21@ed39c1a4). The two roundings first disagree at
+  ## 2 995 933, where the pinned JDK prints 2097153 and a float64 product
+  ## gives 2097154.
+  checkEq("muckraker C=2995933 follows Java's float product",
+    convictionAtSpawn(rtMuckraker, 2_995_933), 2_097_153)
 
 # --- the conviction cap -----------------------------------------------------
 block:

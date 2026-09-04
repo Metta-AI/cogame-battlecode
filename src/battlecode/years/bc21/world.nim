@@ -388,10 +388,15 @@ func isReady*(r: Robot): bool =
   r.cooldownTurns < 1.0
 
 func convictionAtSpawn*(kind: RobotKind, influence: int): int =
-  ## `(int) Math.ceil(type.convictionRatio * influence)`. `convictionRatio` is
-  ## a Java `float` widened to double by the multiply, which is why the
-  ## muckraker's 0.7 gives ceil(0.7*10) = 7 and ceil(0.7*11) = 8.
-  int(ceil(float64(RobotSpecs[kind].convictionRatio) * float64(influence)))
+  ## `(int) Math.ceil(this.type.convictionRatio * this.influence)`
+  ## (`InternalRobot.java:67` at the pinned `battlecode21@ed39c1a4`).
+  ## `convictionRatio` is a Java `float` and `influence` an `int`, so binary
+  ## numeric promotion (JLS 5.6.2) makes the PRODUCT a `float`; the widening to
+  ## `double` happens at the `Math.ceil` call, after the multiply. Hence the
+  ## float32 product here: it is the muckraker's 0.699999988079071 that gives
+  ## ceil(0.7*10) = 7 and ceil(0.7*11) = 8, and above ~3.0e6 influence the two
+  ## roundings genuinely part (float64 first disagrees at 2 995 933).
+  int(ceil(float64(RobotSpecs[kind].convictionRatio * float32(influence))))
 
 func canSenseLocation*(w: World, r: Robot, l: Loc): bool =
   r.loc.distanceSquaredTo(l) <= RobotSpecs[r.kind].sensorRadiusSquared and
