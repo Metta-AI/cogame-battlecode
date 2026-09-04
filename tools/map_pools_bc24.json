@@ -1,0 +1,9 @@
+{
+  "small": ["DefaultSmall", "Yinyang", "BreadPudding", "Rivers", "Tunnels",
+            "Occulus"],
+  "mixed": ["DefaultSmall", "Yinyang", "GaltonBoard", "StackGame", "Alligator",
+            "Randy", "Anchor", "DefaultMedium", "Gauntlet", "HungerGames",
+            "Soccer", "DefaultLarge"],
+  "large": ["Bunkers", "Fountain", "CH3353C4K3F4CT0RY", "Islands",
+            "Battlecode24", "DefaultHuge"]
+}

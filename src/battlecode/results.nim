@@ -126,14 +126,31 @@ const Bc21GameKeys* = [
   ## bc21 REUSES `units_built` and `units_alive`, which already exist with the
   ## same meaning and type; the rest are new optional siblings.
 
+const Bc24GameKeys* = [
+  "flags_captured", "flags_picked_up", "flags_dropped", "flags_returned",
+  "rounds_carrying", "crumbs_end", "crumbs_collected", "crumbs_spent",
+  "kill_crumbs", "ducks_spawned", "ducks_jailed", "alive_end", "attacks",
+  "damage_dealt", "kills", "heals", "heal_dealt", "traps_built",
+  "traps_triggered", "trap_damage", "tiles_dug", "tiles_filled", "levels_end",
+  "attack_levels_end", "build_levels_end", "heal_levels_end", "masteries",
+  "upgrades_taken", "upgrade_first_round", "setup_flag_teleports",
+  "rounds_with_any_carry"
+]
+  ## bc24 shares NOTHING with the other years' optional siblings: one unit
+  ## type, one resource and a flag game. `setup_flag_teleports` and
+  ## `rounds_with_any_carry` are the two scalars.
+
 const EndReasons* = [
   "kings_destroyed", "cats_cleared", "round_limit", "abandoned",
   "hq_destroyed", "quantity", "quality", "broadcasts", "highest_id",
   "coin_flip", "annihilated", "more_votes", "more_enlightenment_centers",
-  "more_influence"
+  "more_influence", "capture", "more_flag_captures", "level_sum", "more_bread"
 ]
-  ## The union of all three years' `DominationFactor` renderings plus our own
-  ## wall-clock `abandoned`.
+  ## The union of all FOUR years' `DominationFactor` renderings plus our own
+  ## wall-clock `abandoned`. bc24's `MORE_FLAGS_PICKED` and `RESIGNATION` are
+  ## deliberately absent: the first is unreachable in the engine's own
+  ## `checkEndOfMatch` and the second has no action a doctrine can produce
+  ## (docs/RULES-BC24.md section Divergences item 5).
 
 const ResultsKeys* = [
   "names", "aliases", "scores", "wins", "points", "games", "seed", "year",
