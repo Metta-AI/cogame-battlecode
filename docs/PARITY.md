@@ -49,6 +49,17 @@ That is the whole bot, and the fidelity is the point. A "helpful" addition —
 picking up cheese, biting a neighbour — would break the only test that proves
 the ported rule set is the same rule set.
 
+**This is a declared divergence from the design note.** The note's §Scripted
+baselines describes `scaffold` as "the ported examplefuncsplayer behaviour:
+random legal move, bite whatever is adjacent, pick up cheese underfoot". The
+real `examplefuncsplayer` at tag `engine.1.2.5` does no biting and no cheese
+pickup — the snippet above is its entire turn, read from
+`example-bots/src/main/examplefuncsplayer/RobotPlayer.java` at that tag — so
+the note describes a bot that does not exist upstream. `scaffold` follows the
+upstream bot, because Tier A compares this chassis against **that** Java bot
+bit-exactly and any behaviour added here would diverge on the first round a
+rat stands next to something. The strong baseline the note wants is `awu`.
+
 ## The tiers
 
 | tier | what | gate |
