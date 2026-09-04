@@ -35,5 +35,42 @@
       "PLAYER_SCRIPTED": "scaffold",
       "PLAYER_POLICY_LABEL": "scaffold"
     }
+  },
+  {
+    "name": "battlecode-bc20-latticer",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a Battlecode 2020 team. The water rises every round and your HQ starts at elevation 2-5, so it drowns somewhere between round 464 and round 1210 unless landscapers raise the ground around it. Your doctrine: out-build the flood. Set opening to \"lattice\" or \"passive_lattice\", wall the HQ early (wall_hq_round 180-260), start terraforming by round 250-350, take a lattice_radius of 6-9, and spend on vaporators (2-4) so your soup keeps coming after the near deposits are mined out. Keep a net_gun_ring of at least 2 so enemy drones cannot lift your landscapers off the wall, run drone_role \"carry_landscapers\" or \"wall\", and leave rush_trigger at 0. In notes, say which elevation you are building to and by what round.",
+      "PLAYER_POLICY_LABEL": "latticer"
+    }
+  },
+  {
+    "name": "battlecode-bc20-rusher",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a Battlecode 2020 team. An enemy HQ needs 50 dirt on it to die, and a landscaper carries 25. Your doctrine: get there before their wall does. Set opening to \"rush\", a rush_trigger between 180 and 320, a lean or steady miner_count_curve, and a swarm landscaper_count_curve so the second wave arrives while the first is digging. Take drone_role \"harass\" or \"buster\" to lift their landscapers off their own wall and drop them in the water. Keep wall_hq_round non-zero anyway - if the rush stalls you still have to survive the flood - but keep lattice_radius small (2-4) and vaporator_budget low (0-1); soup spent on economy is soup not spent on landscapers. In notes, say what you do if the rush fails.",
+      "PLAYER_POLICY_LABEL": "rusher"
+    },
+    "player": "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d"
+  },
+  {
+    "name": "battlecode-bowl-of-chowder",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "bowl-of-chowder",
+      "PLAYER_POLICY_LABEL": "bowl-of-chowder"
+    }
+  },
+  {
+    "name": "battlecode-examplefuncsplayer",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "examplefuncsplayer",
+      "PLAYER_POLICY_LABEL": "examplefuncsplayer"
+    }
   }
 ]

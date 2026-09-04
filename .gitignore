@@ -15,3 +15,7 @@ nim.cfg
 # Local scratch
 /tmp/
 *.log
+
+# Python bytecode from the CI-time tools
+__pycache__/
+*.pyc

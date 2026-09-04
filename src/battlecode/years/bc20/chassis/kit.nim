@@ -143,10 +143,19 @@ proc effectiveWallRound*(w: World, side: Side): int =
       max(1, roundWaterReaches(minElev) - 200))
   side.wallRoundCache
 
-proc latticeTarget*(side: Side, round: int): int =
+proc latticeTarget*(w: World, side: Side): int =
   ## `lattice.nim`: every non-wall tile inside `lattice_radius` is raised to
-  ## `waterLevel(round + 250) + 1`.
-  int(waterLevelAt(min(WaterTableMaxRound, round + 250))) + 1
+  ## `waterLevel(round + 250) + 1` — OR to three below the HQ wall, whichever
+  ## is higher.
+  ##
+  ## The second term is not decoration. `MAX_DIRT_DIFFERENCE` is 3, so a wall
+  ## ring at elevation 8 with bare ground at 3 around it is a SHEER CLIFF: the
+  ## HQ survives and every miner is locked out of it, the team's only refinery
+  ## is unreachable, and mining stops dead around round 200. Raising the
+  ## lattice to `wallTarget - 3` builds the ramp that makes the wall a wall and
+  ## not a tomb.
+  max(int(waterLevelAt(min(WaterTableMaxRound, w.currentRound + 250))) + 1,
+      w.wallTarget(side) - 3)
 
 proc willFloodNextRound*(w: World, l: Loc): bool =
   ## A tile a ground unit must not be standing on when the flood arrives.

@@ -24,7 +24,7 @@ proc latticeNeedsWork*(w: World, side: Side, l: Loc): bool =
   if side.isWallRing(l): return false
   let occupant = w.getRobot(l)
   if occupant != nil and occupant.kind.isBuilding(): return false
-  w.getDirt(l) < side.latticeTarget(w.currentRound)
+  w.getDirt(l) < w.latticeTarget(side)
 
 proc lowestLatticeTileNear*(w: World, side: Side, r: Robot): (bool, Loc) =
   ## The lowest tile within the robot's own sense window that the lattice still

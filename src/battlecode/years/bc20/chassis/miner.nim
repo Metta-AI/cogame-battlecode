@@ -33,13 +33,14 @@ proc electBuilder(w: World, side: Side) =
 proc nextBuilding(w: World, side: Side): (bool, RobotKind) =
   let d = side.doctrine
   if w.alive(side, rtDesignSchool) < 1: return (true, rtDesignSchool)
+  ## One Refinery, EARLY. An HQ that has been walled in is eight elevation
+  ## steps above the ground outside it, and `MAX_DIRT_DIFFERENCE` is 3: a miner
+  ## that can no longer reach the HQ has nowhere to put its soup. A refinery
+  ## outside the wall is the team's second drop-off, and it also refines its
+  ## own 20 a round.
+  if w.alive(side, rtRefinery) < 1: return (true, rtRefinery)
   if w.alive(side, rtNetGun) < d.netGunRing: return (true, rtNetGun)
   if w.alive(side, rtFulfillmentCenter) < 1: return (true, rtFulfillmentCenter)
-  ## One Refinery once the near seam is worked out: a miner that has to walk
-  ## the whole way back to the HQ spends most of the match in transit, and a
-  ## starved pool is what stops the Design School making landscapers.
-  if w.currentRound >= 250 and w.alive(side, rtRefinery) < 1:
-    return (true, rtRefinery)
   if w.alive(side, rtVaporator) < d.vaporatorBudget: return (true, rtVaporator)
   if w.currentRound >= 600 and w.alive(side, rtDesignSchool) < 2:
     return (true, rtDesignSchool)
@@ -54,7 +55,10 @@ proc buildSiteScore(w: World, side: Side, kind: RobotKind, l: Loc): int =
   ## High ground first: a building cannot be raised (dirt dropped on a
   ## building buries it), so the elevation it is founded on is the elevation it
   ## drowns at.
-  var score = 100 - abs(ring - 2) * 20 + w.getDirt(l) * 12
+  ## A REFINERY sits further out, where the miners are and where the HQ wall
+  ## cannot lock it away; everything else hugs the base at Chebyshev 2.
+  let want = if kind == rtRefinery: 4 else: 2
+  var score = 100 - abs(ring - want) * 20 + w.getDirt(l) * 12
   if w.willFloodNextRound(l): score -= 500
   if kind == rtVaporator and not l.isLatticeTile(): score -= 10
   score
@@ -103,6 +107,29 @@ proc nearestRefinery(w: World, r: Robot, side: Side): (bool, Loc) =
       found = true
   (found, best)
 
+proc noteSoupTips(w: World, side: Side, r: Robot, brain: Brain) =
+  ## A seam worth telling the team about. The blockchain is the ONLY channel
+  ## the rules give a team, so a tip costs soup and is rate-limited; a miner
+  ## that has mined out its own side otherwise wanders a 1024-tile map with a
+  ## sensor window the cows have shrunk to three tiles, and the whole team's
+  ## income stops around round 200.
+  if brain.turnCount mod 40 != 0: return
+  for l in w.sensed(r):
+    if w.getSoup(l) < SoupTipThreshold: continue
+    var known = false
+    for existing in side.soupTips:
+      if existing == l: known = true
+    if known: continue
+    if side.soupTips.len < 8:
+      side.soupTips.add(l)
+      w.broadcast(side, r, SigAnnounceSoup, l.x, l.y)
+    return
+
+proc pruneSoupTips(w: World, side: Side) =
+  for i in countdown(side.soupTips.high, 0):
+    if w.getSoup(side.soupTips[i]) <= 0:
+      side.soupTips.delete(i)
+
 proc nearestSoup(w: World, r: Robot, side: Side): (bool, Loc) =
   var best = loc(0, 0)
   var bestD = high(int)
@@ -143,6 +170,8 @@ proc runMiner*(w: World, side: Side, r: Robot) =
   if w.fleeWater(side, r): return
   if r.dead: return
 
+  w.pruneSoupTips(side)
+  w.noteSoupTips(side, r, brain)
   w.electBuilder(side)
   if r.id == side.builderId:
     let (wanted, kind) = w.nextBuilding(side)

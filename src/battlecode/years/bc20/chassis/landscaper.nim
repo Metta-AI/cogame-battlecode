@@ -171,9 +171,15 @@ proc chooseMode(w: World, side: Side, r: Robot, brain: Brain): int =
     return ModeWall
   if w.currentRound >= d.terraformStartRound:
     return ModeTerraform
-  if d.wallHqRound > 0 and not w.wallComplete(side):
-    return ModeWall
-  ModeTerraform
+  ## BEFORE `terraform_start_round` a landscaper WALLS and nothing else. The
+  ## knob has to have teeth: falling through to terraform here made
+  ## `terraform_start_round` inert, because the lattice went up from round one
+  ## whatever the sheet said.
+  ##
+  ## `wall_hq_round = 0` means NEVER, so a doctrine that refuses the wall
+  ## terraforms instead — and its HQ ring stays at map elevation, which is
+  ## exactly why never walling drowns.
+  if d.wallHqRound > 0: ModeWall else: ModeTerraform
 
 proc runLandscaper*(w: World, side: Side, r: Robot) =
   let brain = side.brainFor(r)
@@ -207,7 +213,7 @@ proc runLandscaper*(w: World, side: Side, r: Robot) =
     ## bar. Without the cap a landscaper that had finished its wall tile and
     ## could no longer walk anywhere (it is eight steps above its neighbours)
     ## dug and dropped for the rest of the match and built a 235-high spike.
-    let cap = max(w.wallTarget(side), side.latticeTarget(w.currentRound))
+    let cap = max(w.wallTarget(side), w.latticeTarget(side))
     if r.dirtCarrying > 0 and w.getDirt(r.loc) < cap:
       discard w.depositToward(r, r.loc)
     elif r.dirtCarrying < RobotSpecs[rtLandscaper].dirtLimit and

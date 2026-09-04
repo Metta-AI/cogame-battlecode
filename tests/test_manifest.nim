@@ -47,13 +47,47 @@ block:
     reasons.add(v.getStr())
   checkEq("the reason enum is the closed set", reasons, @EpisodeReasons)
 
+  ## `games.items.required` is narrowed to the FIVE year-neutral keys, and
+  ## each year's own statistics are optional siblings — the two sets do not
+  ## collide. Deliberately not a nested `stats` object: nesting would change
+  ## the bytes every shipped bc26 replay's `result` block carries.
   var gameKeys: seq[string]
   for v in game["results_schema"]["properties"]["games"]["items"]["required"]:
     gameKeys.add(v.getStr())
-  var expectedGameKeys = @GameKeys
+  var expectedGameKeys = @RequiredGameKeys
   gameKeys.sort()
   expectedGameKeys.sort()
-  checkEq("the per-game key set matches too", gameKeys, expectedGameKeys)
+  checkEq("the per-game required key set is year-neutral", gameKeys,
+    expectedGameKeys)
+
+  var gameProps: seq[string]
+  for key, _ in game["results_schema"]["properties"]["games"]["items"]["properties"]:
+    gameProps.add(key)
+  for key in RequiredGameKeys:
+    check("the schema declares the required game key " & key, key in gameProps)
+  for key in Bc26GameKeys:
+    check("the schema keeps bc26's optional game key " & key, key in gameProps)
+  for key in Bc20GameKeys:
+    check("the schema declares bc20's optional game key " & key,
+      key in gameProps)
+  for key in Bc20GameKeys:
+    check("and bc20's key does not collide with bc26's",
+      key notin Bc26GameKeys)
+
+  var endReasons: seq[string]
+  for v in game["results_schema"]["properties"]["games"]["items"]["properties"]["end_reason"]["enum"]:
+    endReasons.add(v.getStr())
+  var wantEndReasons = @EndReasons
+  endReasons.sort()
+  wantEndReasons.sort()
+  checkEq("end_reason is the union of both years plus abandoned", endReasons,
+    wantEndReasons)
+
+  var yearEnum: seq[string]
+  for v in game["config_schema"]["properties"]["year"]["enum"]:
+    yearEnum.add(v.getStr())
+  checkEq("config_schema.year.enum names both years", yearEnum,
+    @["bc26", "bc20"])
 
 block:
   ## The third leg: what docker_smoke.sh actually asserts.
@@ -65,7 +99,16 @@ block:
 
 # --- num_agents -------------------------------------------------------------
 block:
-  checkEq("exactly one variant ships in v1", variants.len, 1)
+  ## ONE VARIANT PER BATTLECODE YEAR.
+  checkEq("one variant per registered year", variants.len, 2)
+  var variantIds: seq[string]
+  for variant in variants: variantIds.add(variant["id"].getStr())
+  checkEq("and they are the registered years", variantIds, @["bc26", "bc20"])
+  for variant in variants:
+    check("variant " & variant["id"].getStr() & " is a registered year",
+      isRegisteredYear(variant["game_config"]["year"].getStr()))
+    checkEq("variant " & variant["id"].getStr() & " names its own year",
+      variant["game_config"]["year"].getStr(), variant["id"].getStr())
   check("variants are TOP LEVEL", not game.hasKey("variants"))
   check("and so is certification", not game.hasKey("certification"))
   for variant in variants:
@@ -159,7 +202,7 @@ block:
   checkEq("docs.readme is an object", docs["readme"].kind, JObject)
   check("docs.readme has type and value",
     docs["readme"].hasKey("type") and docs["readme"].hasKey("value"))
-  checkEq("three doc pages ship", docs["pages"].len, 3)
+  checkEq("four doc pages ship", docs["pages"].len, 4)
   var ids: seq[string]
   for page in docs["pages"]:
     ids.add(page["id"].getStr())
@@ -173,7 +216,7 @@ block:
       toUpperAscii() & ".md"
     check("the page's file exists: " & target, fileExists(target))
   checkEq("the pages are the ones the design note names", ids,
-    @["rules.md", "replay.md", "parity.md"])
+    @["rules.md", "rules-bc20.md", "replay.md", "parity.md"])
 
 # --- the rest of the shape --------------------------------------------------
 block:
@@ -195,7 +238,13 @@ block:
     "secret://coworld/battlecode/anthropic_api_key")
   checkEq("the replay viewer is the STATIC bundle",
     game["replay_viewer"]["bundle"].getStr(), "static-replay-viewer")
-  checkEq("both players are declared", manifest["player"].len, 2)
+  ## Two published baselines per year: `awu`/`scaffold` for bc26 and
+  ## `bowl-of-chowder`/`examplefuncsplayer` for bc20.
+  checkEq("all four baselines are declared", manifest["player"].len, 4)
+  var playerIds: seq[string]
+  for p in manifest["player"]: playerIds.add(p["id"].getStr())
+  checkEq("and they are the four the design note names", playerIds,
+    @["awu", "scaffold", "bowl-of-chowder", "examplefuncsplayer"])
   for p in manifest["player"]:
     checkEq(p["id"].getStr() & " runs the player entrypoint",
       p["run"][0].getStr(), "/bin/battlecode-player")
@@ -209,7 +258,8 @@ block:
 # --- the policy set ---------------------------------------------------------
 block:
   let policies = parseJson(readFile("tools/ci/policies.json"))
-  checkEq("four policies ship", policies.len, 4)
+  ## Four per year: two `PLAYER_PROMPT` champions and two scripted fillers.
+  checkEq("eight policies ship — four per year", policies.len, 8)
   var prompts = 0
   var scripted = 0
   var owned = 0
@@ -232,15 +282,29 @@ block:
         p["env"]["PLAYER_PROMPT"].getStr().len > 200)
     if p["env"].hasKey("PLAYER_SCRIPTED"): inc scripted
     if p.hasKey("player"): inc owned
-  checkEq("two LLM champions", prompts, 2)
-  checkEq("two scripted baselines", scripted, 2)
-  checkEq("champion #2 carries its owning player", owned, 1)
-  checkEq("and it is the second prompt policy",
+  checkEq("two LLM champions per year", prompts, 4)
+  checkEq("two scripted baselines per year", scripted, 4)
+  checkEq("each year's champion #2 carries its owning player", owned, 2)
+  checkEq("bc26 champion #2 is the second prompt policy",
     policies[1]["player"].getStr(),
     "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
-  check("the two champion prompts differ",
+  checkEq("bc20 champion #2 is the sixth policy",
+    policies[5]["player"].getStr(),
+    "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
+  check("the two bc26 champion prompts differ",
     policies[0]["env"]["PLAYER_PROMPT"].getStr() !=
     policies[1]["env"]["PLAYER_PROMPT"].getStr())
+  check("the two bc20 champion prompts differ",
+    policies[4]["env"]["PLAYER_PROMPT"].getStr() !=
+    policies[5]["env"]["PLAYER_PROMPT"].getStr())
+  checkEq("and the bc20 policies are named for the year",
+    policies[4]["name"].getStr(), "battlecode-bc20-latticer")
+  checkEq("bc20 champion #2 is the rusher",
+    policies[5]["name"].getStr(), "battlecode-bc20-rusher")
+  checkEq("the bc20 fillers name the two published chassis",
+    policies[6]["env"]["PLAYER_SCRIPTED"].getStr() & "," &
+    policies[7]["env"]["PLAYER_SCRIPTED"].getStr(),
+    "bowl-of-chowder,examplefuncsplayer")
 
 # --- compose.yaml service names are load-bearing ----------------------------
 block:
