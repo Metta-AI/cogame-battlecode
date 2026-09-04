@@ -218,7 +218,7 @@ jobs:
           # committed: a reader that only works on the maps we ship is a
           # reader nobody can extend the pool with.
           parsed="$(python3 tools/convert_maps_bc24.py --engine "$BC24_DIR" \
-            --parse-all 2>&1 >/dev/null | tr -dc '0-9')"
+            --parse-all 2>&1 >/dev/null | grep -oE '^[0-9]+' | head -1)"
           echo "official .map24 files parsed: ${parsed}"
           test "${parsed}" = "78" || {
             echo "::error::expected all 78 .map24 files to parse, got ${parsed}"
@@ -1249,9 +1249,17 @@ jobs:
       #
       # SMOKE_REQUIRE_STATS is the episode SUBSTANCE assertion (the LEARNINGS
       # pin), enforced FOR BOTH SEATS by the script: an episode where a seat
-      # spawned nothing, spent nothing, built nothing, levelled nothing, hit
-      # nothing and healed nothing is a red build rather than a green one
-      # with an empty replay.
+      # spawned nothing, spent nothing, built nothing and hit nothing is a
+      # red build rather than a green one with an empty replay.
+      #
+      # LEVELS AND HEALS ARE NOT IN THIS SET, because they are not things
+      # BOTH seats can do. `examplefuncsplayer24` never heals, and its ducks
+      # die faster than they earn the 15 attack experience a first level
+      # costs (measured over this exact episode: 236 attacks against 143
+      # jailings, and the jail penalty is -1 experience a time), so its
+      # `levels_end` and `heal_dealt` are legitimately 0 -- that is what
+      # being the weak floor means. Both are asserted ACROSS the seats in
+      # the step below instead.
       - name: Raw-Docker episode smoke (bc24, scripted vs scripted)
         env:
           SMOKE_SLUG: ${{ env.SLUG }}
@@ -1267,34 +1275,48 @@ jobs:
              "connectTimeoutMs":15000}
           SMOKE_REQUIRE_STATS: >-
             {"ducks_spawned":10,"crumbs_spent":100,"traps_built":1,
-             "levels_end":3,"damage_dealt":300,"heal_dealt":80}
+             "damage_dealt":300}
           SMOKE_REPLAY_OUT: ${{ github.workspace }}/dist/smoke/replay-bc24.json
           SMOKE_CONTRACT_PROBE: "0"
         run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
 
-      # THE FLAG HALF of the substance assertion. `SMOKE_REQUIRE_STATS` is
-      # per-seat and a 600-round game cannot guarantee that BOTH weak seats
-      # reach a flag, so the flag clause is asserted ACROSS the two seats
-      # here. Together they make an idle win machine-visible, which is
-      # exactly what the 2026-09-03 round-1 degenerate match lacked.
+      # THE ACROSS-THE-SEATS HALF of the substance assertion.
+      # `SMOKE_REQUIRE_STATS` is per-seat, and three of this game's
+      # signatures -- lifting an enemy flag, specialising, and healing -- are
+      # things only a seat playing WELL does. Asserting them per-seat would
+      # be asserting that the weak floor is not weak. Asserting them across
+      # the pair makes an idle win machine-visible, which is exactly what the
+      # 2026-09-03 round-1 degenerate match lacked.
       #
       # The key is `flags_picked_up`, the name the results document actually
       # uses; the design note's jq line says `flag_pickups`, which is not a
       # key any bc24 results document has ever carried.
-      - name: The bc24 episode really touched a flag
+      - name: The bc24 episode really played bc24
         run: |
           set -euo pipefail
           # Read from the REPLAY, whose `result` block is the results
           # document verbatim: `dist/smoke/results.json` is overwritten by
           # every episode in turn and naming it here would make this
           # assertion depend on which episode happened to run last.
-          picked="$(jq -r '[.result.games[0].flags_picked_up[]] | add' \
-            dist/smoke/replay-bc24.json)"
-          echo "enemy-flag pickups across the two seats: ${picked}"
+          sum() { jq -r "[.result.games[0].$1[]] | add" \
+            dist/smoke/replay-bc24.json; }
+          picked="$(sum flags_picked_up)"
+          levels="$(sum levels_end)"
+          healed="$(sum heal_dealt)"
+          echo "across the two seats: flag pickups=${picked}" \
+               "skill levels=${levels} health healed=${healed}"
           test "${picked}" -ge 1 || {
             echo "::error::the bc24 smoke episode never touched a flag."
             echo "::error::A bc24 game where nobody lifts a flag is not this"
             echo "::error::game being played."
+            exit 1; }
+          test "${levels}" -ge 3 || {
+            echo "::error::nobody specialised: the whole episode ended with"
+            echo "::error::${levels} skill levels between the two clans."
+            exit 1; }
+          test "${healed}" -ge 80 || {
+            echo "::error::nobody healed: ${healed} health restored in the"
+            echo "::error::whole episode, and one heal is worth 80."
             exit 1; }
 
       - name: All four smoke replays are present and are different years
