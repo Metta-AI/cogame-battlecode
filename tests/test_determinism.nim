@@ -48,9 +48,19 @@ block:
 
 # --- record → re-derive, for EVERY end reason -------------------------------
 proc deriveAndCompare(config: GameConfig, sheets: array[2, Sheet],
-                      seed: int): tuple[reason: EpisodeReason, ok: bool,
-                                        games: int] =
+                      seed: int, onMaps: seq[string] = @[]):
+                        tuple[reason: EpisodeReason, ok: bool,
+                              outcomes: seq[GameOutcome]] =
   var plan = buildPlan(config, sheets, seed)
+  if onMaps.len > 0:
+    ## A specific map, when the end reason under test needs one: the draw is
+    ## by seed, and no seed is guaranteed to land on the map that produces it.
+    plan.maps = onMaps
+    plan.sideAslots = @[]
+    plan.abandonAfter = @[]
+    for m in onMaps:
+      plan.sideAslots.add(0)
+      plan.abandonAfter.add(-1)
   var events: seq[MatchEvent]
   let (games, reason) = playMatch(config, plan, events)
   var seats: array[2, SeatReport]
@@ -69,7 +79,7 @@ proc deriveAndCompare(config: GameConfig, sheets: array[2, Sheet],
   let reparsed = parseReplay($doc.toJson())
   let deriver = newDeriver(reparsed)
   while deriver.advance(): discard
-  (reason, deriver.mismatchRound < 0, games.len)
+  (reason, deriver.mismatchRound < 0, games)
 
 var seenReasons: seq[EndReason]
 block:
@@ -82,6 +92,10 @@ block:
   let r = deriveAndCompare(config, sheets, 7)
   checkEq("a short scaffold game completes", r.reason, epComplete)
   check("and re-derives with no hash mismatch", r.ok)
+  checkEq("one game was recorded", r.outcomes.len, 1)
+  checkEq("and it ended on the round limit", r.outcomes[0].endReason,
+    erRoundLimit)
+  seenReasons.add(r.outcomes[0].endReason)
 
 block:
   ## `kings_destroyed`: awu starves scaffold's crowns out.
@@ -93,6 +107,10 @@ block:
   let r = deriveAndCompare(config, sheets, 3)
   checkEq("a full game completes", r.reason, epComplete)
   check("and re-derives with no hash mismatch", r.ok)
+  checkEq("one game was recorded", r.outcomes.len, 1)
+  checkEq("and it ended on the kings", r.outcomes[0].endReason,
+    erKingsDestroyed)
+  seenReasons.add(r.outcomes[0].endReason)
 
 block:
   ## `cats_cleared`: every cat dead WHILE the alliance holds ends the game on
@@ -107,6 +125,24 @@ block:
   check("the world stops running", not w.running or w.hasWinner)
   check("and a winner was set", w.hasWinner)
   check("on points, not on kings", w.domination != dfKillAllRatKings)
+
+  ## And the same reason RECORDED and RE-DERIVED, from a match that really
+  ## reaches it: two cat-hunting clans that never turn on each other clear
+  ## `cheesefarm`'s cats around round 420. Before r1-N13b this end reason was
+  ## the only one with no record -> re-derive at all.
+  var config = defaultGameConfig()
+  config.pool = "small"
+  config.gamesPerMatch = 1
+  config.maxRounds = 2000
+  let hunter = parseReply("""{"sheet":{"chassis":"awu","cat_engagement":"hunt",
+    "cat_trap_budget":200,"backstab_policy":"never"}}""")
+  let r = deriveAndCompare(config, [hunter, hunter], 11, @["cheesefarm"])
+  checkEq("the cat hunt completes", r.reason, epComplete)
+  checkEq("one game was recorded", r.outcomes.len, 1)
+  checkEq("and it ended with the cats cleared", r.outcomes[0].endReason,
+    erCatsCleared)
+  check("and re-derives with no hash mismatch", r.ok)
+  seenReasons.add(r.outcomes[0].endReason)
 
 block:
   ## `deadline`: the wall-clock stop is RECORDED, and the re-derivation
@@ -154,6 +190,9 @@ block:
   checkEq("and stops exactly there", frames, stoppedAt)
   checkEq("at the recorded round", deriver.world.currentRound, stoppedAt)
   checkEq("with no hash mismatch", deriver.mismatchRound, -1)
+  ## `abandoned` is the one end reason that never reaches `results.games[]`
+  ## (playMatch discards the game); its record -> re-derive is this block.
+  seenReasons.add(erAbandoned)
 
 block:
   ## The scoring of a deadline episode is honest: only the games that
@@ -189,5 +228,13 @@ block:
   while again.advance(): discard
   checkEq("re-reading the same bytes gives the same chain",
     toHex(again.world.hashChain), outcome.hashChain)
+
+# --- EVERY end reason was covered above -------------------------------------
+block:
+  ## `seenReasons` was declared and never used, so "record -> re-derive for
+  ## every end reason" was a claim no assertion made (r1-N13b). Now the
+  ## blocks fill it and this fails if one is ever dropped.
+  for reason in EndReason:
+    check("record -> re-derive covered " & $reason, reason in seenReasons)
 
 finish("test_determinism")

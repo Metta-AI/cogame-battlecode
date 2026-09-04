@@ -169,6 +169,39 @@ jobs:
           done
           exit "${fail}"
 
+      # The manifest is validated by the CLI THAT WILL PUBLISH IT, not only
+      # by tests/test_manifest.nim's own reading of the schema. `coworld
+      # build` runs `_load_template_manifest` -> `validate_upload_manifest`
+      # over this exact file, and a template CI passed can still fail there
+      # (playbooks/make-coworld.md's own known-issue row: game.owner
+      # required, no top-level version, no runner-managed tokens,
+      # replay_viewer under game). Failing here costs a CI minute; failing in
+      # coworld-release.yml costs a release.
+      #
+      # Pin: keep in step with coworld-release.yml's COWORLD_PKG.
+      - name: The coworld CLI accepts the manifest template
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet "coworld==0.1.43"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          from coworld.bundle import _load_template_manifest
+
+          template = json.loads(Path("coworld_manifest_template.json").read_text())
+          # compose.yaml's two services, whose names tests/test_manifest.nim
+          # pins; `coworld build` derives the same map from `docker compose
+          # config`.
+          placeholders = {
+              "{{GAME_IMAGE}}": "cogame-battlecode-game:latest",
+              "{{PLAYER_IMAGE}}": "cogame-battlecode-player:latest",
+          }
+          manifest = _load_template_manifest(template, "0.0.0", placeholders)
+          print("coworld accepted the template:", manifest.game.name,
+                "with", len(manifest.variants), "variant(s)")
+          PY
+
 
   # ---------------------------------------------------------------------
   # THE PARITY ORACLE. The Java engine as a CI-ONLY differential test: it

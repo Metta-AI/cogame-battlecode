@@ -231,6 +231,30 @@ block:
     "cogame-battlecode-game:latest" in compose)
   check("both are linux/amd64", compose.count("platform: linux/amd64") == 2)
 
+# --- the CLI that publishes this manifest validates it in CI ----------------
+block:
+  ## The note's shard 12 asks for the installed coworld CLI's own
+  ## `_load_template_manifest`/`validate_upload_manifest` over this template.
+  ## A Nim shard cannot import a Python package, so the call lives in the
+  ## `test` job and this asserts it is still wired — the two defects it found
+  ## when it was first run (a missing `game.owner`, and `resources.limits.
+  ## memory`, which CoworldResourceLimits forbids) are the exact class of
+  ## failure that otherwise surfaces in `coworld certify`, one phase later.
+  let workflow = readFile(".github/workflows/ci.yml")
+  check("ci.yml runs the coworld CLI over the template",
+    "The coworld CLI accepts the manifest template" in workflow)
+  check("through _load_template_manifest itself",
+    "from coworld.bundle import _load_template_manifest" in workflow)
+  check("and the CLI pin is a real version",
+    "coworld==0.1.4" in workflow)
+  ## The two things it rejected, asserted here as well so a Nim-only run
+  ## still catches them.
+  check("game.owner is present", manifest["game"]{"owner"}.getStr().len > 0)
+  for runnable in @[manifest["game"]["runnable"]] & toSeq(manifest["player"].items):
+    let limits = runnable{"resources"}{"limits"}
+    check("no runnable declares resources.limits.memory (cpu only)",
+      limits == nil or limits{"memory"} == nil)
+
 # --- the licence trail is complete ------------------------------------------
 block:
   ## AGPL-3.0 means the credits are load-bearing, and README.md links to
@@ -250,11 +274,20 @@ block:
 
 # --- no JVM anywhere in the image -------------------------------------------
 block:
+  ## The banned words are looked for in the INSTRUCTIONS, with the comments
+  ## stripped. The old form was `banned notin dockerfile or "no jdk" in
+  ## dockerfile`, and Dockerfile:7 says "NO JDK, NO JRE, NO JAVA, NO NODE" —
+  ## so the right-hand disjunct was true for every word and the check passed
+  ## vacuously no matter what the image installed (r1-N13c).
   let dockerfile = readFile("Dockerfile")
+  var instructions = ""
+  for line in dockerfile.splitLines():
+    let stripped = line.strip()
+    if stripped.len == 0 or stripped.startsWith("#"): continue
+    instructions.add(stripped.toLowerAscii() & "\n")
+  check("the Dockerfile has instructions to check", instructions.len > 200)
   for banned in ["openjdk", "java", "jdk", "jre", "nodejs", "npm"]:
-    check("the Dockerfile installs no " & banned,
-      banned notin dockerfile.toLowerAscii().replace("java engine exists", "") or
-      "no jdk" in dockerfile.toLowerAscii())
+    check("the Dockerfile installs no " & banned, banned notin instructions)
   check("the runtime stage is debian slim", "FROM debian:bookworm-slim AS runtime" in dockerfile)
   check("and the player stage reuses it", "FROM runtime AS player" in dockerfile)
 

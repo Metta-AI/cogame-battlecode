@@ -10,6 +10,7 @@
   "game": {
     "name": "battlecode",
     "description": "Battlecode 2026 \"Uneasy Alliances\", played by doctrine. Two cogs each command a clan of robot rats on a symmetric grid; neither moves a rat. At t=0 each writes a sealed JSON doctrine and a deterministic Nim port of the official rule set plays a best-of-three match from those two sheets. Both clans start in COOPERATION against neutral NPC cats and the points formula is cat-damage weighted; the moment either clan bites, ratnaps, throws at or traps the other, the world flips to BACKSTAB and the weights swing to king survival. Losing every rat king loses the game outright.",
+    "owner": "daveey@gmail.com",
     "replay_viewer": {
       "bundle": "static-replay-viewer"
     },
@@ -412,9 +413,11 @@
       },
       "source_url": "https://github.com/Metta-AI/cogame-battlecode/tree/main",
       "resources": {
-        "limits": {
-          "cpu": "2",
+        "requests": {
           "memory": "4Gi"
+        },
+        "limits": {
+          "cpu": "2"
         }
       }
     }
@@ -435,9 +438,11 @@
       },
       "source_url": "https://github.com/Metta-AI/cogame-battlecode/tree/main",
       "resources": {
-        "limits": {
-          "cpu": "1",
+        "requests": {
           "memory": "512Mi"
+        },
+        "limits": {
+          "cpu": "1"
         }
       }
     },
@@ -456,9 +461,11 @@
       },
       "source_url": "https://github.com/Metta-AI/cogame-battlecode/tree/main",
       "resources": {
-        "limits": {
-          "cpu": "1",
+        "requests": {
           "memory": "512Mi"
+        },
+        "limits": {
+          "cpu": "1"
         }
       }
     }

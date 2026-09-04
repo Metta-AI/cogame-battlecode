@@ -151,8 +151,18 @@ for aliased in ["renderClock", "renderTransport", "getSpoilers",
 check("relayout sets --hudscale", "--hudscale" in page)
 check("relayout sets --topband", "--topband" in page)
 check("relayout sets --band", "--band" in page)
-check("the endcard stops at the transport band",
-  "bottom: calc(var(--band" in page)
+## The endcard's OWN rule, not any rule that happens to mention the band:
+## `bottom: calc(var(--band` matched #econ and #doctrines, so this assertion
+## passed for two unrelated overlays and would have kept passing if the
+## endcard had lost its bound (r1-N13d).
+block:
+  let start = page.find("#endcard {")
+  check("the page has an #endcard rule", start >= 0)
+  let rule = page[start ..< page.find("}", start)]
+  check("the endcard stops at the transport band",
+    "bottom: var(--band, 0px);" in rule)
+  check("and starts below the top band", "top: var(--topband, 0px);" in rule)
+  check("and it is hidden until it is raised", "display: none;" in rule)
 check("the scorebug stays legible at 360 px",
   ".plate-name { flex: 1 1 auto; min-width: 3.2em; }" in page)
 check("and labels drop under 640 px", "@media (max-width: 640px)" in page)
