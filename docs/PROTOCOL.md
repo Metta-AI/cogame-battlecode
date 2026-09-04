@@ -160,6 +160,15 @@ payload differs in three places:
   the water never reaches it inside the 1500-round cap;
 * **`scoring`** carries bc20's three weights instead of bc26's two weight sets.
 
+**No `rules_digest` and no `sheet_schema` key.** The design note's sample
+payload shows both inside the per-seat observation. They ship instead in the
+**system preamble** (`decide.nim`'s `Bc20Preamble`), which every seat receives
+as the system message and which the replay records once, at document level, as
+`prompt_preamble` — the condensed rule set and the full knob surface with every
+range and default are there in full, verbatim, for both years. The content a
+doctrine sees is the same; only the layout differs. A consumer that wants the
+knob surface off a replay reads `prompt_preamble`, not `seats[].prompt`.
+
 **Hidden**, as ever: the opponent's doctrine, sheet, notes, motto, real name
 and fallback status; every in-match state (a cog receives **no** per-round
 observation). The only cross-team channel inside a match is the sim's own
