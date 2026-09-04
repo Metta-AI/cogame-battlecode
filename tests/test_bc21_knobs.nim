@@ -44,19 +44,34 @@
 ##                                                     influence held in units
 ##                                                       at 600  -37 %     >= 30 %
 ##
-## THREE OF THE NOTE'S OWN STATISTICS ARE MEASURED DIFFERENTLY, and each swap
-## is recorded in the build report and in docs/PARITY.md:
+## FIVE OF THE NOTE'S OWN GATE STATISTICS ARE MEASURED DIFFERENTLY, and THIS
+## HEADER IS THE RECORD OF ALL FIVE. (An earlier version of this paragraph said
+## three, and pointed at docs/PARITY.md; PARITY.md is about the Java oracle and
+## has no knob-gate section, so the pointer was to nothing.) The note's table
+## and this file's table differ in exactly these places:
 ##   * `muck_ratio`'s second gate is muckraker-turns in the enemy half rather
 ##     than "enemy slanderers exposed", because the number of slanderers the
 ##     OPPONENT chooses to build — not the number of muckrakers we build — is
 ##     what binds that counter;
-##   * `politician_size_curve` measures the mean influence of the politicians
-##     the SPEND MIX built, which is exactly what the knob steers, rather than
-##     of every politician (a defence or capture body's size is dictated by the
-##     threat or the target, not by the curve);
-##   * `empower_threshold` measures empowers PER POLITICIAN BUILT rather than
-##     raw empowers, because a low threshold collapses the economy and so
-##     builds far fewer politicians in the first place.
+##   * `politician_size_curve`'s first gate measures the mean influence of the
+##     politicians the SPEND MIX built, which is exactly what the knob steers,
+##     rather than of every politician (a defence or capture body's size is
+##     dictated by the threat or the target, not by the curve) — and it gates
+##     at 2.5x rather than the note's 3x, which is this file's rule of roughly
+##     half the measured delta applied to the measured 2.89x;
+##   * `politician_size_curve`'s second gate is politicians BUILT down >= 25 %
+##     (416 -> 270) rather than the note's "empowers down >= 30 %". A fatter
+##     curve spends more influence per body, so the build count is the knob's
+##     first-order effect; the empower count moves only through it;
+##   * `empower_threshold`'s first gate is empowers PER POLITICIAN BUILT rather
+##     than raw empowers, because a low threshold collapses the economy and so
+##     builds far fewer politicians in the first place;
+##   * `empower_threshold`'s second gate is politicians ALIVE AT THE END up
+##     >= 20 (0 -> 232) rather than the note's "mean conviction delivered per
+##     empower up >= 2x". A politician that does not clear the threshold does
+##     not destroy itself, so the surviving population is the knob's direct and
+##     largest signal, while at a threshold of 250 the empower events the note's
+##     statistic would average over are few.
 
 import std/strformat
 import harness
