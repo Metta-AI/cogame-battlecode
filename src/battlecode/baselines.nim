@@ -21,17 +21,27 @@ proc parseBaseline*(text: string): Baseline =
   of "scaffold", "examplefuncsplayer", "example": blScaffold
   else: blAwu
 
+proc chassisFor*(kind: Baseline): Chassis =
+  ## The filler path's chassis selection, and the ONLY one there is. It is not
+  ## a sheet key: an LLM doctrine cannot reach it (see `sheet.KnownKeys`), so
+  ## `scaffold` is selectable only by `PLAYER_SCRIPTED=scaffold`.
+  case kind
+  of blAwu: chAwu
+  of blScaffold: chScaffold
+
 proc baselineReply*(kind: Baseline): string =
   ## The exact JSON a scripted seat "answers" with. Emitted as text and then
   ## parsed by the same tolerant validator, so a scripted seat is
-  ## indistinguishable from an LLM seat downstream.
+  ## indistinguishable from an LLM seat downstream — which is why it carries
+  ## only keys the LLM surface also has, and never `chassis`.
   case kind
   of blAwu:
-    """{"sheet":{"chassis":"awu"},"notes":"default awu doctrine",
+    """{"sheet":{},"notes":"default awu doctrine",
         "motto":"Cheese first."}"""
   of blScaffold:
-    """{"sheet":{"chassis":"scaffold"},"notes":"scaffold baseline",
+    """{"sheet":{},"notes":"scaffold baseline",
         "motto":"Forward."}"""
 
 proc baselineSheet*(kind: Baseline): Sheet =
   result = parseReply(baselineReply(kind))
+  result.doctrine.chassis = chassisFor(kind)

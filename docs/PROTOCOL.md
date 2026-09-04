@@ -61,7 +61,7 @@ squeaks and positions between robots.
 ## Reply schema and caps
 
 ```json
-{"sheet":{"chassis":"awu","backstab_policy":"at_round_N","backstab_round":700,
+{"sheet":{"backstab_policy":"at_round_N","backstab_round":700,
           "cat_engagement":"hunt","cat_trap_budget":60,"rat_trap_budget":80,
           "spawn_curve":"swarm","cheese_ferry_ratio":0.4,"king_count_target":4,
           "dirt_wall_policy":"king_shell","throw_rats_to_feed_cats":false},

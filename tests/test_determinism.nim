@@ -32,7 +32,7 @@ block:
 block:
   let sheets = [baselineSheet(blAwu), baselineSheet(blScaffold)]
   var swarm = sheets
-  swarm[0] = parseReply("""{"sheet":{"chassis":"awu","spawn_curve":"swarm"}}""")
+  swarm[0] = parseReply("""{"sheet":{"spawn_curve":"swarm"}}""")
   let a = play("DefaultSmall", sheets, 300)
   let b = play("DefaultSmall", swarm, 300)
   check("changing a knob changes the hash chain", a.hashChain != b.hashChain)
@@ -134,7 +134,7 @@ block:
   config.pool = "small"
   config.gamesPerMatch = 1
   config.maxRounds = 2000
-  let hunter = parseReply("""{"sheet":{"chassis":"awu","cat_engagement":"hunt",
+  let hunter = parseReply("""{"sheet":{"cat_engagement":"hunt",
     "cat_trap_budget":200,"backstab_policy":"never"}}""")
   let r = deriveAndCompare(config, [hunter, hunter], 11, @["cheesefarm"])
   checkEq("the cat hunt completes", r.reason, epComplete)

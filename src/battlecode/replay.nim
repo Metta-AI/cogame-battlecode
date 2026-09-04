@@ -174,6 +174,11 @@ proc parseSeat(node: JsonNode): SeatReport =
   wrapper["notes"] = %node{"notes"}.getStr()
   wrapper["motto"] = %node{"motto"}.getStr()
   result.sheet = validate(wrapper)
+  ## `chassis` is not a knob, so `validate` does not read it — but the
+  ## deriver has to run the bot the recording ran or every round mismatches.
+  ## It rides in the applied sheet and is restored here.
+  result.sheet.doctrine.chassis =
+    parseChassis(node{"sheet"}{"chassis"}.getStr("awu"))
   result.sheet.notes = node{"notes"}.getStr()
   result.sheet.motto = node{"motto"}.getStr()
   result.sheet.submitted = node{"sheet_submitted"}.getStr("{}")

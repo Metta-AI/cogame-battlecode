@@ -20,17 +20,19 @@
 ##   dirt_wall_policy         none -> king_shell     dirt 0 -> 143     +20
 ##   cat_engagement           avoid -> hunt          cat 0 -> 12520    +30 %
 ##   throw_rats_to_feed_cats  false -> true          fed 0 -> 40       >= 1
-##   chassis                  scaffold -> awu        wins 4/5 of 9     >= 4 of 9
+##   chassis (filler path)    scaffold -> awu        wins 4/5 of 9     >= 4 of 9
 ##
-## The `chassis` gate is the declared deviation from the note's "5 of 6": awu
-## takes the match on every economic measure (cheese, cat damage, rats built,
-## all three asserted below) but scaffold still steals round-limit points
-## games, so the win count is gated at 4 of 9 with the dominance checks
-## carrying the rest.
+## `chassis` is NOT one of the doctrine knobs — an LLM sheet cannot select it
+## (r2-D1), so the pair below is built the way the FILLER path builds it,
+## through `baselines.chassisFor`. Its gate is the declared deviation from the
+## note's "5 of 6": awu takes the match on every economic measure (cheese, cat
+## damage, rats built, all three asserted below) but scaffold still steals
+## round-limit points games, so the win count is gated at 4 of 9 with the
+## dominance checks carrying the rest.
 
 import std/strutils
 import harness
-import battlecode/sheet
+import battlecode/[baselines, sheet]
 import battlecode/years/bc26/[maps, rules]
 
 const
@@ -41,11 +43,10 @@ const
 type Totals = object
   rats, kings, cheese, traps, dirt, catDamage, catsFed, wins: array[2, int]
 
-proc pairedGames(lowJson, highJson: string): Totals =
+proc pairedSheets(sheets: array[2, Sheet]): Totals =
   ## The LOW setting takes seat 0 and the HIGH setting seat 1, on the same
   ## maps and the same seeds, so the only difference between the two clans is
   ## the knob under test.
-  let sheets = [parseReply(lowJson), parseReply(highJson)]
   for mapName in Maps:
     for seed in Seeds:
       ## The world RNG is seeded from the MAP's own seed field
@@ -65,6 +66,11 @@ proc pairedGames(lowJson, highJson: string): Totals =
         result.catDamage[slot] += o.catDamage[slot]
         result.catsFed[slot] += o.catsFed[slot]
       if o.winnerSlot >= 0: result.wins[o.winnerSlot] += 1
+
+proc pairedGames(lowJson, highJson: string): Totals =
+  ## The same paired set, from two DOCTRINE sheets — the only surface an LLM
+  ## has.
+  pairedSheets([parseReply(lowJson), parseReply(highJson)])
 
 proc pct(name: string, values: array[2, int], minPct: int) =
   ## A signed RELATIVE delta: the high setting must beat the low one by at
@@ -129,10 +135,10 @@ block:
   checkEq("and `false` never feeds one", t.catsFed[0], 0)
 
 block:
-  ## `chassis` is the only knob whose teeth are measured in WINS: the
-  ## distilled awubot against the ported example bot.
-  let t = pairedGames("""{"sheet":{"chassis":"scaffold"}}""",
-                      """{"sheet":{"chassis":"awu"}}""")
+  ## The chassis selection is the only one whose teeth are measured in WINS:
+  ## the distilled awubot against the ported example bot. It is not a knob, so
+  ## the two sheets come from the filler path, not from a doctrine.
+  let t = pairedSheets([baselineSheet(blScaffold), baselineSheet(blAwu)])
   let games = Maps.len * Seeds.len
   check("chassis scaffold->awu: awu wins at least 4 of " & $games & " (" &
     $t.wins[0] & "/" & $t.wins[1] & ")", t.wins[1] >= 4)

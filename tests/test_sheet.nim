@@ -11,6 +11,7 @@ block:
   let s = validate(parseJson("""{"sheet":{}}"""))
   let d = defaultDoctrine()
   checkEq("chassis default", s.doctrine.chassis, d.chassis)
+  checkEq("and the default chassis is awu", d.chassis, chAwu)
   checkEq("backstab_policy default", s.doctrine.backstabPolicy, d.backstabPolicy)
   checkEq("backstab_round default", s.doctrine.backstabRound, d.backstabRound)
   checkEq("cat_engagement default", s.doctrine.catEngagement, d.catEngagement)
@@ -29,14 +30,13 @@ block:
 # --- every knob accepts its own values --------------------------------------
 block:
   let s = parseReply("""
-    {"sheet":{"chassis":"scaffold","backstab_policy":"at_round_N",
+    {"sheet":{"backstab_policy":"at_round_N",
               "backstab_round":700,"cat_engagement":"hunt",
               "cat_trap_budget":60,"rat_trap_budget":80,"spawn_curve":"swarm",
               "cheese_ferry_ratio":0.4,"king_count_target":4,
               "dirt_wall_policy":"choke","throw_rats_to_feed_cats":true},
      "notes":"Farm cats to 700, then take their kings.",
      "motto":"Trust, briefly."}""")
-  checkEq("chassis", s.doctrine.chassis, chScaffold)
   checkEq("backstab_policy", s.doctrine.backstabPolicy, bpAtRoundN)
   checkEq("backstab_round", s.doctrine.backstabRound, 700)
   checkEq("cat_engagement", s.doctrine.catEngagement, ceHunt)
@@ -73,12 +73,11 @@ block:
 # --- mistyped ---------------------------------------------------------------
 block:
   let s = parseReply("""
-    {"sheet":{"chassis":42,"backstab_policy":["never"],
+    {"sheet":{"backstab_policy":["never"],
               "cat_engagement":null,"spawn_curve":{"a":1},
               "dirt_wall_policy":7,"cat_trap_budget":"not a number",
               "throw_rats_to_feed_cats":"maybe"}}""")
   let d = defaultDoctrine()
-  checkEq("a numeric chassis takes the default", s.doctrine.chassis, d.chassis)
   checkEq("an array policy takes the default", s.doctrine.backstabPolicy,
     d.backstabPolicy)
   checkEq("a null engagement takes the default", s.doctrine.catEngagement,
@@ -91,7 +90,7 @@ block:
     d.catTrapBudget)
   checkEq("an unparseable bool takes the default",
     s.doctrine.throwRatsToFeedCats, d.throwRatsToFeedCats)
-  check("every repair is recorded", s.defaultsApplied.len >= 7)
+  check("every repair is recorded", s.defaultsApplied.len >= 6)
 
 # --- tolerant spellings -----------------------------------------------------
 block:
@@ -110,12 +109,34 @@ block:
 # --- unknown keys -----------------------------------------------------------
 block:
   let s = parseReply("""
-    {"sheet":{"chassis":"awu","swarm_mode":true,"secret_weapon":"laser",
+    {"sheet":{"swarm_mode":true,"secret_weapon":"laser",
               "cat_engagement":"hunt"}}""")
   checkEq("known keys still apply", s.doctrine.catEngagement, ceHunt)
   checkEq("two unknown keys are recorded", s.unknownFields.len, 2)
   check("by name", "swarm_mode" in s.unknownFields)
   checkEq("and nothing was repaired", s.defaultsApplied.len, 0)
+
+# --- `chassis` is NOT a knob (r2-D1) ----------------------------------------
+block:
+  ## The round-1 champion answered `{"chassis":"scaffold"}` and idled three
+  ## games on the move-or-turn-only bot. `chassis` is not on the LLM knob
+  ## surface at all now: the key is recorded as unknown, ignored, and the clan
+  ## runs `awu` whatever the reply says.
+  check("chassis is not a known key", "chassis" notin KnownKeys)
+  let s = parseReply("""{"sheet":{"chassis":"scaffold","cat_engagement":"hunt"}}""")
+  checkEq("an LLM reply naming a chassis still runs awu", s.doctrine.chassis,
+    chAwu)
+  check("and the key is recorded as unknown", "chassis" in s.unknownFields)
+  checkEq("it is not counted as a repaired knob", s.defaultsApplied.len, 0)
+  checkEq("and the rest of the sheet still applies", s.doctrine.catEngagement,
+    ceHunt)
+  ## Not even the spelling the preamble used to print.
+  let awuReply = parseReply("""{"sheet":{"chassis":"awu"}}""")
+  check("`chassis: awu` is unknown too", "chassis" in awuReply.unknownFields)
+  ## The prompt no longer offers it.
+  check("the preamble does not list a chassis knob",
+    "\n  chassis " notin SystemPreamble)
+  check("and says so in words", "not yours to choose" in SystemPreamble)
 
 block:
   ## At most MaxUnknownFields keys are kept, each at most
@@ -218,12 +239,13 @@ block:
 
 # --- round trip -------------------------------------------------------------
 block:
-  let s = parseReply("""{"sheet":{"chassis":"scaffold","king_count_target":5}}""")
+  var s = parseReply("""{"sheet":{"king_count_target":5}}""")
+  s.doctrine.chassis = chScaffold          ## as the filler path sets it
   let again = validate(%*{"sheet": s.toJson()})
-  checkEq("a sheet round-trips through its own JSON",
-    again.doctrine.chassis, s.doctrine.chassis)
   checkEq("and keeps its numbers", again.doctrine.kingCountTarget,
     s.doctrine.kingCountTarget)
+  checkEq("the applied chassis rides in the recorded sheet",
+    parseChassis(s.toJson(){"chassis"}.getStr()), chScaffold)
   check("plain words describe every sheet", s.plainWords().len >= 6)
 
 # --- the decision layer records ONE fallback per seat, naming its cause -----

@@ -89,13 +89,20 @@ Per game (`results.games[].end_reason`): `kings_destroyed`, `cats_cleared`,
 
 ## The doctrine sheet
 
-Eleven knobs. Unknown key, wrong type or out-of-range value → **that field's
+Ten knobs. Unknown key, wrong type or out-of-range value → **that field's
 default**, recorded in `sheet_defaults_applied` / `sheet_unknown_fields`. A
 sheet can never be rejected, so a cog can never forfeit.
 
+**`chassis` is not one of them.** Which bot drives a clan is not a strategic
+choice a doctrine gets to make: every LLM doctrine runs the `awu` chassis,
+`chassis` is absent from `sheet.KnownKeys` and from the prompt's knob list, and
+a reply that sends it has the key recorded in `sheet_unknown_fields`, ignored
+and logged. The weak `scaffold` bot is reachable only through the scripted
+filler path, `PLAYER_SCRIPTED=scaffold`, which sets the chassis directly
+(`baselines.chassisFor`).
+
 | field | type / values | default | site in the chassis |
 | --- | --- | --- | --- |
-| `chassis` | `awu` \| `scaffold` | `awu` | `chassis/awu.nim`, `chassis/scaffold.nim` |
 | `backstab_policy` | `never` \| `when_ahead` \| `at_round_N` \| `on_first_contact` \| `retaliate_only` | `retaliate_only` | `kit.hostilitiesOpen` gates the enemy target list in `targets.nim` |
 | `backstab_round` | 1…2000 (read only for `at_round_N`) | 600 | same |
 | `cat_engagement` | `avoid` \| `opportunistic` \| `hunt` \| `feed` | `opportunistic` | `targets.catWeight` / `targets.catsAreTargets` |
@@ -117,9 +124,10 @@ cat damage and is not behind on kings. With hostilities closed the enemy is
 not a candidate for bite, ratnap, throw **or rat trap**.
 
 **Every knob has teeth.** `tests/test_knob_sensitivity.nim` is a CI gate that
-plays a paired set of seeded games for each of the ten non-`backstab_policy`
-knobs and asserts a named, signed statistic moves. The thresholds live in one
-table in that file so tuning is a one-line change.
+plays a paired set of seeded games for each of the nine non-`backstab_policy`
+knobs — and for the chassis selection the filler path makes — and asserts a
+named, signed statistic moves. The thresholds live in one table in that file
+so tuning is a one-line change.
 
 Free-text caps: `notes` 280 runes, `motto` 48 runes, unknown keys 16 of at most
 40 runes each, provider error text 200 runes. **Every cap is measured in RUNES

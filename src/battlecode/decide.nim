@@ -80,7 +80,6 @@ Reply with ONE JSON object and NOTHING else. Your reply must begin with '{'.
 
 THE KNOBS (unknown key, wrong type or out-of-range value = that field's
 default; you cannot forfeit by answering badly, only by answering weakly):
-  chassis                "awu" | "scaffold"                      default "awu"
   backstab_policy        "never" | "when_ahead" | "at_round_N"
                          | "on_first_contact" | "retaliate_only" default "retaliate_only"
   backstab_round         1..2000 (read only for at_round_N)      default 600
@@ -93,6 +92,9 @@ default; you cannot forfeit by answering badly, only by answering weakly):
   king_count_target      1..5                                     default 3
   dirt_wall_policy       "none" | "king_shell" | "choke"          default "king_shell"
   throw_rats_to_feed_cats  true | false                           default false
+
+Your clan is driven by the `awu` chassis. That is not yours to choose: there
+is no `chassis` knob, and a reply that sends one has it ignored.
 """
 
 proc briefFor*(
@@ -214,6 +216,14 @@ proc decide*(
         result.sheets[slot] = parseReply(text)
         result.decisionMs[slot] = latency
         result.fallback[slot] = ""
+        ## `chassis` is not a knob (sheet.KnownKeys). A reply that still sends
+        ## one is already recorded in `unknownFields` and ignored — the clan
+        ## runs `awu` — but a silent ignore is how round 1's champion came to
+        ## idle three games, so the seat that tried is named in the log.
+        if "chassis" in result.sheets[slot].unknownFields:
+          echo "battlecode llm: seat ", slot,
+            " sent `chassis`, which is not a doctrine knob: ignored, the clan",
+            " runs the awu chassis"
         result.events.add(ev("doctrine_received", ms = latency, fields = %*{
           "slot": slot, "attempt": attempt + 1, "latency_ms": latency,
           "defaults_applied": result.sheets[slot].defaultsApplied.len,

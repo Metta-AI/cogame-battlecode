@@ -13,12 +13,19 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV03"
+  GameVersion* = "GV04"
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV04 — `chassis` is no longer a doctrine knob. It is gone from
+    ##        `sheet.KnownKeys` and from the prompt preamble's knob list, so
+    ##        an LLM doctrine ALWAYS runs the `awu` chassis and a reply that
+    ##        still sends `chassis` is recorded in `sheet_unknown_fields`,
+    ##        ignored and logged. `scaffold` is selectable only by
+    ##        `PLAYER_SCRIPTED=scaffold`, which sets the chassis directly.
     ##
     ## GV03 — `backstab_policy: never` no longer opens hostilities after the
     ##        alliance breaks. `never` and `retaliate_only` both fought back

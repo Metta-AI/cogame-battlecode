@@ -42,9 +42,16 @@ type
     dwChoke = "choke"
 
   Doctrine* = object
-    ## The 11 knobs, each with a named site in the chassis (docs/RULES.md
-    ## §The doctrine sheet lists the site per knob).
+    ## The 10 doctrine knobs, each with a named site in the chassis
+    ## (docs/RULES.md §The doctrine sheet lists the site per knob), plus the
+    ## chassis selector, which is NOT one of them.
     chassis*: Chassis
+      ## NOT A KNOB. An LLM doctrine always runs `awu`: `chassis` is absent
+      ## from `KnownKeys` and from the prompt's knob list, so a reply that
+      ## names it is recorded in `unknownFields` and ignored. The only way to
+      ## select `scaffold` is the scripted filler path
+      ## (`PLAYER_SCRIPTED=scaffold` → `baselines.baselineSheet`), which sets
+      ## this field directly rather than through the sheet.
     backstabPolicy*: BackstabPolicy
     backstabRound*: int
     catEngagement*: CatEngagement
@@ -66,10 +73,15 @@ type
 
 const
   KnownKeys* = [
-    "chassis", "backstab_policy", "backstab_round", "cat_engagement",
+    "backstab_policy", "backstab_round", "cat_engagement",
     "cat_trap_budget", "rat_trap_budget", "spawn_curve", "cheese_ferry_ratio",
     "king_count_target", "dirt_wall_policy", "throw_rats_to_feed_cats"
   ]
+    ## THE LLM-VISIBLE KNOB SURFACE, and the same list the prompt preamble
+    ## prints. `chassis` is deliberately not in it: which bot drives the clan
+    ## is not a strategic choice a cog gets to make, it is which policy the
+    ## operator ran. A reply that sends `chassis` is treated as any other
+    ## unknown key — recorded, ignored, and the clan plays `awu`.
 
 proc defaultDoctrine*(): Doctrine =
   Doctrine(
@@ -165,6 +177,17 @@ proc extractJsonObject*(text: string): JsonNode =
         replace("\n", " "))
   parseJson(text[first .. last])
 
+proc parseChassis*(text: string): Chassis =
+  ## The RECORDED chassis, read back on playback. `validate` never reads
+  ## `chassis` — it is not a knob — so the replay's applied sheet is the only
+  ## place the deriver can learn which bot actually drove a clan. Anything
+  ## unrecognised is `awu`, the chassis every LLM doctrine runs.
+  let key = normalizeKey(text)
+  for value in Chassis:
+    if $value == key:
+      return value
+  chAwu
+
 proc validate*(payload: JsonNode): Sheet =
   ## Turn one parsed reply into a legal `Sheet`. Never raises: every bounded
   ## field is repaired to its default and the repair is recorded, so a cog
@@ -196,17 +219,10 @@ proc validate*(payload: JsonNode): Sheet =
   template repair(name: string) =
     result.defaultsApplied.add(name)
 
-  # --- chassis -------------------------------------------------------------
-  if "chassis" in seen and seen["chassis"].kind == JString:
-    let text = normalizeKey(seen["chassis"].getStr())
-    var found = false
-    for value in Chassis:
-      if $value == text:
-        result.doctrine.chassis = value
-        found = true
-    if not found: repair("chassis")
-  elif "chassis" in seen:
-    repair("chassis")
+  # --- chassis is NOT read here --------------------------------------------
+  # It is not in `KnownKeys`, so the loop above has already recorded it in
+  # `unknownFields`; `result.doctrine.chassis` keeps `defaultDoctrine()`'s
+  # `awu`. `decide.nim` logs the seat that tried.
 
   # --- backstab_policy / backstab_round ------------------------------------
   if "backstab_policy" in seen:
