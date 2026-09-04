@@ -137,9 +137,18 @@ block:
   var declared: seq[string]
   for p in manifest["player"]:
     declared.add(p["id"].getStr())
+  var seated: seq[string]
   for p in cert["players"]:
+    seated.add(p["player_id"].getStr())
     check("certification seats a DECLARED player: " & p["player_id"].getStr(),
       p["player_id"].getStr() in declared)
+  ## The other direction, and the one that failed release 0.2.0: the
+  ## certifier's `players-run` step fails `players_missing` for EVERY declared
+  ## player that occupies no certification slot, so a manifest may not declare
+  ## a player the fixture does not seat.
+  for id in declared:
+    check("every DECLARED player has a certification slot: " & id,
+      id in seated)
 
 # --- no runner-managed tokens, and bounded arrays ---------------------------
 proc walkArrays(node: JsonNode, path: string) =
@@ -238,13 +247,16 @@ block:
     "secret://coworld/battlecode/anthropic_api_key")
   checkEq("the replay viewer is the STATIC bundle",
     game["replay_viewer"]["bundle"].getStr(), "static-replay-viewer")
-  ## Two published baselines per year: `awu`/`scaffold` for bc26 and
-  ## `bowl-of-chowder`/`examplefuncsplayer` for bc20.
-  checkEq("all four baselines are declared", manifest["player"].len, 4)
+  ## Two declared baselines, both seated by the certification fixture, and
+  ## `PLAYER_SCRIPTED` resolves each PER YEAR: on bc20 `awu` plays
+  ## bowl-of-chowder and `scaffold` plays examplefuncsplayer
+  ## (src/battlecode/baselines.nim). Declaring the bc20 names as extra player
+  ## entries is what failed release 0.2.0 (`players_missing`).
+  checkEq("both baselines are declared", manifest["player"].len, 2)
   var playerIds: seq[string]
   for p in manifest["player"]: playerIds.add(p["id"].getStr())
-  checkEq("and they are the four the design note names", playerIds,
-    @["awu", "scaffold", "bowl-of-chowder", "examplefuncsplayer"])
+  checkEq("and they are the two the fixture seats", playerIds,
+    @["awu", "scaffold"])
   for p in manifest["player"]:
     checkEq(p["id"].getStr() & " runs the player entrypoint",
       p["run"][0].getStr(), "/bin/battlecode-player")

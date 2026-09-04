@@ -644,7 +644,12 @@ jobs:
         env:
           SMOKE_SLUG: ${{ env.SLUG }}
           SMOKE_EXPECT_YEAR: bc20
-          SMOKE_PLAYER_IDS: bowl-of-chowder,examplefuncsplayer
+          # The manifest declares exactly the two players the certification
+          # fixture seats (certifier `players-run` fails any declared player
+          # that has no slot), and `PLAYER_SCRIPTED` resolves per year:
+          # on bc20 `awu` is bowl-of-chowder and `scaffold` is
+          # examplefuncsplayer (src/battlecode/baselines.nim).
+          SMOKE_PLAYER_IDS: awu,scaffold
           SMOKE_CONFIG_OVERRIDE: >-
             {"year":"bc20","pool":"small","seed":4,"gamesPerMatch":1,
              "maxRounds":300,"perGameBudgetSeconds":40,"matchBudgetSeconds":45,

@@ -47,7 +47,9 @@
 #                              be overridden. (empty)
 #   SMOKE_PLAYER_IDS           comma-separated manifest player ids, one per
 #                              seat, replacing certification.players for this
-#                              run -- the bc20 episode seats
+#                              run. Ids must be declared in the manifest, so
+#                              the bc20 episode seats awu and scaffold, whose
+#                              PLAYER_SCRIPTED values resolve per year to
 #                              bowl-of-chowder and examplefuncsplayer.
 #                              (empty = the certification fixture's seats)
 #   SMOKE_EXPECT_YEAR          if set, results.year and the replay's year must
@@ -210,6 +212,15 @@ if override_ids:
             f"SEAT-COUNT FAIL: SMOKE_PLAYER_IDS names {len(override_ids)} "
             f"seats, the fixture declares {seats}")
     cert_players = [{"player_id": s.strip()} for s in override_ids]
+    # An id the manifest does not declare would silently seat a player with no
+    # env at all -- the wrong baseline, and green.
+    unknown = [p["player_id"] for p in cert_players if p["player_id"] not in
+               {e.get("id") for e in (manifest.get("player") or [])}]
+    if unknown:
+        raise SystemExit(
+            f"SEAT-COUNT FAIL: SMOKE_PLAYER_IDS names undeclared player ids "
+            f"{unknown}; the manifest declares "
+            f"{[e.get('id') for e in (manifest.get('player') or [])]}")
     print(f"player ids overridden: {[p['player_id'] for p in cert_players]}")
 
 with open(os.path.join(work, "config.json"), "w") as fh:

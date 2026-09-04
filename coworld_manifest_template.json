@@ -615,7 +615,7 @@
       "id": "awu",
       "name": "awu",
       "type": "player",
-      "description": "distilled-awubot baseline on its default doctrine",
+      "description": "the strong published baseline of whichever year the variant selects — distilled-awubot on bc26, Bowl of Chowder on bc20",
       "image": "{{PLAYER_IMAGE}}",
       "run": [
         "/bin/battlecode-player"
@@ -638,7 +638,7 @@
       "id": "scaffold",
       "name": "scaffold",
       "type": "player",
-      "description": "scaffold baseline — the ported example bot, weak",
+      "description": "the weak scaffold baseline of whichever year the variant selects — the ported example bot (examplefuncsplayer on bc20)",
       "image": "{{PLAYER_IMAGE}}",
       "run": [
         "/bin/battlecode-player"
@@ -646,52 +646,6 @@
       "env": {
         "PLAYER_SCRIPTED": "scaffold",
         "PLAYER_POLICY_LABEL": "scaffold"
-      },
-      "source_url": "https://github.com/Metta-AI/cogame-battlecode/tree/main",
-      "resources": {
-        "requests": {
-          "memory": "512Mi"
-        },
-        "limits": {
-          "cpu": "1"
-        }
-      }
-    },
-    {
-      "id": "bowl-of-chowder",
-      "name": "bowl-of-chowder",
-      "type": "player",
-      "description": "Bowl of Chowder baseline (2020) — passive lattice, ported behaviour",
-      "image": "{{PLAYER_IMAGE}}",
-      "run": [
-        "/bin/battlecode-player"
-      ],
-      "env": {
-        "PLAYER_SCRIPTED": "bowl-of-chowder",
-        "PLAYER_POLICY_LABEL": "bowl-of-chowder"
-      },
-      "source_url": "https://github.com/Metta-AI/cogame-battlecode/tree/main",
-      "resources": {
-        "requests": {
-          "memory": "512Mi"
-        },
-        "limits": {
-          "cpu": "1"
-        }
-      }
-    },
-    {
-      "id": "examplefuncsplayer",
-      "name": "examplefuncsplayer",
-      "type": "player",
-      "description": "scaffold baseline (2020) — the ported example bot, weak",
-      "image": "{{PLAYER_IMAGE}}",
-      "run": [
-        "/bin/battlecode-player"
-      ],
-      "env": {
-        "PLAYER_SCRIPTED": "examplefuncsplayer",
-        "PLAYER_POLICY_LABEL": "examplefuncsplayer"
       },
       "source_url": "https://github.com/Metta-AI/cogame-battlecode/tree/main",
       "resources": {
