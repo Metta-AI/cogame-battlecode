@@ -33,7 +33,10 @@ line() {
   # The GameVersion declaration line from one ref, or empty if unreadable.
   git show "$1:$CONST_FILE" 2>/dev/null | grep -m1 'GameVersion\* ='
 }
-ver()  { line "$1" | grep -o '"[0-9]*"' | tr -d '"'; }
+# The constant is `GameVersion* = "GV04"`, so the digits sit behind a `GV`
+# prefix; `grep -o '"[0-9]*"'` matched nothing and every invocation died on
+# "could not read GameVersion" instead of comparing anything.
+ver()  { line "$1" | grep -o '"GV[0-9]*"' | tr -d '"GV'; }
 rule() { line "$1" | sed 's/.*## //'; }
 
 base_v=$(ver "$BASE"); head_v=$(ver "$HEAD_REF")

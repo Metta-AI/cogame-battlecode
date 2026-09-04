@@ -163,6 +163,61 @@ check("and on the spoiler toggle",
 check("the killfeed has no unreachable spoiler guard",
   "if (!C.getSpoilers() && b.t > s.t) return;" notin page)
 
+## ---- THE APPENDED bc20 GAME BLOCK -----------------------------------------
+## No starter element is removed and no existing id is reused: every id the
+## bc20 block adds is new and prefixed.
+for added in ["id=\"bc20-flood\"", "id=\"bc20-soup\"", "id=\"bc20-units\"",
+              "id=\"bc20-doctrines\"", "id=\"bc20-doctrines-close\"",
+              "id=\"bc20-doctrines-toggle\"", "id=\"bc20-chain\""]:
+  check("the bc20 block adds " & added, added in page)
+check("under its own banner comment",
+  "BC20 additions to the inherited cogame-battlecode chrome" in page)
+check("and the bc26 block's own elements are still there",
+  "id=\"coopchip\"" in page and "id=\"doctrines\"" in page)
+
+## The year is ONE attribute plus CSS, not a rewrite.
+check("the block sets data-year from the replay header",
+  "setAttribute('data-year'" in page)
+check("and the stylesheet hides the other year's readouts",
+  "html[data-year=\"bc20\"] #coopchip" in page)
+check("both ways", "html:not([data-year=\"bc20\"]) #bc20-flood" in page)
+
+## D3: the doctrine overlay is DISMISSIBLE and never sits in the transport
+## band.
+check("the overlay's close control names itself for a screen reader",
+  "aria-label=\"Dismiss doctrines\"" in page)
+check("Escape dismisses it", "event.key !== 'Escape'" in page)
+check("and a chip re-opens it", "setDoctrinesOpen(true)" in page)
+block:
+  let start = page.find("#bc20-doctrines {")
+  check("the page has a #bc20-doctrines rule", start >= 0)
+  let rule = page[start ..< page.find("}", start)]
+  check("and it sits ABOVE the transport band",
+    "bottom: calc(var(--band, 0px) + 8px);" in rule)
+for panel in ["#bc20-soup {", "#bc20-units {"]:
+  let start = page.find(panel)
+  check("the page has a " & panel & " rule", start >= 0)
+  let rule = page[start ..< page.find("}", start)]
+  check(panel & " sits above the transport band too",
+    "var(--band, 0px) +" in rule)
+
+## CSS for EVERY beat kind bc20 emits — all ten.
+for kind in ["doctrine", "game", "flood", "build", "wall", "rush", "drop",
+             "bury", "drown", "end"]:
+  check("the page styles .beat-marker." & kind & " (bc20)",
+    ".beat-marker." & kind in page)
+
+## The tandem hoisting collision, again: the bc20 block's beat builder may
+## share neither `markBeat` nor the bc26 block's `buildBeatButtons`.
+check("the bc20 block has its OWN beat builder",
+  "function buildBc20BeatButtons" in page)
+check("and its own spoiler gate", "function applyBc20BeatSpoilers" in page)
+for aliased in ["renderClock", "renderTransport", "getSpoilers",
+                "setSpoilers", "renderBeatMarkers", "markBeat",
+                "buildBeatButtons"]:
+  check("the bc20 block does not shadow " & aliased,
+    page.count("function " & aliased & "(") <= 1)
+
 ## Transport rules from the design note.
 check("relayout sets --hudscale", "--hudscale" in page)
 check("relayout sets --topband", "--topband" in page)

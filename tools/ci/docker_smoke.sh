@@ -39,6 +39,19 @@
 #   SMOKE_REQUIRE_REPLAY_JSON  1 = replay must parse as JSON    (1)
 #                              set 0 for binary replay formats
 #   SMOKE_EXTRA_ENV            extra "K=V K=V" for every player (empty)
+#   SMOKE_CONFIG_OVERRIDE      JSON object merged over the certification
+#                              fixture's game_config, so a SECOND episode can
+#                              exercise a different year without a second
+#                              certification fixture. num_agents and the seat
+#                              count still come from the fixture and may not
+#                              be overridden. (empty)
+#   SMOKE_PLAYER_IDS           comma-separated manifest player ids, one per
+#                              seat, replacing certification.players for this
+#                              run -- the bc20 episode seats
+#                              bowl-of-chowder and examplefuncsplayer.
+#                              (empty = the certification fixture's seats)
+#   SMOKE_EXPECT_YEAR          if set, results.year and the replay's year must
+#                              equal it (empty)
 #   SMOKE_REPLAY_OUT           where to COPY the replay this smoke produced,
 #                              so it outlives the scratch dir the trap deletes
 #                              (dist/smoke/replay.json). ci.yml uploads it as
@@ -66,6 +79,9 @@ contract_probe="${SMOKE_CONTRACT_PROBE:-1}"
 timeout_s="${SMOKE_TIMEOUT:-900}"
 require_replay_json="${SMOKE_REQUIRE_REPLAY_JSON:-1}"
 replay_out="${SMOKE_REPLAY_OUT:-${repo_dir}/dist/smoke/replay.json}"
+config_override="${SMOKE_CONFIG_OVERRIDE:-}"
+player_ids="${SMOKE_PLAYER_IDS:-}"
+expect_year="${SMOKE_EXPECT_YEAR:-}"
 
 run_id="$$"
 prefix="${slug}-smoke-${run_id}"
@@ -100,6 +116,7 @@ test -f "${manifest}" || { echo "manifest not found: ${manifest}" >&2; exit 1; }
 # --------------------------------------------------------------------------
 # Episode config + per-seat launch args, derived from the cert fixture.
 # --------------------------------------------------------------------------
+SMOKE_CONFIG_OVERRIDE="${config_override}" SMOKE_PLAYER_IDS="${player_ids}" \
 python3 - "${manifest}" "${work_dir}" "${player_bin}" "${seats_expected}" <<'PY'
 import json
 import os
@@ -160,11 +177,40 @@ if str(seats_expected).isdigit() and int(seats_expected) != seats:
         "manifest disagree; fix whichever is wrong."
     )
 
+# A SECOND episode, on another year, needs another game_config -- but not
+# another certification fixture: certification stays where it is, and the
+# override may not touch the seat count it declares.
+override = os.environ.get("SMOKE_CONFIG_OVERRIDE") or ""
+if override.strip():
+    try:
+        patch = json.loads(override)
+    except Exception as exc:
+        raise SystemExit(f"SMOKE_CONFIG_OVERRIDE is not JSON: {exc}") from exc
+    if not isinstance(patch, dict):
+        raise SystemExit("SMOKE_CONFIG_OVERRIDE must be a JSON object")
+    if "num_agents" in patch and patch["num_agents"] != seats:
+        raise SystemExit(
+            "SEAT-COUNT FAIL: SMOKE_CONFIG_OVERRIDE may not change num_agents; "
+            f"the certification fixture declares {seats}")
+    config.update(patch)
+    print(f"config override applied: {sorted(patch)}")
+
 players = list(fixture_players)
 while len(players) < seats:
     players.append({"name": f"smoke-{len(players)}"})
 config["players"] = players[:seats]
 config["tokens"] = [f"token-{i}" for i in range(seats)]
+
+# The seats this run drives. Defaults to the certification fixture's.
+override_ids = [s for s in (os.environ.get("SMOKE_PLAYER_IDS") or "").split(",")
+                if s.strip()]
+if override_ids:
+    if len(override_ids) != seats:
+        raise SystemExit(
+            f"SEAT-COUNT FAIL: SMOKE_PLAYER_IDS names {len(override_ids)} "
+            f"seats, the fixture declares {seats}")
+    cert_players = [{"player_id": s.strip()} for s in override_ids]
+    print(f"player ids overridden: {[p['player_id'] for p in cert_players]}")
 
 with open(os.path.join(work, "config.json"), "w") as fh:
     json.dump(config, fh, indent=2)
@@ -327,7 +373,7 @@ echo "all ${seats} player containers exited 0"
 # --------------------------------------------------------------------------
 # Assert the artifacts.
 # --------------------------------------------------------------------------
-if ! python3 - "${work_dir}" "${seats}" "${require_replay_json}" <<'PY'
+if ! python3 - "${work_dir}" "${seats}" "${require_replay_json}" "${expect_year}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -335,6 +381,7 @@ from pathlib import Path
 work = Path(sys.argv[1])
 seats = int(sys.argv[2])
 require_replay_json = sys.argv[3] not in ("0", "", "false", "no")
+expect_year = sys.argv[4] if len(sys.argv) > 4 else ""
 
 failure = work / "player_failure.json"
 if failure.exists():
@@ -382,6 +429,9 @@ if results["reason"] != "complete":
 if results["fallbacks"] != [0] * seats:
     raise SystemExit(
         f"a scripted seat reported a fallback: {results['fallbacks']!r}")
+if expect_year and results.get("year") != expect_year:
+    raise SystemExit(
+        f"results.year is {results.get('year')!r}, expected {expect_year!r}")
 for key in ("aliases", "wins", "points", "policy_kind",
             "sheet_defaults_applied", "fallbacks", "decision_ms"):
     if len(results[key]) != seats:
@@ -414,6 +464,9 @@ if require_replay_json:
         raise SystemExit("replay has an empty events array")
     if not replay.get("games"):
         raise SystemExit("replay recorded no games")
+    if expect_year and replay.get("year") != expect_year:
+        raise SystemExit(
+            f"replay year is {replay.get('year')!r}, expected {expect_year!r}")
     # --------------------------------------------------------- /battlecode
 
 print(
