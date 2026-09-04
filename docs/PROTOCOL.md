@@ -119,3 +119,64 @@ score + replay write + shutdown grace                <=  30 s
 
 There is deliberately **no `/client/replay` live viewer**: the replay is a
 static file re-derived by the wasm bundle in the browser.
+
+---
+
+## bc20
+
+The protocol id is **unchanged** — `cogame.battlecode.v1`. The wire shape is
+identical; only the year-dependent *payload* differs. A new protocol id would
+force every existing consumer to re-register for no change in the contract.
+
+The registration blob gains two `scripted` values,
+`"bowl-of-chowder"` and `"examplefuncsplayer"`. A seat that sets neither env
+var takes the ACTIVE YEAR's default baseline: `awu` on bc26,
+`bowl-of-chowder` on bc20 — the strong published doctrine, never the weak
+floor.
+
+### The bc20 observation
+
+One sealed, simultaneous doctrine request per episode, exactly as bc26. The
+payload differs in three places:
+
+```jsonc
+{"protocol":"cogame.battlecode.v1","game_version":"GV05","year":"bc20",
+ "slot":0,"alias":"Clan Ash","opponent_alias":"Clan Basil","seed":871345,
+ "games":[{"map":"CentralLake","width":41,"height":41,"symmetry":"rotational",
+           "you_are":"A","hq_elevation":4,"hq_separation":34,
+           "soup_tiles":50,"soup_total":24800,"soup_near_hq":3100,
+           "cows":4,"initially_flooded_tiles":118,"rounds":1500}, …],
+ "flood_table":{"1":256,"2":464,"3":677,"4":931,"5":1210,"6":1413,"7":1501},
+ "scoring":{"weights":{"hq_survival":60,"unit_share":25,"net_worth_share":15},
+            "win_bonus_per_game":100,"games":3,
+            "note":"shares are float32; points truncate to an integer"},
+ "budget":{"attempt1_ms":20000,"retry_ms":12000,"one_shot":true}}
+```
+
+* **the map cards** carry the seat's own HQ starting elevation and the HQ
+  separation, which is what a doctrine has to plan the wall against;
+* **`flood_table`** says which round each integer elevation floods at — the
+  single most important fact in the year. Elevation 7 reports `1501` because
+  the water never reaches it inside the 1500-round cap;
+* **`scoring`** carries bc20's three weights instead of bc26's two weight sets.
+
+**Hidden**, as ever: the opponent's doctrine, sheet, notes, motto, real name
+and fallback status; every in-match state (a cog receives **no** per-round
+observation). The only cross-team channel inside a match is the sim's own
+blockchain and what a robot can see.
+
+### The bc20 reply
+
+```json
+{"sheet":{"opening":"rush","terraform_start_round":420,"lattice_radius":3,
+          "landscaper_count_curve":"swarm","miner_count_curve":"lean",
+          "vaporator_budget":0,"drone_role":"harass","net_gun_ring":1,
+          "rush_trigger":240,"wall_hq_round":300},
+ "notes":"Bury them by 400; if it stalls, wall at 300 and lattice out.",
+ "motto":"Soup is for the patient."}
+```
+
+Ten knobs, and **no `chassis`** (D1). The caps are the year-neutral ones: 16 KB
+of bytes for the whole reply, ≤ 32 sheet keys, 280 runes of `notes`, 48 of
+`motto`, ≤ 16 unknown keys recorded at ≤ 40 runes each — every one cut on a
+rune boundary.
