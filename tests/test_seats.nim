@@ -7,6 +7,8 @@
 ##
 ##   0.1.1  "Bad player token was accepted: …/player?slot=0&token=bad"
 ##   0.1.2  "Global viewer websocket did not produce a message from …/global"
+##   0.1.3  "Game websocket did not answer a WebSocket Ping with Pong" — the
+##          branch was there, but the Pong was EMPTY instead of echoing
 
 import std/strutils
 import harness
@@ -75,11 +77,30 @@ block:
   check("no /client/replay route is served",
     "\"/client/replay\"" notin server)
 
-  ## The lux-ai scar: a lost Ping -> Pong branch fails certification.
+  ## The lux-ai scar: a lost Ping -> Pong branch fails certification. And an
+  ## EMPTY Pong is the same failure with a different cause: RFC 6455 §5.5.3
+  ## says the Pong carries the Ping's application data, and the certifier
+  ## checks it (0.1.3).
   check("the websocket handler answers a Ping with a Pong",
-    "websocket.send(\"\", Pong)" in server)
+    "Pong)" in server)
+  check("and the Pong ECHOES the ping payload",
+    "websocket.send(message.data, Pong)" in server)
   ## The lux-ai / snake-royale scar: the seat registers with a BINARY frame.
   check("and does not filter non-text frames",
     "NOT filtered by frame kind" in server)
+
+  ## /client/player and /client/global are both probed with a plain GET
+  ## before the episode starts; a 404 on either fails the release.
+  check("/client/player answers a GET", "\"/client/player\"" in server)
+  check("/client/global answers a GET", "\"/client/global\"" in server)
+
+## The probe harness itself: it is the only thing that checks the contract
+## end to end without spending a release dispatch, so it has to exist and it
+## has to name every probe.
+block:
+  let probe = readFile("tools/ci/cert_probe.py")
+  for named in ["/healthz", "/client/player", "/client/global", "/global",
+                "token=bad", "coworld-certification-ping", "results_schema"]:
+    check("cert_probe.py covers " & named, named in probe)
 
 finish("test_seats")

@@ -207,7 +207,10 @@ proc websocketHandler(
     ## NOT filtered by frame kind: the seat registers with a Sprite v1 chat
     ## blob sent as a BINARY message.
     if message.kind == Ping:
-      websocket.send("", Pong)
+      ## The Pong must ECHO the Ping's application data — RFC 6455 §5.5.3,
+      ## and `coworld certify` checks it: an empty Pong reads as
+      ## "did not answer a WebSocket Ping with Pong" (0.1.3, 2026-09-04).
+      websocket.send(message.data, Pong)
       return
     let text = readSpriteInputText(message.data)
     let payload = if text.len > 0: text else: message.data
