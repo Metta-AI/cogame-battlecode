@@ -161,7 +161,19 @@ Ten beat kinds, and **every one has CSS** in `client/replay_broadcast.html`.
 | `episode_end` | `reason` | — |
 
 `flood_stage` fires once per integer level reached, so a 1499-round game emits
-at most six; `first_build` fires once per team per unit kind. `hq_buried` and
-`hq_drowned` are derived from the recorded per-game statistics rather than
-from a sim event, so the same two facts drive the endcard, the scrubber and
-`results.games[]`.
+at most six; `first_build` fires once per team per unit kind.
+
+`first_build.unit` is spelled with the engine's own `RobotType` names, which is
+why the drone is `delivery_drone` and not `drone`: `miner`, `refinery`,
+`vaporator`, `design_school`, `fulfillment_center`, `landscaper`,
+`delivery_drone`, `net_gun`. (`hq` and `cow` complete the type list and are
+never built by anyone, so they never appear.) The design note's shorter list —
+six kinds, with `drone` for the drone — is the subset it expected the chassis
+to put up; the chassis also builds miners and a refinery (§Divergences item 16
+in `docs/RULES-BC20.md`), and naming a beat after anything but the type that
+was built would make the feed line disagree with the sim. Every one of them
+draws as the `build` beat, which has CSS.
+
+`hq_buried` and `hq_drowned` are derived from the recorded per-game statistics
+rather than from a sim event, so the same two facts drive the endcard, the
+scrubber and `results.games[]`.
