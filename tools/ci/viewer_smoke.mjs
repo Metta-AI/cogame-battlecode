@@ -155,7 +155,8 @@ function die(code, message) {
 }
 
 function parseArgs(argv) {
-  const out = { timeout: 60, soak: 0, outDir: process.cwd(), headed: false, strictTextBounds: false };
+  const out = { timeout: 60, soak: 0, outDir: process.cwd(), headed: false,
+                strictTextBounds: false, killfeedOverlap: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const next = () => {
@@ -171,11 +172,12 @@ function parseArgs(argv) {
       case "--timeout": out.timeout = Number(next()); break;
       case "--soak": out.soak = Number(next()); break;
       case "--strict-text-bounds": out.strictTextBounds = true; break;
+      case "--killfeed-overlap": out.killfeedOverlap = true; break;
       case "--out": out.outDir = resolve(next()); break;
       case "--headed": out.headed = true; break;
       case "-h":
       case "--help":
-        die(0, "usage: viewer_smoke.mjs (--bundle <dir> --replay <file> | --url <url>) [--timeout 60] [--soak 0] [--strict-text-bounds] [--out dir]");
+        die(0, "usage: viewer_smoke.mjs (--bundle <dir> --replay <file> | --url <url>) [--timeout 60] [--soak 0] [--strict-text-bounds] [--killfeed-overlap] [--out dir]");
         break;
       default: die(2, `unknown argument: ${arg}`);
     }
@@ -189,6 +191,84 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
+
+
+// --------------------------------------------------------------------------
+// THE KILLFEED / STAT-BOX OVERLAP GATE (`--killfeed-overlap`).
+//
+// A LOCAL ADDITION TO THE TEMPLATE, reported as a delta in the build report.
+// `#killfeed` is anchored in board-scaled units (`--u`) and the year stat
+// boxes are anchored in pixels off the transport band, so on a small board at
+// FIT zoom the feed's offset falls BELOW the boxes and — being eight z-levels
+// higher — overdraws them (bc20 judge, advisory). The fix is a fourth :root
+// variable, `--statrail`, measured in relayout(); this is what proves it, at
+// three widths and at both FIT and 2x zoom, on every year's replay.
+//
+// It measures CLIENT RECTS, not CSS: a rule that is present and wrong fails
+// here exactly as a rule that is missing does.
+// --------------------------------------------------------------------------
+const OVERLAP_SCRIPT = `((zoomValue) => {
+  const slider = document.getElementById('zoom-slider');
+  if (slider) {
+    slider.value = String(zoomValue);
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  const feed = document.getElementById('killfeed');
+  if (!feed) return { ok: true, skipped: 'no #killfeed' };
+  const feedStyle = getComputedStyle(feed);
+  if (feedStyle.display === 'none' || feedStyle.visibility === 'hidden') {
+    return { ok: true, skipped: 'killfeed hidden' };
+  }
+  const fb = feed.getBoundingClientRect();
+  const hits = [];
+  const boxes = [];
+  for (const id of ['econ', 'bc20-soup', 'bc20-units', 'bc21-influence',
+                    'bc21-units']) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') continue;
+    const b = el.getBoundingClientRect();
+    if (b.width <= 0 || b.height <= 0) continue;
+    boxes.push({ id, box: [Math.round(b.left), Math.round(b.top),
+                           Math.round(b.right), Math.round(b.bottom)] });
+    const w = Math.min(b.right, fb.right) - Math.max(b.left, fb.left);
+    const h = Math.min(b.bottom, fb.bottom) - Math.max(b.top, fb.top);
+    if (w > 0 && h > 0) hits.push({ id, overlap: Math.round(w * h) });
+  }
+  return {
+    ok: hits.length === 0,
+    year: document.documentElement.getAttribute('data-year'),
+    statrail: getComputedStyle(document.documentElement)
+      .getPropertyValue('--statrail').trim(),
+    killfeed: [Math.round(fb.left), Math.round(fb.top),
+               Math.round(fb.right), Math.round(fb.bottom)],
+    boxes,
+    hits,
+  };
+})`;
+
+async function killfeedOverlapGate(page) {
+  const results = [];
+  const original = page.viewportSize();
+  // slider level = 1 + (value / 1000) * 11, so 0 is FIT and ~91 is 2x.
+  const zooms = [["fit", 0], ["2x", 91]];
+  for (const width of [360, 720, 1280]) {
+    await page.setViewportSize({ width, height: 720 });
+    for (const [label, value] of zooms) {
+      await sleep(350);
+      let probe;
+      try {
+        probe = await page.evaluate(OVERLAP_SCRIPT, value);
+      } catch (error) {
+        probe = { ok: false, error: String(error && error.message) };
+      }
+      results.push({ width, zoom: label, ...probe });
+    }
+  }
+  if (original) await page.setViewportSize(original);
+  return results;
+}
 
 // --------------------------------------------------------------------------
 // Playwright, pinned. Resolved late so --help works without it installed.
@@ -697,6 +777,24 @@ async function main() {
   } catch (error) {
     record(`[text-bounds] ${error && error.message}`);
   }
+  // ------------------------------------------------------------------
+  // The killfeed / stat-box overlap gate. Run last, because it resizes the
+  // viewport and drives the zoom slider.
+  // ------------------------------------------------------------------
+  let overlap = null;
+  let overlapFailure = "";
+  if (loaded && args.killfeedOverlap) {
+    overlap = await killfeedOverlapGate(page);
+    const bad = overlap.filter((r) => r.ok === false);
+    if (bad.length) {
+      overlapFailure = bad.map((r) =>
+        `#killfeed overlaps ${JSON.stringify(r.hits || r.error)} at ` +
+        `${r.width}px / ${r.zoom} zoom (year ${r.year}, --statrail ` +
+        `${r.statrail}, killfeed ${JSON.stringify(r.killfeed)}, boxes ` +
+        `${JSON.stringify(r.boxes)})`).join("; ");
+    }
+  }
+
   let boundsFailure = "";
   if (args.strictTextBounds && canvasText && canvasText.never_inside > 0) {
     boundsFailure = `${canvasText.never_inside} string(s) were NEVER drawn inside the ` +
@@ -733,7 +831,8 @@ async function main() {
     scrub_selector: scrubSelector,
     soak,
     canvas_text: canvasText,
-    failure: failure || boundsFailure || null,
+    killfeed_overlap: overlap,
+    failure: failure || boundsFailure || overlapFailure || null,
     console_tail: consoleLog.slice(-30),
     screenshot: pngPath,
   };
@@ -742,8 +841,8 @@ async function main() {
   await browser.close().catch(() => {});
   if (hosted) await new Promise((r) => hosted.server.close(r));
 
-  if (!loaded || playFailure || boundsFailure) {
-    console.error(`VIEWER SMOKE FAILED: ${failure || boundsFailure}`);
+  if (!loaded || playFailure || boundsFailure || overlapFailure) {
+    console.error(`VIEWER SMOKE FAILED: ${failure || boundsFailure || overlapFailure}`);
     if (boundsFailure && canvasText) {
       console.error("  never drawn inside the canvas -- no room was reserved for these:");
       for (const sample of canvasText.never_inside_samples) {

@@ -63,9 +63,10 @@
   // The featured-match frame, a tablet width and desktop -- ONE ROW PER
   // YEAR, because each year's readouts are different elements under
   // different CSS and a fixture that only lays out bc26 says nothing about
-  // bc20's flood, soup, unit and doctrine panels.
+  // bc20's flood, soup, unit and doctrine panels — or bc21's vote, influence,
+  // unit and doctrine panels.
   var SIZES = [[360, 640], [720, 900], [1280, 720]];
-  var YEARS = ['bc26', 'bc20'];
+  var YEARS = ['bc26', 'bc20', 'bc21'];
 
   function runes(text) { return Array.from(text); }
   function repeatRunes(text, count) {
@@ -81,7 +82,8 @@
 
   var params = new URLSearchParams(location.search);
   var inner = params.get('w');
-  var year = params.get('year') === 'bc20' ? 'bc20' : 'bc26';
+  var yearParam = params.get('year');
+  var year = (yearParam === 'bc20' || yearParam === 'bc21') ? yearParam : 'bc26';
 
   // ------------------------------------------------------------------
   // Parent: one iframe per width, each posting its own verdict back.
@@ -236,6 +238,36 @@
       '<br><i>' + notes + '</i></div>';
   }
 
+  // --- the bc21 row: the same full-cap strings through bc21's own words ---
+  var BC21_WORDS = [
+    'turtles and prints money, 70 % of spend on slanderers, 15 % of spend ' +
+      'on muckrakers, politicians ramp with the round, escalates the bid ' +
+      'when ahead, takes the neutral centres first, screens home, empowers ' +
+      'at 140 %, converts rather than kills, stops compounding at round 1100',
+    'spams muckrakers, 10 % of spend on slanderers, 70 % of spend on ' +
+      'muckrakers, cheap politicians, bids a flat 2, takes the neutral ' +
+      'centres first, flanks wide, empowers on contact, kills rather than ' +
+      'converts, stops compounding at round 250'
+  ];
+  var bc21Influence = '<span></span><span>Clan Ash</span><span>Clan Basil</span>';
+  [['influence', 18422, 9103], ['income', 24, 16], ['centres', '5 / 8', '3 / 8']]
+    .forEach(function (r) {
+      bc21Influence += '<span>' + r[0] + '</span><b>' + r[1] + '</b><b>' +
+        r[2] + '</b>';
+    });
+  var bc21Units = '';
+  for (var q = 0; q < 2; q++) {
+    bc21Units += '<div>' + ALIASES[q] +
+      ' Po <b>142</b> Sl <b>38</b> Mu <b>217</b> ' +
+      '<span class="buff">&times;1.043</span></div>';
+  }
+  var bc21Doctrines = '';
+  for (var z = 0; z < 2; z++) {
+    bc21Doctrines += '<div class="dline"><span class="dname">' + ALIASES[z] +
+      '</span> ' + NAMES[z] + ' — ' + BC21_WORDS[z] +
+      '<br><i>' + notes + '</i></div>';
+  }
+
   document.body.innerHTML =
     '<div id="viewport"><div id="stage"><div id="chrome">' +
       '<div id="scorebug">' +
@@ -244,6 +276,7 @@
           '<div class="time" id="clock-time">0:00</div>' +
           '<div class="caption" id="clock-caption">game 3 of 3 — DefaultMedium</div>' +
           '<button type="button" id="bc20-doctrines-toggle" hidden>doctrines</button>' +
+          '<button type="button" id="bc21-doctrines-toggle" hidden>doctrines</button>' +
         '</div></div>' +
         '<div class="plates" id="plates-r">' + plate(1, 'basil') + '</div>' +
       '</div>' +
@@ -261,6 +294,17 @@
         '<button type="button" id="bc20-doctrines-close" ' +
         'aria-label="Dismiss doctrines">&times;</button>' +
         '<div id="bc20-doctrines-body">' + bc20Doctrines + '</div></div>' +
+      '<div id="bc21-votes"><span class="lbl">CLAN ASH</span> <b>812</b>' +
+        '<span class="gauge"><i class="a" style="width:57%"></i>' +
+        '<i class="b" style="width:43%"></i></span>' +
+        '<b>604</b> <span class="lbl">CLAN BASIL</span>' +
+        '<span class="clinch">751 to clinch</span></div>' +
+      '<div id="bc21-units">' + bc21Units + '</div>' +
+      '<div id="bc21-influence">' + bc21Influence + '</div>' +
+      '<div id="bc21-doctrines">' +
+        '<button type="button" id="bc21-doctrines-close" ' +
+        'aria-label="Dismiss doctrines">&times;</button>' +
+        '<div id="bc21-doctrines-body">' + bc21Doctrines + '</div></div>' +
     '</div></div></div>';
 
   // The verdict: nothing may leave the frame, and nothing may hide text
@@ -268,7 +312,7 @@
   // containers — a container fixed to the frame's width cannot report that
   // the caption inside it ran off the end.
   function problem() {
-    var probe = year === 'bc20' ? 'bc20-doctrines' : 'doctrines';
+    var probe = year === 'bc26' ? 'doctrines' : year + '-doctrines';
     if (getComputedStyle(document.getElementById(probe)).position !==
         'absolute') {
       return 'page_styles.css did not load — the fixture would be testing ' +
@@ -305,12 +349,17 @@
     // clips its own text reads short and reports nothing. (The inherited
     // clock column is measured for containment above, but its text is the
     // starter's, not a doctrine's.)
-    var filled = document.querySelectorAll(year === 'bc20'
-      ? '#scorebug .plate, #scorebug .plate *, #bc20-flood, #bc20-flood *, ' +
+    var FILLED = {
+      bc26: '#scorebug .plate, #scorebug .plate *, #coopchip, #econ, #econ *, ' +
+        '#doctrines, #doctrines *',
+      bc20: '#scorebug .plate, #scorebug .plate *, #bc20-flood, #bc20-flood *, ' +
         '#bc20-soup, #bc20-soup *, #bc20-units, #bc20-units *, ' +
-        '#bc20-doctrines, #bc20-doctrines *'
-      : '#scorebug .plate, #scorebug .plate *, #coopchip, #econ, #econ *, ' +
-        '#doctrines, #doctrines *');
+        '#bc20-doctrines, #bc20-doctrines *',
+      bc21: '#scorebug .plate, #scorebug .plate *, #bc21-votes, #bc21-votes *, ' +
+        '#bc21-influence, #bc21-influence *, #bc21-units, #bc21-units *, ' +
+        '#bc21-doctrines, #bc21-doctrines *'
+    };
+    var filled = document.querySelectorAll(FILLED[year]);
     for (var j = 0; j < filled.length; j++) {
       var node = filled[j];
       var nodeStyle = getComputedStyle(node);
@@ -333,9 +382,10 @@
     // both seats, at 360 px, the doctrine panel may not take half the frame:
     // that is how a working replay came to look like a still image in two
     // live screenshots a minute apart.
-    // `probe` is the year's own doctrine panel: under data-year="bc20" the
-    // inherited #doctrines is `display: none !important`, so measuring it
-    // there would report a 0x0 rect and pass this rule vacuously (r1-F1).
+    // `probe` is the year's own doctrine panel: under data-year="bc20" or
+    // "bc21" the inherited #doctrines is `display: none !important`, so
+    // measuring it there would report a 0x0 rect and pass this rule vacuously
+    // (r1-F1).
     var panel = document.getElementById(probe).getBoundingClientRect();
     if (panel.height > frame.height * 0.5) {
       return 'the doctrine panel takes ' +
@@ -350,9 +400,7 @@
         runes(NAMES[0]).length + 3 + MAX_MOTTO_RUNES) {
       return 'the motto was shortened before it was measured';
     }
-    var shown = year === 'bc20'
-      ? document.querySelectorAll('#bc20-doctrines .dline i')
-      : document.querySelectorAll('#doctrines .dline i');
+    var shown = document.querySelectorAll('#' + probe + ' .dline i');
     if (!shown.length || shown[0].textContent !== notes) {
       return 'the notes were shortened before they were measured';
     }
