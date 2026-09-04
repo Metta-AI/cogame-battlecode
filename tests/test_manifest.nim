@@ -231,6 +231,23 @@ block:
     "cogame-battlecode-game:latest" in compose)
   check("both are linux/amd64", compose.count("platform: linux/amd64") == 2)
 
+# --- the licence trail is complete ------------------------------------------
+block:
+  ## AGPL-3.0 means the credits are load-bearing, and README.md links to
+  ## NOTICE — a link that pointed at nothing until r1-N11.
+  check("NOTICE exists", fileExists("NOTICE"))
+  let notice = readFile("NOTICE")
+  for named in ["battlecode/battlecode26", "engine.1.2.5",
+                "991c91af9c35db497f3508393cb6a6f5610725c0",
+                "awu7/battlecode-2026", "final",
+                "a70328eacaab18622cdac838f5e4e981c2a1f0cd",
+                "AGPL-3.0"]:
+    check("NOTICE names " & named, named in notice)
+  check("and says no upstream Java runs in the image",
+    "No upstream Java source runs in any image" in notice)
+  check("README's NOTICE link has a target", "[`NOTICE`](NOTICE)" in
+    readFile("README.md") and fileExists("NOTICE"))
+
 # --- no JVM anywhere in the image -------------------------------------------
 block:
   let dockerfile = readFile("Dockerfile")
