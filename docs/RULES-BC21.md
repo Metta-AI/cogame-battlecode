@@ -353,9 +353,12 @@ Every difference between this port and the pinned engine, with its reason.
 10. **18 of the 76 official maps** are converted, with `Cow` and `Misdirection`
     excluded for the reasons above.
 11. **Two chassis behaviours that are ours, not the engine's**, both in
-    `chassis/bids.nim`: a 0…2 influence **jitter** on every bid,
-    `hash(id, round) mod 3`, and a **bid bank** of `20 + round/5` influence
-    (capped at 300) held out of the build budget. A perfect mirror match on a
+    `chassis/bids.nim`: a 0…2 influence **jitter** on every bid, taken from a
+    multiplicative hash of the Center's id and the round
+    (`(((id xor round·0x9E3779B1)·0x85EBCA6B) >> 13) mod 3` — a *sum* of id and
+    round has a constant difference between two Centers, so ids congruent
+    mod 3 would tie every round), and a **bid bank** of `15 + round/10`
+    influence (capped at 150) held out of the build budget. A perfect mirror match on a
     symmetric map otherwise produces identical bids on both sides for hundreds
     of rounds, equal top bids give the vote to nobody, and the auction — the
     clock of the whole game — stops meaning anything. Both are deterministic in

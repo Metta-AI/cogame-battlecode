@@ -12,14 +12,16 @@
 ## TWO ADDITIONS THAT ARE OURS, both chassis behaviour rather than rules, and
 ## both recorded in docs/RULES-BC21.md §Divergences item 11:
 ##
-##   * a 0..2 influence JITTER, `(id*7 + round*3) mod 3`. A perfect mirror
+##   * a 0..2 influence JITTER, a multiplicative hash of the Center's id and
+##     the round (`((id xor round*0x9E3779B1) * 0x85EBCA6B) shr 13) mod 3`, not
+##     a sum of the two — see the comment on `plannedBid`. A perfect mirror
 ##     match on a symmetric map otherwise produces IDENTICAL bids on both sides
 ##     for hundreds of rounds, equal top bids give the vote to NOBODY, and the
 ##     auction — the clock of the whole game — stops meaning anything. It costs
 ##     at most two influence a round and is deterministic in the Center's id
 ##     and the round;
 ##   * a BID BANK (`bidBank`): unless `bid_policy` is `never`, an Enlightenment
-##     Center keeps `20 + round/5` influence (capped at 300) out of the build
+##     Center keeps `15 + round/10` influence (capped at 150) out of the build
 ##     budget, because a Center that spends to zero every round can only ever
 ##     bid 1 and the ladder has nothing to climb.
 
