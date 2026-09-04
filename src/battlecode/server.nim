@@ -30,6 +30,14 @@ type
 
 var app: AppState
 
+var
+  viewerLock: Lock
+  viewers: seq[WebSocket]
+    ## Every live `/global` spectator socket. Guarded by `viewerLock`;
+    ## mummy's `send` only enqueues, so pushing from the episode thread and
+    ## from the heartbeat is safe.
+  viewersRunning: bool
+
 proc initAppState() =
   initLock(app.lock)
   app.phase = "waiting for seats"
@@ -38,13 +46,29 @@ proc initAppState() =
     app.policy[slot].baseline = blAwu
     app.policy[slot].label = "awu"
 
+proc globalJson(): string {.gcsafe.}
+
+proc pushGlobal() {.gcsafe.} =
+  ## One frame of the global channel to every spectator. Sent as TEXT (the
+  ## same JSON document `GET /global` returns) and again as a Sprite v1 chat
+  ## blob, so a bitworld client and a plain websocket client both get
+  ## something they can read.
+  {.gcsafe.}:
+    let payload = globalJson()
+    let blob = blobFromSpriteChat(payload)
+    withLock viewerLock:
+      for viewer in viewers:
+        viewer.send(payload, TextMessage)
+        viewer.send(blob, BinaryMessage)
+
 proc setPhase(text: string) =
   {.gcsafe.}:
     withLock app.lock:
       app.phase = text
   echo "battlecode: ", text
+  pushGlobal()
 
-proc globalJson(): string =
+proc globalJson(): string {.gcsafe.} =
   {.gcsafe.}:
     withLock app.lock:
       return $(%*{
@@ -110,7 +134,41 @@ proc handleHealth(request: Request) =
   headers["Content-Type"] = "text/plain"
   request.respond(200, headers, "ok\n")
 
+proc wantsWebSocket(request: Request): bool =
+  ## mummy has no `isWebSocketUpgrade` on the request, so read the header the
+  ## handshake is defined by.
+  request.headers["Upgrade"].strip().toLowerAscii() == "websocket"
+
 proc handleGlobal(request: Request) =
+  ## `/global` answers BOTH ways on purpose. `coworld certify`'s
+  ## `smoke-episode` upgrades it and fails the game with
+  ## "Global viewer websocket did not produce a message" if nothing arrives
+  ## (cogame-battlecode 0.1.2, 2026-09-04), while the platform's status probe
+  ## and `docs/PROTOCOL.md` both want a plain JSON GET.
+  if request.wantsWebSocket():
+    ## A spectator socket carrying a seat's credentials is a player socket
+    ## wearing a viewer's hat; coworld-ctf refuses it and so does this.
+    if request.queryParams.getOrDefault("slot", "").len > 0 or
+        request.queryParams.getOrDefault("token", "").len > 0:
+      var forbidden: HttpHeaders
+      forbidden["Content-Type"] = "text/plain"
+      request.respond(403, forbidden,
+        "/global is a spectator channel and takes no player credentials\n")
+      echo "battlecode: refused a /global socket carrying seat credentials"
+      return
+    let websocket = request.upgradeToWebSocket()
+    ## mummy documents send() as callable immediately after the upgrade, and
+    ## the first frame goes out HERE rather than waiting for the next phase
+    ## change: a spectator that connects during a one-second certification
+    ## episode would otherwise see nothing at all.
+    {.gcsafe.}:
+      let payload = globalJson()
+      websocket.send(payload, TextMessage)
+      websocket.send(blobFromSpriteChat(payload), BinaryMessage)
+      withLock viewerLock:
+        viewers.add(websocket)
+    echo "battlecode: a spectator joined /global"
+    return
   var headers: HttpHeaders
   headers["Content-Type"] = "application/json"
   headers["Cache-Control"] = "no-cache"
@@ -165,7 +223,12 @@ proc websocketHandler(
     except CatchableError:
       slot = 0
     applyRegistration(slot, payload)
-  of ErrorEvent, CloseEvent: discard
+  of ErrorEvent, CloseEvent:
+    {.gcsafe.}:
+      withLock viewerLock:
+        for i in countdown(viewers.high, 0):
+          if $viewers[i] == $websocket:
+            viewers.delete(i)
 
 # ---------------------------------------------------------------------------
 #  The episode
@@ -352,8 +415,24 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
   echo "battlecode: reason=", reason, " games=", games.len,
     " scores=", scoresFor(games), " sim=", simSeconds, "s wall=", wallClock, "s"
 
+proc heartbeat(interval: int) {.thread.} =
+  ## A spectator that connects between phases still gets frames. Bounded by
+  ## `viewersRunning`, which `runServer` clears before it closes the server.
+  while true:
+    {.gcsafe.}:
+      if not viewersRunning: break
+    sleep(interval)
+    {.gcsafe.}:
+      if not viewersRunning: break
+      var any = false
+      withLock viewerLock:
+        any = viewers.len > 0
+      if any:
+        pushGlobal()
+
 proc runServer*(runtimeConfig: RuntimeConfig, config: GameConfig) =
   initAppState()
+  initLock(viewerLock)
   seatTokens = config.tokens
   var router: Router
   router.get("/healthz", handleHealth)
@@ -370,6 +449,10 @@ proc runServer*(runtimeConfig: RuntimeConfig, config: GameConfig) =
   echo "battlecode: listening on ", runtimeConfig.host, ":", runtimeConfig.port
   sleep(200)
 
+  viewersRunning = true
+  var heartbeatThread: Thread[int]
+  createThread(heartbeatThread, heartbeat, 500)
+
   runEpisode(runtimeConfig, config)
 
   ## The ~20 s shutdown grace: `/healthz` and `/global` keep answering after
@@ -378,4 +461,5 @@ proc runServer*(runtimeConfig: RuntimeConfig, config: GameConfig) =
   let graceMs = try: parseInt(getEnv("BATTLECODE_SHUTDOWN_GRACE_MS", "20000"))
                 except CatchableError: 20000
   sleep(max(0, graceMs))
+  viewersRunning = false
   server.close()

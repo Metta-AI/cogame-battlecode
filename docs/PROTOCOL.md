@@ -113,8 +113,8 @@ score + replay write + shutdown grace                <=  30 s
 | route | what |
 | --- | --- |
 | `GET /healthz`, `GET /health` | liveness; keeps answering for a ~20 s shutdown grace after the artifacts are written |
-| `GET /global` | phase, seat registration, and the results document once it exists |
-| `GET /player?slot=N&token=…` | the seat websocket |
+| `GET /global` | phase, seat registration, and the results document once it exists. **Also upgrades**: a spectator that opens it as a WebSocket gets that same JSON as a text frame and as a Sprite v1 chat blob, immediately on connect and then every 500 ms, so a socket opened mid-episode is never silent. A `/global` upgrade carrying `slot` or `token` is refused 403 — a spectator does not use a seat's credentials. |
+| `GET /player?slot=N&token=…` | the seat websocket. The token is a **credential**: the runner injects one per seat into `game_config.tokens`, and a wrong, missing or out-of-range one is refused **403 before the upgrade** so the dialler sees a failed handshake. A config that declares no tokens at all is a local run and is left open. |
 | `GET /client/global`, `/client/player` | a one-paragraph page saying the watchable artifact is the recorded replay |
 
 There is deliberately **no `/client/replay` live viewer**: the replay is a
