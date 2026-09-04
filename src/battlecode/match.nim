@@ -1,16 +1,21 @@
 ## The match: three games, alternating sides, one sealed doctrine per seat.
 ##
+## YEAR-NEUTRAL. The games are played through `years/dispatch.nim`, which is
+## the only module that names a year's world; the beats collected below are
+## mapped from the year's own event stream by kind, so a new year adds event
+## kinds and nothing here changes shape.
+##
 ## Everything wall-clock-driven is recorded as ONE load-bearing record and
 ## applied by the SAME proc on record and on playback (`abandonAfter`), which
 ## is the particle-worlds 2026-08-26 scar: a `deadline` stop derived from the
 ## recorder's clock and re-derived from the viewer's clock is not the same
 ## match.
 
-import std/[json, monotimes, strutils, times]
+import std/[json, monotimes, times]
 import sim_types, sheet
-import years/bc26/[constants, maps, rules, world]
+import years/dispatch
 
-export rules, maps
+export dispatch
 
 type
   MatchEvent* = object
@@ -29,6 +34,9 @@ type
     maps*: seq[string]
     sideAslots*: seq[int]
     sheets*: array[2, Sheet]
+    chassis*: array[2, ChassisKind]
+      ## Which chassis each SEAT drives. Never a sheet field (D1): it comes
+      ## from `PLAYER_SCRIPTED`, or is the fixed champion chassis.
     maxRounds*: int
     ## The wall-clock stop, RECORDED: round `abandonAfter[g]` is the last
     ## round game `g` played. -1 means the game ran to its own end.
@@ -61,37 +69,88 @@ proc buildPlan*(config: GameConfig, sheets: array[2, Sheet],
   result.year = config.year
   result.maxRounds = config.maxRounds
   result.sheets = sheets
+  result.chassis = [ckBowlOfChowder, ckBowlOfChowder]
   let count = max(1, config.gamesPerMatch)
-  result.maps = drawMaps(config.pool, seed, count)
+  result.maps = drawMapsFor(config.year, config.pool, seed, count)
   for g in 0 ..< result.maps.len:
-    result.sideAslots.add(sideAslotFor(seed, g))
+    result.sideAslots.add(sideAslotFor(config.year, seed, g))
     result.abandonAfter.add(-1)
 
 proc winsNeeded*(games: int): int = games div 2 + 1
 
-proc collectGameEvents(w: World, gameIndex: int, plan: MatchPlan,
-                       events: var seq[MatchEvent]) =
-  ## The engine's own event stream, filtered to the beats the chrome draws.
+proc aliasOfTeam(plan: MatchPlan, gameIndex, teamOrdinal: int): string =
+  ## `teamOrdinal` is 0 for A and 1 for B; which SEAT that is alternates per
+  ## game.
+  let slot = if teamOrdinal == 0: plan.sideAslots[gameIndex]
+             else: 1 - plan.sideAslots[gameIndex]
+  aliasFor(slot)
+
+proc collectGameEvents(
+  raw: seq[tuple[round: int, kind: string, a, b, c: int, s: string]],
+  gameIndex: int, plan: MatchPlan, events: var seq[MatchEvent]
+) =
+  ## The year's own event stream, filtered to the beats the chrome draws.
   ## Everything else stays in the sim; the replay re-derives it.
-  for e in w.events:
+  var firstBuildSeen: seq[string]
+  for e in raw:
     case e.kind
     of "backstab":
-      let slot = if Team(e.a) == teamA: plan.sideAslots[gameIndex]
-                 else: 1 - plan.sideAslots[gameIndex]
       events.add(ev("backstab", game = gameIndex, round = e.round,
-        fields = %*{"by_alias": aliasFor(slot), "by_slot": slot,
+        fields = %*{"by_alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "by_slot": (if e.a == 0: plan.sideAslots[gameIndex]
+                                else: 1 - plan.sideAslots[gameIndex]),
                     "trigger": e.s}))
     of "king_built":
-      let slot = if Team(e.b) == teamA: plan.sideAslots[gameIndex]
-                 else: 1 - plan.sideAslots[gameIndex]
       events.add(ev("king_built", game = gameIndex, round = e.round,
-        fields = %*{"alias": aliasFor(slot), "kings_now": e.c}))
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.b),
+                    "kings_now": e.c}))
     of "cat_fed":
-      let slot = if Team(e.c) == teamA: plan.sideAslots[gameIndex]
-                 else: 1 - plan.sideAslots[gameIndex]
       events.add(ev("cat_fed", game = gameIndex, round = e.round,
-        fields = %*{"alias": aliasFor(slot)}))
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.c)}))
+    of "flood_stage":
+      events.add(ev("flood_stage", game = gameIndex, round = e.c,
+        fields = %*{"level": e.a, "flooded_tiles": e.b}))
+    of "first_build":
+      let key = $e.a & ":" & $e.b
+      if key in firstBuildSeen: continue
+      firstBuildSeen.add(key)
+      events.add(ev("first_build", game = gameIndex, round = e.c,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "unit": Bc20UnitNames[e.b]}))
+    of "wall_closed":
+      events.add(ev("wall_closed", game = gameIndex, round = e.c,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "min_ring_elevation": e.b}))
+    of "rush_launched":
+      events.add(ev("rush_launched", game = gameIndex, round = e.c,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "units": e.b}))
+    of "drone_water_drop":
+      events.add(ev("drone_water_drop", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.b),
+                    "victim_alias": plan.aliasOfTeam(gameIndex, 1 - e.b),
+                    "victim_unit": Bc20UnitNames[e.c]}))
     else: discard
+
+proc bc20HqEvents(outcome: GameOutcome, gameIndex: int,
+                  events: var seq[MatchEvent]) =
+  ## `hq_buried` / `hq_drowned` are CHAPTER MARKERS, derived from the recorded
+  ## per-game statistics rather than from a sim event, so the same two facts
+  ## drive the endcard, the scrubber and `results.games[]`.
+  if outcome.stats.isNil: return
+  if not outcome.stats.hasKey("hq_lost_round"): return
+  for slot in 0 .. 1:
+    let round = outcome.stats["hq_lost_round"][slot].getInt(-1)
+    if round < 0: continue
+    let cause = outcome.stats["hq_lost_cause"][slot].getStr("none")
+    if cause == "buried":
+      events.add(ev("hq_buried", game = gameIndex, round = round,
+        fields = %*{"alias": aliasFor(slot), "by_alias": aliasFor(1 - slot),
+                    "dirt": 50}))
+    elif cause == "drowned":
+      events.add(ev("hq_drowned", game = gameIndex, round = round,
+        fields = %*{"alias": aliasFor(slot),
+                    "water_level": outcome.stats{"water_level_end"}.getFloat()}))
 
 proc playMatch*(config: GameConfig, plan: var MatchPlan,
                 events: var seq[MatchEvent]): (seq[GameOutcome], EpisodeReason) =
@@ -113,15 +172,16 @@ proc playMatch*(config: GameConfig, plan: var MatchPlan,
       break
     let remaining = (matchBudget - elapsed).inSeconds.int
     let perGame = max(1, min(config.perGameBudgetSeconds, remaining))
-    let spec = loadMap(plan.maps[g])
+    let card = mapCardFor(config.year, plan.maps[g], plan.sideAslots[g],
+      plan.sideAslots[g], plan.maxRounds)
     events.add(ev("game_start", game = g, round = 0, fields = %*{
       "map": plan.maps[g],
-      "width": spec.width, "height": spec.height,
+      "width": card{"width"}.getInt(), "height": card{"height"}.getInt(),
       "sides": [aliasFor(plan.sideAslots[g]), aliasFor(1 - plan.sideAslots[g])]
     }))
-    let (w, outcome) = playGame(spec, plan.sheets, g, plan.sideAslots[g],
-      plan.maxRounds, perGame)
-    collectGameEvents(w, g, plan, events)
+    let (outcome, raw) = playGameFor(config.year, plan.maps[g], plan.sheets,
+      plan.chassis, g, plan.sideAslots[g], plan.maxRounds, perGame)
+    collectGameEvents(raw, g, plan, events)
     if outcome.aborted:
       ## The unfinished game is DISCARDED, and the round it stopped at is
       ## recorded so the viewer's re-derivation stops in the same place.
@@ -130,24 +190,28 @@ proc playMatch*(config: GameConfig, plan: var MatchPlan,
       events.add(ev("game_abandoned", game = g, round = outcome.roundsPlayed,
         fields = %*{"map": plan.maps[g]}))
       break
+    bc20HqEvents(outcome, g, events)
     outcomes.add(outcome)
     if outcome.winnerSlot >= 0:
       wins[outcome.winnerSlot] += 1
+    var endFields = %*{
+      "winner_alias": (if outcome.winnerSlot >= 0:
+                         aliasFor(outcome.winnerSlot) else: "nobody"),
+      "winner_slot": outcome.winnerSlot,
+      "end_reason": outcome.endReason,
+      "points": [outcome.points[0], outcome.points[1]]
+    }
+    if outcome.stats != nil and outcome.stats.hasKey("cooperation_at_end"):
+      endFields["cooperation_at_end"] = outcome.stats["cooperation_at_end"]
     events.add(ev("game_end", game = g, round = outcome.roundsPlayed,
-      fields = %*{
-        "winner_alias": (if outcome.winnerSlot >= 0:
-                           aliasFor(outcome.winnerSlot) else: "nobody"),
-        "winner_slot": outcome.winnerSlot,
-        "end_reason": $outcome.endReason,
-        "points": [outcome.points[0], outcome.points[1]],
-        "cooperation_at_end": outcome.cooperationAtEnd
-      }))
+      fields = endFields))
   (outcomes, reason)
 
 proc scoresFor*(games: seq[GameOutcome]): array[2, float] =
   ## `100 * gamesWon + mean(gamePoints over games actually played)`.
   ## Higher is better; the 100-per-game win bonus dominates, which is what
-  ## makes "losing every rat king loses the game outright" true.
+  ## makes "lose your HQ, lose the game" true in the ranking as well as in the
+  ## rules.
   if games.len == 0:
     return [0.0, 0.0]
   var wins: array[2, int]

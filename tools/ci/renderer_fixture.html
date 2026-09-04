@@ -60,8 +60,12 @@
   // to everything except one lenient viewer.
   var MAX_NOTE_RUNES = 280;
   var MAX_MOTTO_RUNES = 48;
-  // The featured-match frame, a tablet width and desktop.
+  // The featured-match frame, a tablet width and desktop -- ONE ROW PER
+  // YEAR, because each year's readouts are different elements under
+  // different CSS and a fixture that only lays out bc26 says nothing about
+  // bc20's flood, soup, unit and doctrine panels.
   var SIZES = [[360, 640], [720, 900], [1280, 720]];
+  var YEARS = ['bc26', 'bc20'];
 
   function runes(text) { return Array.from(text); }
   function repeatRunes(text, count) {
@@ -77,6 +81,7 @@
 
   var params = new URLSearchParams(location.search);
   var inner = params.get('w');
+  var year = params.get('year') === 'bc20' ? 'bc20' : 'bc26';
 
   // ------------------------------------------------------------------
   // Parent: one iframe per width, each posting its own verdict back.
@@ -88,13 +93,18 @@
     var readout = document.createElement('div');
     readout.id = 'verdict';
     document.body.appendChild(readout);
-    var frames = SIZES.map(function (size) {
-      var frame = document.createElement('iframe');
-      frame.width = String(size[0]);
-      frame.height = String(size[1]);
-      frame.src = location.pathname + '?w=' + size[0];
-      box.appendChild(frame);
-      return frame;
+    var frames = [];
+    var labels = [];
+    YEARS.forEach(function (year) {
+      SIZES.forEach(function (size) {
+        var frame = document.createElement('iframe');
+        frame.width = String(size[0]);
+        frame.height = String(size[1]);
+        frame.src = location.pathname + '?w=' + size[0] + '&year=' + year;
+        box.appendChild(frame);
+        frames.push(frame);
+        labels.push(year + ' @ ' + size[0] + 'px');
+      });
     });
     var deadline = Date.now() + 30000;
     (function collect() {
@@ -111,9 +121,9 @@
           return;
         }
         if (!child || child.__fixtureVerdict === undefined) { pending = true; continue; }
-        lines.push(SIZES[i][0] + 'px: ' + (child.__fixtureVerdict || 'ok'));
+        lines.push(labels[i] + ': ' + (child.__fixtureVerdict || 'ok'));
         if (child.__fixtureVerdict && !problem) {
-          problem = SIZES[i][0] + 'px: ' + child.__fixtureVerdict;
+          problem = labels[i] + ': ' + child.__fixtureVerdict;
         }
       }
       readout.textContent = lines.join('\n');
@@ -160,6 +170,11 @@
   // relayout()'s own arithmetic (client/replay_broadcast.html): --hudscale
   // from the width, --topband from the scale, --band from the measured
   // transport height (76 px is what the inherited bar measures).
+  // ONE ATTRIBUTE picks the year, exactly as the page does from the replay
+  // header; the stylesheet extracted from client/replay_broadcast.html then
+  // shows one block and hides the other.
+  document.documentElement.setAttribute('data-year', year);
+
   var scale = Math.max(0.62, Math.min(1, window.innerWidth / 1100));
   var root = document.documentElement.style;
   root.setProperty('--hudscale', String(scale));
@@ -193,6 +208,34 @@
   }
   doctrines += '</div>';
 
+  // --- the bc20 row: the same full-cap strings through bc20's own words ---
+  var BC20_WORDS = [
+    'lattices inward first, never commits a rush, walls at 250, terraforms ' +
+      'from 300, lattice radius 6, steady landscapers, steady miners, ' +
+      '2 vaporators, drones harass, 2 net guns',
+    'rushes the enemy HQ, commits at round 240, walls at 300, terraforms ' +
+      'from 500, lattice radius 3, swarm landscapers, lean miners, ' +
+      'no vaporators, drones bust walls, no net guns'
+  ];
+  var bc20Soup = '<span></span><span>Clan Ash</span><span>Clan Basil</span>';
+  [['soup', 1482, 903], ['mined', 24800, 19310], ['refined', 18240, 15102]]
+    .forEach(function (r) {
+      bc20Soup += '<span>' + r[0] + '</span><b>' + r[1] + '</b><b>' +
+        r[2] + '</b>';
+    });
+  var bc20Units = '';
+  for (var u = 0; u < 2; u++) {
+    bc20Units += '<div>' + ALIASES[u] +
+      ' Mi <b>12</b> La <b>18</b> Dr <b>9</b> Va <b>4</b> NG <b>3</b> ' +
+      'DS <b>2</b> FC <b>1</b> <span class="hqdirt">dirt 34/50</span></div>';
+  }
+  var bc20Doctrines = '';
+  for (var v = 0; v < 2; v++) {
+    bc20Doctrines += '<div class="dline"><span class="dname">' + ALIASES[v] +
+      '</span> ' + NAMES[v] + ' — ' + BC20_WORDS[v] +
+      '<br><i>' + notes + '</i></div>';
+  }
+
   document.body.innerHTML =
     '<div id="viewport"><div id="stage"><div id="chrome">' +
       '<div id="scorebug">' +
@@ -200,12 +243,24 @@
         '<div class="clock-col"><div class="clock amb" id="clock">' +
           '<div class="time" id="clock-time">0:00</div>' +
           '<div class="caption" id="clock-caption">game 3 of 3 — DefaultMedium</div>' +
+          '<button type="button" id="bc20-doctrines-toggle" hidden>doctrines</button>' +
         '</div></div>' +
         '<div class="plates" id="plates-r">' + plate(1, 'basil') + '</div>' +
       '</div>' +
       '<div id="coopchip" class="backstab">BACKSTAB — Clan Basil, round 1612</div>' +
       '<div id="econ">' + econ + '</div>' +
       '<div id="doctrines">' + doctrines + '</div>' +
+      '<div id="bc20-flood"><span class="lbl">WATER</span> <b>4.71</b>' +
+        '<span class="gauge"><i style="width:62%"></i></span>' +
+        '<span>62% flooded</span>' +
+        '<span class="hqelev">CLAN ASH HQ elev 8</span>' +
+        '<span class="hqelev">CLAN BASIL HQ elev 3</span></div>' +
+      '<div id="bc20-units">' + bc20Units + '</div>' +
+      '<div id="bc20-soup">' + bc20Soup + '</div>' +
+      '<div id="bc20-doctrines">' +
+        '<button type="button" id="bc20-doctrines-close" ' +
+        'aria-label="Dismiss doctrines">&times;</button>' +
+        '<div id="bc20-doctrines-body">' + bc20Doctrines + '</div></div>' +
     '</div></div></div>';
 
   // The verdict: nothing may leave the frame, and nothing may hide text
@@ -213,7 +268,8 @@
   // containers — a container fixed to the frame's width cannot report that
   // the caption inside it ran off the end.
   function problem() {
-    if (getComputedStyle(document.getElementById('doctrines')).position !==
+    var probe = year === 'bc20' ? 'bc20-doctrines' : 'doctrines';
+    if (getComputedStyle(document.getElementById(probe)).position !==
         'absolute') {
       return 'page_styles.css did not load — the fixture would be testing ' +
         'nothing (extracted from client/replay_broadcast.html by ci.yml)';
@@ -249,9 +305,12 @@
     // clips its own text reads short and reports nothing. (The inherited
     // clock column is measured for containment above, but its text is the
     // starter's, not a doctrine's.)
-    var filled = document.querySelectorAll(
-      '#scorebug .plate, #scorebug .plate *, #coopchip, #econ, #econ *, ' +
-      '#doctrines, #doctrines *');
+    var filled = document.querySelectorAll(year === 'bc20'
+      ? '#scorebug .plate, #scorebug .plate *, #bc20-flood, #bc20-flood *, ' +
+        '#bc20-soup, #bc20-soup *, #bc20-units, #bc20-units *, ' +
+        '#bc20-doctrines, #bc20-doctrines *'
+      : '#scorebug .plate, #scorebug .plate *, #coopchip, #econ, #econ *, ' +
+        '#doctrines, #doctrines *');
     for (var j = 0; j < filled.length; j++) {
       var node = filled[j];
       var nodeStyle = getComputedStyle(node);
@@ -288,8 +347,10 @@
         runes(NAMES[0]).length + 3 + MAX_MOTTO_RUNES) {
       return 'the motto was shortened before it was measured';
     }
-    if (document.querySelectorAll('#doctrines .dline i')[0].textContent !==
-        notes) {
+    var shown = year === 'bc20'
+      ? document.querySelectorAll('#bc20-doctrines .dline i')
+      : document.querySelectorAll('#doctrines .dline i');
+    if (!shown.length || shown[0].textContent !== notes) {
       return 'the notes were shortened before they were measured';
     }
     return null;

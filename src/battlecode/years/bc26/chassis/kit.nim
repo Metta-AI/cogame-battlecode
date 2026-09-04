@@ -10,10 +10,10 @@
 
 import std/tables
 import ../../../rng
-import ../../../sheet
+import ../knobs
 import ../constants, ../world
 
-export sheet, constants, world, rng
+export knobs, constants, world, rng
 
 type
   Brain* = ref object

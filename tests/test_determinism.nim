@@ -12,7 +12,7 @@ import battlecode/[baselines, match, replay, results, sheet, sim_types]
 import battlecode/years/bc26/[constants, maps, rules, world]
 
 proc play(mapName: string, sheets: array[2, Sheet], rounds: int,
-          sideAslot = 0): GameOutcome =
+          sideAslot = 0): GameOutcome26 =
   let (w, outcome) = playGame(loadMap(mapName), sheets, 0, sideAslot, rounds, 0)
   outcome
 
@@ -73,7 +73,7 @@ proc deriveAndCompare(config: GameConfig, sheets: array[2, Sheet],
   for slot in 0 .. 1: doc.names[slot] = "seat" & $slot
   for g in games:
     doc.games.add(GameHeader(index: g.index, map: g.mapName,
-      mapSha: mapSha(g.mapName), sideAslot: g.sideAslot,
+      mapSha: mapSha("bc26", g.mapName), sideAslot: g.sideAslot,
       rounds: g.roundsPlayed, hashChain: g.hashChain))
   ## Re-derive from the written bytes, exactly as the wasm viewer does.
   let reparsed = parseReplay($doc.toJson())
@@ -81,7 +81,7 @@ proc deriveAndCompare(config: GameConfig, sheets: array[2, Sheet],
   while deriver.advance(): discard
   (reason, deriver.mismatchRound < 0, games)
 
-var seenReasons: seq[EndReason]
+var seenReasons: seq[string]
 block:
   ## `round_limit`: a short game that neither side can finish.
   var config = defaultGameConfig()
@@ -94,7 +94,7 @@ block:
   check("and re-derives with no hash mismatch", r.ok)
   checkEq("one game was recorded", r.outcomes.len, 1)
   checkEq("and it ended on the round limit", r.outcomes[0].endReason,
-    erRoundLimit)
+    $erRoundLimit)
   seenReasons.add(r.outcomes[0].endReason)
 
 block:
@@ -109,7 +109,7 @@ block:
   check("and re-derives with no hash mismatch", r.ok)
   checkEq("one game was recorded", r.outcomes.len, 1)
   checkEq("and it ended on the kings", r.outcomes[0].endReason,
-    erKingsDestroyed)
+    $erKingsDestroyed)
   seenReasons.add(r.outcomes[0].endReason)
 
 block:
@@ -140,7 +140,7 @@ block:
   checkEq("the cat hunt completes", r.reason, epComplete)
   checkEq("one game was recorded", r.outcomes.len, 1)
   checkEq("and it ended with the cats cleared", r.outcomes[0].endReason,
-    erCatsCleared)
+    $erCatsCleared)
   check("and re-derives with no hash mismatch", r.ok)
   seenReasons.add(r.outcomes[0].endReason)
 
@@ -188,11 +188,11 @@ block:
   var frames = 0
   while deriver.advance(): inc frames
   checkEq("and stops exactly there", frames, stoppedAt)
-  checkEq("at the recorded round", deriver.world.currentRound, stoppedAt)
+  checkEq("at the recorded round", deriver.session.w26.currentRound, stoppedAt)
   checkEq("with no hash mismatch", deriver.mismatchRound, -1)
   ## `abandoned` is the one end reason that never reaches `results.games[]`
   ## (playMatch discards the game); its record -> re-derive is this block.
-  seenReasons.add(erAbandoned)
+  seenReasons.add($erAbandoned)
 
 block:
   ## The scoring of a deadline episode is honest: only the games that
@@ -214,20 +214,20 @@ block:
   var doc = ReplayDoc(gameVersion: GameVersion, year: "bc26",
     config: %*{}, seed: 1, seats: seats, plan: plan,
     result: %*{}, games: @[GameHeader(index: 0, map: "closeup",
-      mapSha: mapSha("closeup"), sideAslot: 0, rounds: outcome.roundsPlayed,
+      mapSha: mapSha("bc26", "closeup"), sideAslot: 0, rounds: outcome.roundsPlayed,
       hashChain: outcome.hashChain)])
   for slot in 0 .. 1: doc.names[slot] = "s" & $slot
   let text = $doc.toJson()
   let deriver = newDeriver(parseReplay(text))
   while deriver.advance(): discard
   checkEq("the re-derived chain matches the recorded one",
-    toHex(deriver.world.hashChain), outcome.hashChain)
+    toHex(deriver.session.w26.hashChain), outcome.hashChain)
   checkEq("and no mismatch round is reported", deriver.mismatchRound, -1)
   ## And once more from the same bytes, to prove the reader is pure.
   let again = newDeriver(parseReplay(text))
   while again.advance(): discard
   checkEq("re-reading the same bytes gives the same chain",
-    toHex(again.world.hashChain), outcome.hashChain)
+    toHex(again.session.w26.hashChain), outcome.hashChain)
 
 # --- EVERY end reason was covered above -------------------------------------
 block:
@@ -235,6 +235,6 @@ block:
   ## every end reason" was a claim no assertion made (r1-N13b). Now the
   ## blocks fill it and this fails if one is ever dropped.
   for reason in EndReason:
-    check("record -> re-derive covered " & $reason, reason in seenReasons)
+    check("record -> re-derive covered " & $reason, $reason in seenReasons)
 
 finish("test_determinism")

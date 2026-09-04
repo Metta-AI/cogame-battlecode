@@ -94,3 +94,74 @@ Load signalling: `static_replay.js` sets `data-replay-loaded="true"` on
 first board frame is composited), and the `coworld-replay` bridge posts `ready`
 from a callback fired **after** that attribute is set. On any failure it sets
 `data-replay-error="<message>"` and shows the failure card.
+
+---
+
+## bc20
+
+A `bc20` recording is the same document with `"year": "bc20"`. Everything the
+format promises holds unchanged — self-sufficient by re-derivation, no
+per-round state dump, no engine bytes — and three things are worth naming.
+
+**No `.bc20` bytes, and no blockchain dump.** The chain is a pure function of
+the sim, so the browser re-derives every block from the events, the config and
+the seed, and `#bc20-chain` on the endcard reads the re-derived blocks. There
+is no `match_b64` field and there never was one.
+
+**The chassis rides on the seat, not in the sheet.** `chassis` is not a
+doctrine knob in either year (D1). bc26 keeps a `chassis` field inside its
+applied sheet because its filler path sets it there; bc20 records it as a
+sibling of `policy` on the seat:
+
+```jsonc
+ "seats":[{"slot":0,"alias":"Clan Ash","name":"daveey","policy":"llm",
+           "chassis":"bowl-of-chowder",
+           "sheet":{"opening":"lattice", …the ten knobs…},
+           "sheet_unknown_fields":["chassis"],   // if a reply sent one
+           …}]
+```
+
+The deriver reads it back, because it has to run the bot the recording ran or
+every round mismatches.
+
+**`results.games[]` carries the year's own statistics.** The five keys
+`map`, `side`, `rounds_played`, `winner` and `end_reason` are required and
+year-neutral; each year's statistics are optional siblings and the two sets do
+not collide. `end_reason`'s enum is the union of both years' `DominationFactor`
+renderings plus our own wall-clock `abandoned`. This is deliberately **not** a
+nested `stats` object: nesting would change the bytes every shipped bc26
+replay's `result` block carries.
+
+bc20's optional keys, each a 2-array in **seat** order unless marked scalar:
+`hq_alive`, `hq_lost_round` (−1 if alive), `hq_lost_cause`
+(`buried` | `drowned` | `none`), `soup_mined`, `soup_refined`, `net_worth`,
+`units_alive`, `units_built`, `miners_built`, `landscapers_built`,
+`drones_built`, `vaporators_built`, `net_guns_built`, `dirt_moved`,
+`drone_pickups`, `drone_water_drops`, `net_gun_kills`, `transactions_sent`,
+`transactions_minted`, `blockchain_soup_spent`; scalars
+`global_pollution_peak`, `flooded_tiles_end`, `water_level_end`.
+
+### The bc20 event vocabulary
+
+Ten beat kinds, and **every one has CSS** in `client/replay_broadcast.html`.
+
+| `kind` | fields | beat |
+| --- | --- | --- |
+| `episode_start` | `seed`, `year`, `maps`, `aliases` | — |
+| `doctrine_requested` / `_received` / `_retry` / `_fallback` | `slot`, `attempt`, `cause`… | `doctrine` |
+| `game_start` | `game`, `map`, `width`, `height`, `sides` | `game` |
+| `flood_stage` | `level` (1…7), `flooded_tiles` | `flood` |
+| `first_build` | `alias`, `unit` | `build` |
+| `wall_closed` | `alias`, `min_ring_elevation` | `wall` |
+| `rush_launched` | `alias`, `units` | `rush` |
+| `drone_water_drop` | `alias`, `victim_alias`, `victim_unit` | `drop` |
+| `hq_buried` | `alias` (victim), `by_alias`, `dirt` | `bury` (chapter marker) |
+| `hq_drowned` | `alias` (victim), `water_level` | `drown` (chapter marker) |
+| `game_end` / `game_abandoned` | `winner_alias`, `end_reason`, `points` | `end` |
+| `episode_end` | `reason` | — |
+
+`flood_stage` fires once per integer level reached, so a 1499-round game emits
+at most six; `first_build` fires once per team per unit kind. `hq_buried` and
+`hq_drowned` are derived from the recorded per-game statistics rather than
+from a sim event, so the same two facts drive the endcard, the scrubber and
+`results.games[]`.

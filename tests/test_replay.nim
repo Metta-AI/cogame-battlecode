@@ -10,7 +10,10 @@ proc buildDoc(mapName: string, notes, motto: string): (ReplayDoc, GameOutcome) =
   var sheets = [baselineSheet(blAwu), baselineSheet(blScaffold)]
   sheets[0].notes = notes
   sheets[0].motto = motto
-  let (w, outcome) = playGame(loadMap(mapName), sheets, 0, 0, 500, 0)
+  ## Through the YEAR BOUNDARY, exactly as the server does, so the document
+  ## this test round-trips is the document the server writes.
+  let (outcome, _) = playGameFor("bc26", mapName, sheets,
+    [ckBowlOfChowder, ckBowlOfChowder], 0, 0, 500, 0)
   var plan = MatchPlan(seed: 4242, year: "bc26", maxRounds: 500,
     maps: @[mapName], sideAslots: @[0], abandonAfter: @[-1], sheets: sheets)
   var seats: array[2, SeatReport]
@@ -24,13 +27,13 @@ proc buildDoc(mapName: string, notes, motto: string): (ReplayDoc, GameOutcome) =
     ev("game_end", game = 0, round = outcome.roundsPlayed, fields = %*{
       "winner_alias": aliasFor(max(0, outcome.winnerSlot)),
       "winner_slot": outcome.winnerSlot,
-      "end_reason": $outcome.endReason,
+      "end_reason": outcome.endReason,
       "points": [outcome.points[0], outcome.points[1]]})]
   var doc = ReplayDoc(gameVersion: GameVersion, year: "bc26",
     config: %*{"pool": "small", "seed": 4242}, seed: 4242, seats: seats,
     events: events, plan: plan,
     result: resultsJson(seats, @[outcome], plan, epComplete, 1.0, 2.0),
-    games: @[GameHeader(index: 0, map: mapName, mapSha: mapSha(mapName),
+    games: @[GameHeader(index: 0, map: mapName, mapSha: mapSha("bc26", mapName),
       sideAslot: 0, rounds: outcome.roundsPlayed,
       hashChain: outcome.hashChain, roundChains: outcome.roundChains)])
   for slot in 0 .. 1: doc.names[slot] = seats[slot].name
@@ -127,8 +130,9 @@ block:
   while deriver.advance(): inc frames
   checkEq("the deriver plays every frame", frames, outcome.roundsPlayed)
   checkEq("with no hash mismatch", deriver.mismatchRound, -1)
-  checkEq("and the same final cheese", deriver.world.teamInfo.cheeseTransferred,
-    [outcome.cheeseTransferred[0], outcome.cheeseTransferred[1]])
+  checkEq("and the same final cheese", deriver.session.w26.teamInfo.cheeseTransferred,
+    [outcome.stats["cheese_transferred"][0].getInt(),
+     outcome.stats["cheese_transferred"][1].getInt()])
 
 # --- a mismatching chain is DETECTED, at the round it FIRST diverges --------
 block:
@@ -169,14 +173,14 @@ block:
   let deriver = newDeriver(parseReplay($doc.toJson()))
   ## Frames are 0-based and round `n` is frame `n - 1`.
   deriver.seek(outcome.roundsPlayed div 2)
-  let midway = deriver.world.hashChain
+  let midway = deriver.session.w26.hashChain
   checkEq("a forward seek lands on the right round",
-    deriver.world.currentRound, outcome.roundsPlayed div 2 + 1)
+    deriver.session.w26.currentRound, outcome.roundsPlayed div 2 + 1)
   deriver.seek(10)
   checkEq("a backward seek restarts and replays",
-    deriver.world.currentRound, 11)
+    deriver.session.w26.currentRound, 11)
   deriver.seek(outcome.roundsPlayed div 2)
-  checkEq("and returning gives the same world", deriver.world.hashChain,
+  checkEq("and returning gives the same world", deriver.session.w26.hashChain,
     midway)
 
 # --- the chrome document ----------------------------------------------------
@@ -187,7 +191,7 @@ block:
   discard deriver.advance()
   var view = initViewerState()
   let beats = beatsFor(back, proc (g, r: int): int = 0)
-  let chrome = parseJson(chromeJson(back, deriver.world, view, 0,
+  let chrome = parseJson(chromeJson(back, deriver.session.w26, view, 0,
     deriver.totalFrames, 0, 0, beats, newJArray(), false))
   for key in ["t", "st", "mx", "mt", "sp", "pl", "lp", "sk", "ff", "en",
               "ph", "beats"]:

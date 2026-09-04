@@ -1,0 +1,35 @@
+--- battlecode20/example-bots/src/main/examplefuncsplayer/RobotPlayer.java
++++ tools/oracle/examplefuncsplayer20/RobotPlayer.java
+@@ -9,6 +9,15 @@
+             RobotType.FULFILLMENT_CENTER, RobotType.NET_GUN};
+ 
+     static int turnCount;
++
++    // ---- THE ONE-HUNK DETERMINISM PATCH (coworld, CI-only) ----------
++    // The stock bot's randomDirection() calls Math.random(), which is
++    // wall-clock seeded, so the stock bot is not reproducible even
++    // against itself and no bit-exact parity is possible with it. This
++    // is the ONLY change to the upstream file: a per-robot
++    // java.util.Random seeded from the robot id, created at the top of
++    // run(), and the single live Math.random() call site below.
++    static java.util.Random RNG;
+ 
+     /**
+      * run() is the method that is called when a robot is instantiated in the Battlecode world.
+@@ -20,6 +29,7 @@
+         // This is the RobotController object. You use it to perform actions from this robot,
+         // and to get information on its current status.
+         RobotPlayer.rc = rc;
++        RNG = new java.util.Random(rc.getID());
+ 
+         turnCount = 0;
+ 
+@@ -122,7 +132,7 @@
+      * @return a random Direction
+      */
+     static Direction randomDirection() {
+-        return directions[(int) (Math.random() * directions.length)];
++        return directions[(int) (RNG.nextDouble() * directions.length)];
+     }
+ 
+     /**

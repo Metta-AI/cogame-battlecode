@@ -1,5 +1,11 @@
 # Rules, knobs and deliberate divergences
 
+> **This document is the `bc26` variant.** The `bc20` variant — Battlecode
+> 2020 "Soup" — has its own rule set, its own ten-knob doctrine sheet and its
+> own §Divergences list in [`RULES-BC20.md`](RULES-BC20.md). One repo, one
+> coworld, one variant per Battlecode year, selected by `game_config.year`.
+
+
 The rule set is a behaviour-for-behaviour port of `battlecode/battlecode26` at
 tag **`engine.1.2.5`**. The port is the authority at runtime; the Java engine
 survives only as the CI-only parity oracle (see [PARITY.md](PARITY.md)).

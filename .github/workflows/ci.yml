@@ -20,7 +20,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    # `bc20-year-module` is the branch the second year module lands on. main's
+    # trigger semantics are untouched; this only adds a branch.
+    branches: [ main, bc20-year-module ]
   pull_request:
   workflow_dispatch:
 
@@ -40,6 +42,10 @@ env:
   ENGINE_TAG: "engine.1.2.5"
   ENGINE_JAR_URL: "https://releases.battlecode.org/maven/org/battlecode/battlecode26-java/1.2.5/battlecode26-java-1.2.5.jar"
   SCALA_JAR_URL: "https://repo1.maven.org/maven2/org/scala-lang/scala-library/2.11.7/scala-library-2.11.7.jar"
+  # The Battlecode 2020 sources the `bc20` year module is a port OF. Used at CI
+  # time by the constants generator, the map converter, the sprite cutter and
+  # the bc20 parity oracle. There is no JDK in any image stage.
+  BC20_COMMIT: "7618f6be7d12da39f2e6e25801e578f1fecfbd86"
 
 jobs:
   # ---------------------------------------------------------------------
@@ -120,6 +126,29 @@ jobs:
             | tar xz -C /tmp/engine
           echo "BC_ENGINE_DIR=/tmp/engine/battlecode26-${ENGINE_TAG}" >> "$GITHUB_ENV"
           python3 -m pip install --quiet flatbuffers
+
+      # The bc20 year module is generated from a SECOND pinned checkout, and
+      # every generated artefact is re-generated here and byte-diffed: the
+      # constants table, all eighteen converted maps and the sprite atlas cut
+      # from the 2020 client. A hand-edited generated file fails the build.
+      - name: Fetch the pinned Battlecode 2020 sources
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/engine20
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode20/archive/${BC20_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/engine20
+          echo "BC20_DIR=/tmp/engine20/battlecode20-${BC20_COMMIT}" >> "$GITHUB_ENV"
+          python3 -m pip install --quiet pillow
+
+      - name: The bc20 generated files match the pinned 2020 sources
+        run: |
+          set -euo pipefail
+          python3 tools/gen_year_constants.py --year bc20 --engine "$BC20_DIR" --check
+          python3 tools/convert_maps_bc20.py --engine "$BC20_DIR" \
+            --out data/maps/bc20 --check
+          python3 tools/build_sprite_atlas_bc20.py --engine "$BC20_DIR" \
+            --out data --check
 
       - name: Run tests
         # Every tests/*.nim runs twice: debug (range/overflow checks, stack
@@ -379,6 +408,174 @@ jobs:
           retention-days: 14
 
   # ---------------------------------------------------------------------
+  # THE bc20 PARITY ORACLE. JDK 8 + the pinned 2020 engine SOURCES as a
+  # CI-only differential test of every piece of arithmetic the Nim port could
+  # get subtly wrong and never notice: the water table (Math.exp/Math.sin
+  # intrinsics), both pollution coefficients over the whole integer domain,
+  # Math.round(float), the IDGenerator streams that decide the highest_id
+  # tiebreak, java.util.Random, the OVERFLOWING cow seed, Transaction's
+  # comparator, and the RobotType table.
+  #
+  # WHY THIS IS NOT THE WHOLE ENGINE: `engine/build.gradle` depends on
+  # `net.sf.jsi:jsi:1.1.0-SNAPSHOT`, published only to jcenter (shut down
+  # 2022) and to the Sonatype OSS SNAPSHOTS repo (expired). Both 404 today and
+  # `world/ObjectInfo.java` imports `net.sf.jsi` directly, so `:engine:jar`
+  # cannot be produced from the unmodified upstream build. The last step below
+  # ATTEMPTS the resolution anyway and reports the failure, so the day the
+  # artifact comes back the round-loop tier is one step away. docs/PARITY.md
+  # section bc20 records exactly what each tier proves.
+  #
+  # There is no JDK in any image stage -- only here.
+  # ---------------------------------------------------------------------
+  parity-oracle-bc20:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache nimby toolchain and nimcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nimby
+            ~/.cache/nim
+          key: nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-${{ hashFiles('nimby.lock') }}
+          restore-keys: |
+            nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-
+
+      - name: Install nimby and Nim
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/nimby" \
+            "https://github.com/treeform/nimby/releases/download/${NIMBY_VERSION}/nimby-Linux-X64"
+          chmod +x "$HOME/.local/bin/nimby"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/nimby" use "$NIM_VERSION"
+
+      - name: Sync Nim dependencies
+        run: nimby --global sync nimby.lock
+
+      - name: Regenerate nim.cfg from the synced package tree
+        run: |
+          set -euo pipefail
+          rm -f nim.cfg
+          for pkg in "$HOME"/.nimby/pkgs/*; do
+            [ -e "$pkg" ] || continue
+            if [ -d "$pkg/src" ]; then
+              echo "--path:\"$pkg/src\"" >> nim.cfg
+            else
+              echo "--path:\"$pkg\"" >> nim.cfg
+            fi
+          done
+          echo '--path:"src"' >> nim.cfg
+
+      # JDK 8: `engine/build.gradle` says `sourceCompatibility = 1.8` and the
+      # 2020 sources are Java 8. The generated water table was produced under
+      # a JDK and is byte-diffed against a JDK here, so the version is pinned.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+
+      - name: Fetch the pinned Battlecode 2020 sources
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/engine20 /tmp/oracle/classes
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode20/archive/${BC20_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/engine20
+          echo "BC20_DIR=/tmp/engine20/battlecode20-${BC20_COMMIT}" >> "$GITHUB_ENV"
+
+      - name: Compile the dependency-free engine sources and the oracle
+        run: |
+          set -euo pipefail
+          S="$BC20_DIR/engine/src/main"
+          javac -d /tmp/oracle/classes \
+            "$S/battlecode/common/GameConstants.java" \
+            "$S/battlecode/common/RobotType.java" \
+            "$S/battlecode/common/Transaction.java" \
+            "$S/battlecode/common/Direction.java" \
+            "$S/battlecode/common/Team.java" \
+            "$S/battlecode/world/IDGenerator.java" \
+            tools/oracle/Bc20Oracle.java
+
+      - name: Tier A (BLOCKING) -- the Java vectors and the Nim vectors agree
+        run: |
+          set -euo pipefail
+          java -cp /tmp/oracle/classes Bc20Oracle > /tmp/oracle/java.vectors
+          nim c --hints:off -d:release --path:src \
+            -o:/tmp/oracle/parity_trace_bc20 tools/parity_trace_bc20.nim
+          /tmp/oracle/parity_trace_bc20 > /tmp/oracle/nim.vectors
+          echo "vector lines: $(wc -l < /tmp/oracle/java.vectors)"
+          if diff -u /tmp/oracle/java.vectors /tmp/oracle/nim.vectors \
+               > /tmp/oracle/vectors.diff; then
+            echo "TIER A: the Nim port is bit-exact with the 2020 engine sources"
+          else
+            echo "::error::TIER A: the Nim port diverged from the 2020 engine"
+            head -60 /tmp/oracle/vectors.diff
+            exit 1
+          fi
+
+      - name: The water-table step (BLOCKING) -- regenerate and byte-diff
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle/wl
+          javac -d /tmp/oracle/wl tools/JavaWaterLevels.java
+          java -cp /tmp/oracle/wl JavaWaterLevels > /tmp/oracle/water_levels.json
+          if diff -u data/bc20/water_levels.json /tmp/oracle/water_levels.json; then
+            echo "the committed water table is what this JDK generates"
+          else
+            echo "::error::data/bc20/water_levels.json is not what the JDK emits"
+            exit 1
+          fi
+
+      - name: The engine-from-source attempt (reported, not blocking)
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          {
+            echo "## bc20 parity -- the engine-from-source tier"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          cd "$BC20_DIR"
+          # `settings.gradle` includes a submodule that is not in the archive.
+          sed -i '/internal-test-bots/d' settings.gradle || true
+          if timeout 900 ./gradlew --no-daemon :engine:jar > /tmp/oracle/gradle.log 2>&1; then
+            echo "the 2020 engine BUILT -- the round-loop tier can be promoted" \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "the 2020 engine did NOT build. The blocking reason, from"
+              echo "the Gradle log:"
+              echo ""
+              echo '```'
+              grep -E "Could not (resolve|find)" /tmp/oracle/gradle.log \
+                | sort -u | head -8
+              echo '```'
+              echo ""
+              echo "\`net.sf.jsi:jsi:1.1.0-SNAPSHOT\` was published only to"
+              echo "jcenter (shut down 2022) and to the Sonatype OSS SNAPSHOTS"
+              echo "repository (expired). Tiers A and the water table above are"
+              echo "BLOCKING and cover every piece of arithmetic the port could"
+              echo "get wrong; the round-loop tier waits on that artifact."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the parity vectors
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-vectors-bc20
+          path: |
+            /tmp/oracle/*.vectors
+            /tmp/oracle/vectors.diff
+            /tmp/oracle/gradle.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ---------------------------------------------------------------------
   # Packaging smoke: the production image builds, and one real episode runs
   # end to end in raw docker with the certification fixture's seat mix.
   # ---------------------------------------------------------------------
@@ -411,13 +608,51 @@ jobs:
       - name: Install the contract probe's client libraries
         run: python3 -m pip install --quiet websockets httpx jsonschema
 
-      - name: Raw-Docker episode smoke
+      - name: Raw-Docker episode smoke (bc26, the certification fixture)
         # SMOKE_SLUG is passed explicitly so the workflow's SLUG is the single
         # source for the game/player entrypoint names; the script's own
         # scaffold-substituted default is only a fallback.
         env:
           SMOKE_SLUG: ${{ env.SLUG }}
+          SMOKE_EXPECT_YEAR: bc26
         run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
+
+      # The SECOND episode: the bc20 year module, end to end, in the
+      # production image. Certification stays on bc26 (the design note's
+      # §Out of scope), so this is the only thing that proves a bc20 episode
+      # runs in a container at all -- and its replay is what the wasm-viewer
+      # job loads in a real browser.
+      #
+      # seed 4 draws `Hourglass` from the small pool, which plays the whole
+      # 300 rounds: ~12.5 s at 24 fps, so the recording outlasts the viewer
+      # smoke's 10 s soak (the ecos 2026-08-23 scar).
+      - name: Raw-Docker episode smoke (bc20, scripted vs scripted)
+        env:
+          SMOKE_SLUG: ${{ env.SLUG }}
+          SMOKE_EXPECT_YEAR: bc20
+          SMOKE_PLAYER_IDS: bowl-of-chowder,examplefuncsplayer
+          SMOKE_CONFIG_OVERRIDE: >-
+            {"year":"bc20","pool":"small","seed":4,"gamesPerMatch":1,
+             "maxRounds":300,"perGameBudgetSeconds":40,"matchBudgetSeconds":45,
+             "connectTimeoutMs":15000}
+          SMOKE_REPLAY_OUT: ${{ github.workspace }}/dist/smoke/replay-bc20.json
+          # The certification contract probe ran against the bc26 episode a
+          # moment ago on the same image; running it twice buys nothing and
+          # doubles the flake surface.
+          SMOKE_CONTRACT_PROBE: "0"
+        run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
+
+      - name: Both smoke replays are present and are different years
+        run: |
+          set -euo pipefail
+          for f in dist/smoke/replay.json dist/smoke/replay-bc20.json; do
+            test -s "$f" || { echo "::error::$f is missing"; exit 1; }
+          done
+          y26="$(jq -r .year dist/smoke/replay.json)"
+          y20="$(jq -r .year dist/smoke/replay-bc20.json)"
+          echo "replay.json year=$y26  replay-bc20.json year=$y20"
+          test "$y26" = "bc26" || { echo "::error::replay.json is not bc26"; exit 1; }
+          test "$y20" = "bc20" || { echo "::error::replay-bc20.json is not bc20"; exit 1; }
 
       # The replay this episode produced is the ONLY replay in CI that is
       # known to be a real, current-format episode of this game. wasm-viewer
@@ -525,18 +760,22 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx --yes playwright@1.55.0 install --with-deps chromium
 
-      - name: Load the bundle in a real browser
+      - name: Load the bundle in a real browser (BOTH years' replays)
         run: |
           set -euo pipefail
           # A for-loop, not `ls … | head -1`: under `set -o pipefail` an unmatched
           # glob makes ls exit 2 and kills the step before the harness ever runs
           # (cogame-raid 2026-08-23, run 32623414696).
-          replay=""
-          for candidate in dist/smoke/*.replay dist/smoke/replay.json; do
-            if [ -f "${candidate}" ]; then replay="${candidate}"; break; fi
+          replays=""
+          for candidate in dist/smoke/replay.json dist/smoke/replay-bc20.json; do
+            if [ -f "${candidate}" ]; then replays="${replays} ${candidate}"; fi
           done
-          test -n "${replay}" || {
+          test -n "${replays}" || {
             echo "::error::docker-smoke uploaded no replay to dist/smoke"; ls -la dist/smoke || true; exit 1; }
+          # The bundle is EXECUTED once per replay: one year rendering is no
+          # evidence at all about the other, and the bc20 game block is a
+          # different set of elements under different CSS.
+          for replay in ${replays}; do
           echo "loading ${replay} in dist/static-replay-viewer"
           # --strict-text-bounds is DELIBERATELY DROPPED here. The board is
           # pannable and zoomable (#viewpanel is kept, because a 60x60 board
@@ -601,11 +840,20 @@ jobs:
             echo "::error::a panel that opens over them must dismiss itself."
             exit 1
           fi
+          mv viewer-smoke.json "viewer-smoke-$(basename "${replay}" .json).json"
+          mv viewer-smoke.png "viewer-smoke-$(basename "${replay}" .json).png"
+          done
 
       # The wasm module itself, under node: wasm32-only failures (int overflow
-      # traps, address-space exhaustion) are invisible to the native tests.
-      - name: Smoke the emitted wasm module under node
-        run: node tools/wasm_replay_smoke.cjs dist/static-replay-viewer "${{ github.workspace }}/dist/smoke/replay.json"
+      # traps, address-space exhaustion) are invisible to the native tests --
+      # and a brand-new year module is exactly where one would live.
+      - name: Smoke the emitted wasm module under node (both years)
+        run: |
+          set -euo pipefail
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/dist/smoke/replay.json"
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/dist/smoke/replay-bc20.json"
 
       # The text the CI replay never carries. Every replay CI produces is
       # SCRIPTED, so its notes and motto are the short strings baselines.nim
@@ -654,8 +902,8 @@ jobs:
         with:
           name: viewer-smoke
           path: |
-            viewer-smoke.png
-            viewer-smoke.json
+            viewer-smoke*.png
+            viewer-smoke*.json
             dist/fixture/viewer-smoke.png
             dist/fixture/viewer-smoke.json
           if-no-files-found: warn

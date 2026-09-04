@@ -4,9 +4,8 @@
 ## key set `tools/ci/docker_smoke.sh` asserts are the same set, and
 ## `tests/test_manifest.nim` fails when any one of them drifts.
 
-import std/[json, strutils]
+import std/json
 import sim_types, sheet, match
-import years/bc26/rules
 
 type
   SeatReport* = object
@@ -18,29 +17,28 @@ type
     fallback*: string         ## "" when the seat's own doctrine was used
     fallbackDetail*: string   ## the provider's own words, <= 200 runes
     brief*: string            ## the prompt payload composed for this seat
+    chassis*: string          ## D1: fixed by the operator, never a sheet field
 
 proc gamesJson(games: seq[GameOutcome]): JsonNode =
+  ## The five YEAR-NEUTRAL keys are always present and always required; the
+  ## year's own statistics ride beside them as optional siblings. Deliberately
+  ## NOT a nested `stats` object: nesting would change the bytes every shipped
+  ## bc26 replay's `result` block carries and force a compatibility shim in the
+  ## endcard. Relaxing `required` changes nothing that already exists.
   result = newJArray()
   for g in games:
-    result.add(%*{
+    var entry = %*{
       "map": g.mapName,
       "side": [(if g.sideAslot == 0: "A" else: "B"),
                (if g.sideAslot == 0: "B" else: "A")],
       "rounds_played": g.roundsPlayed,
       "winner": g.winnerSlot,
-      "end_reason": $g.endReason,
-      "cooperation_at_end": g.cooperationAtEnd,
-      "backstab_round": g.backstabRound,
-      "backstab_by": g.backstabBySlot,
-      "cat_damage": [g.catDamage[0], g.catDamage[1]],
-      "cheese_transferred": [g.cheeseTransferred[0], g.cheeseTransferred[1]],
-      "kings_alive": [g.kingsAlive[0], g.kingsAlive[1]],
-      "kings_built": [g.kingsBuilt[0], g.kingsBuilt[1]],
-      "rats_built": [g.ratsBuilt[0], g.ratsBuilt[1]],
-      "rats_alive": [g.ratsAlive[0], g.ratsAlive[1]],
-      "traps_placed": [g.trapsPlaced[0], g.trapsPlaced[1]],
-      "dirt_placed": [g.dirtPlaced[0], g.dirtPlaced[1]]
-    })
+      "end_reason": g.endReason
+    }
+    if g.stats != nil and g.stats.kind == JObject:
+      for key, value in g.stats:
+        entry[key] = value
+    result.add(entry)
 
 proc resultsJson*(
   seats: array[2, SeatReport],
@@ -96,6 +94,34 @@ proc resultsJson*(
     "game_version": GameVersion
   }
 
+const RequiredGameKeys* = [
+  "map", "side", "rounds_played", "winner", "end_reason"
+]
+  ## The year-neutral keys `results.games[].required` names.
+
+const Bc26GameKeys* = [
+  "cooperation_at_end", "backstab_round", "backstab_by", "cat_damage",
+  "cheese_transferred", "kings_alive", "kings_built", "rats_built",
+  "rats_alive", "traps_placed", "dirt_placed"
+]
+
+const Bc20GameKeys* = [
+  "hq_alive", "hq_lost_round", "hq_lost_cause", "soup_mined", "soup_refined",
+  "net_worth", "units_alive", "units_built", "miners_built",
+  "landscapers_built", "drones_built", "vaporators_built", "net_guns_built",
+  "dirt_moved", "drone_pickups", "drone_water_drops", "net_gun_kills",
+  "transactions_sent", "transactions_minted", "blockchain_soup_spent",
+  "global_pollution_peak", "flooded_tiles_end", "water_level_end"
+]
+
+const EndReasons* = [
+  "kings_destroyed", "cats_cleared", "round_limit", "abandoned",
+  "hq_destroyed", "quantity", "quality", "broadcasts", "highest_id",
+  "coin_flip"
+]
+  ## The union of both years' `DominationFactor` renderings plus our own
+  ## wall-clock `abandoned`.
+
 const ResultsKeys* = [
   "names", "aliases", "scores", "wins", "points", "games", "seed", "year",
   "policy_kind", "sheet_defaults_applied", "fallbacks", "decision_ms",
@@ -105,11 +131,9 @@ const ResultsKeys* = [
   ## manifest's `results_schema.required` and the list `docker_smoke.sh`
   ## checks.
 
-const GameKeys* = [
-  "map", "side", "rounds_played", "winner", "end_reason",
-  "cooperation_at_end", "backstab_round", "backstab_by", "cat_damage",
-  "cheese_transferred", "kings_alive", "kings_built", "rats_built",
-  "rats_alive", "traps_placed", "dirt_placed"
-]
+const GameKeys* = @RequiredGameKeys & @Bc26GameKeys
+  ## The key set a bc26 game emits, unchanged: the five required keys plus
+  ## bc26's eleven. `tests/test_manifest.nim` checks both years against the
+  ## manifest's `results_schema`.
 
 const EpisodeReasons* = ["complete", "deadline", "fault"]

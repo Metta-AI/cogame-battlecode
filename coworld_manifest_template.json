@@ -9,7 +9,7 @@
   "episode_timeout_minutes": 20,
   "game": {
     "name": "battlecode",
-    "description": "Battlecode 2026 \"Uneasy Alliances\", played by doctrine. Two cogs each command a clan of robot rats on a symmetric grid; neither moves a rat. At t=0 each writes a sealed JSON doctrine and a deterministic Nim port of the official rule set plays a best-of-three match from those two sheets. Both clans start in COOPERATION against neutral NPC cats and the points formula is cat-damage weighted; the moment either clan bites, ratnaps, throws at or traps the other, the world flips to BACKSTAB and the weights swing to king survival. Losing every rat king loses the game outright.",
+    "description": "Battlecode, played by doctrine. Two cogs each write one sealed JSON strategy sheet and a deterministic Nim port of an official Battlecode rule set plays the whole match from those two sheets. Variant `bc26` is 2026 \"Uneasy Alliances\" — rat clans allied against NPC cats until one of them betrays. Variant `bc20` is 2020 \"Soup\" — the water rises every round, and a team either terraforms its way above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt.",
     "owner": "daveey@gmail.com",
     "replay_viewer": {
       "bundle": "static-replay-viewer"
@@ -36,6 +36,14 @@
           "content": {
             "type": "uri",
             "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/RULES.md"
+          }
+        },
+        {
+          "id": "rules-bc20.md",
+          "title": "Battlecode 2020 \"Soup\": rules, knobs and divergences",
+          "content": {
+            "type": "uri",
+            "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/RULES-BC20.md"
           }
         },
         {
@@ -77,7 +85,8 @@
         "year": {
           "type": "string",
           "enum": [
-            "bc26"
+            "bc26",
+            "bc20"
           ]
         },
         "pool": {
@@ -239,18 +248,7 @@
               "side",
               "rounds_played",
               "winner",
-              "end_reason",
-              "cooperation_at_end",
-              "backstab_round",
-              "backstab_by",
-              "cat_damage",
-              "cheese_transferred",
-              "kings_alive",
-              "kings_built",
-              "rats_built",
-              "rats_alive",
-              "traps_placed",
-              "dirt_placed"
+              "end_reason"
             ],
             "properties": {
               "map": {
@@ -276,7 +274,13 @@
                   "kings_destroyed",
                   "cats_cleared",
                   "round_limit",
-                  "abandoned"
+                  "abandoned",
+                  "hq_destroyed",
+                  "quantity",
+                  "quality",
+                  "broadcasts",
+                  "highest_id",
+                  "coin_flip"
                 ]
               },
               "cooperation_at_end": {
@@ -351,6 +355,175 @@
                 "items": {
                   "type": "integer"
                 }
+              },
+              "hq_alive": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "boolean"
+                }
+              },
+              "hq_lost_round": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "hq_lost_cause": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "soup_mined": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "soup_refined": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "net_worth": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "units_alive": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "units_built": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "miners_built": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "landscapers_built": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "drones_built": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "vaporators_built": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "net_guns_built": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "dirt_moved": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "drone_pickups": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "drone_water_drops": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "net_gun_kills": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "transactions_sent": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "transactions_minted": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "blockchain_soup_spent": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "global_pollution_peak": {
+                "type": "integer"
+              },
+              "flooded_tiles_end": {
+                "type": "integer"
+              },
+              "water_level_end": {
+                "type": "number"
               }
             }
           }
@@ -465,7 +638,7 @@
       "id": "scaffold",
       "name": "scaffold",
       "type": "player",
-      "description": "scaffold baseline \u2014 the ported example bot, weak",
+      "description": "scaffold baseline — the ported example bot, weak",
       "image": "{{PLAYER_IMAGE}}",
       "run": [
         "/bin/battlecode-player"
@@ -483,12 +656,58 @@
           "cpu": "1"
         }
       }
+    },
+    {
+      "id": "bowl-of-chowder",
+      "name": "bowl-of-chowder",
+      "type": "player",
+      "description": "Bowl of Chowder baseline (2020) — passive lattice, ported behaviour",
+      "image": "{{PLAYER_IMAGE}}",
+      "run": [
+        "/bin/battlecode-player"
+      ],
+      "env": {
+        "PLAYER_SCRIPTED": "bowl-of-chowder",
+        "PLAYER_POLICY_LABEL": "bowl-of-chowder"
+      },
+      "source_url": "https://github.com/Metta-AI/cogame-battlecode/tree/main",
+      "resources": {
+        "requests": {
+          "memory": "512Mi"
+        },
+        "limits": {
+          "cpu": "1"
+        }
+      }
+    },
+    {
+      "id": "examplefuncsplayer",
+      "name": "examplefuncsplayer",
+      "type": "player",
+      "description": "scaffold baseline (2020) — the ported example bot, weak",
+      "image": "{{PLAYER_IMAGE}}",
+      "run": [
+        "/bin/battlecode-player"
+      ],
+      "env": {
+        "PLAYER_SCRIPTED": "examplefuncsplayer",
+        "PLAYER_POLICY_LABEL": "examplefuncsplayer"
+      },
+      "source_url": "https://github.com/Metta-AI/cogame-battlecode/tree/main",
+      "resources": {
+        "requests": {
+          "memory": "512Mi"
+        },
+        "limits": {
+          "cpu": "1"
+        }
+      }
     }
   ],
   "variants": [
     {
       "id": "bc26",
-      "name": "Battlecode 2026 \u2014 Uneasy Alliances (2 seats)",
+      "name": "Battlecode 2026 — Uneasy Alliances (2 seats)",
       "description": "Best of three on the mixed pool. Both clans start allied against the cats; either can betray at any moment, and the points formula swings when they do.",
       "game_config": {
         "year": "bc26",
@@ -502,6 +721,33 @@
         "doctrineBudgetMs": 45000,
         "perGameBudgetSeconds": 90,
         "matchBudgetSeconds": 330,
+        "connectTimeoutMs": 25000,
+        "players": [
+          {
+            "name": "Clan Ash"
+          },
+          {
+            "name": "Clan Basil"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc20",
+      "name": "Battlecode 2020 — Soup (2 seats)",
+      "description": "Best of three on the mixed pool. The water rises every round and every HQ starts below it: a team either walls its HQ in, terraforms above the flood, or buries the enemy's HQ under fifty units of dirt before the sea gets to its own.",
+      "game_config": {
+        "year": "bc20",
+        "pool": "mixed",
+        "gamesPerMatch": 3,
+        "seed": 0,
+        "maxRounds": 1500,
+        "num_agents": 2,
+        "attempt1Ms": 20000,
+        "retryMs": 12000,
+        "doctrineBudgetMs": 45000,
+        "perGameBudgetSeconds": 100,
+        "matchBudgetSeconds": 320,
         "connectTimeoutMs": 25000,
         "players": [
           {

@@ -1,6 +1,18 @@
 # cogame-battlecode
 
-**Battlecode 2026 "Uneasy Alliances", played by doctrine.**
+**Battlecode, played by doctrine.** Two cogs each write one sealed JSON
+strategy sheet and a deterministic Nim port of an official Battlecode rule set
+plays the whole match from those two sheets. **One variant per Battlecode
+year**, chosen by `game_config.year`:
+
+| variant | year | the game in one line |
+| --- | --- | --- |
+| `bc26` | 2026 "Uneasy Alliances" | rat clans allied against NPC cats until one of them betrays |
+| `bc20` | 2020 "Soup" | the water rises every round, and a team either terraforms above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt |
+
+---
+
+## `bc26` — Battlecode 2026 "Uneasy Alliances"
 
 Two cogs each command a clan of robot rats on a symmetric grid. Neither cog
 moves a rat. At t=0 each writes a **doctrine** — a sealed JSON sheet of named
@@ -45,11 +57,56 @@ coworld upload-policy cogame-battlecode:latest --name my-clan \
 `PLAYER_SCRIPTED=scaffold` is the ported `examplefuncsplayer`, deliberately
 weak, and the bot the parity oracle runs.
 
+---
+
+## `bc20` — Battlecode 2020 "Soup"
+
+**The clock is the water.** From round 1 the level rises on a fixed curve and
+floods outward **one ring per round** from every already-flooded tile whose
+neighbour sits below it. Anything that is not a delivery drone dies on a
+flooding tile.
+
+An **HQ cannot be raised** — dirt dropped on a building buries it, and fifty
+dirt kills an HQ outright. The only thing that keeps an HQ dry is a ring of
+eight adjacent tiles the water can never cross. A team that never walls
+drowns on a schedule: elevation 3 floods at round 677, elevation 5 at 1210.
+
+Miners mine SOUP and refine it. Design schools build landscapers that dig and
+dump dirt — a lattice, a wall, or fifty units on the enemy's HQ. Fulfillment
+centers build delivery drones that pick up any unit, including enemy
+landscapers, and drop them in the water. Vaporators print soup and scrub
+pollution; net guns shoot drones. The only global channel is a blockchain,
+seven ints a message, seven messages a round, paid for in soup — and **both
+teams read every block**.
+
+```
+points = int(60 * HQ-survival share + 25 * unit share + 15 * net-worth share)
+score  = 100 * games won + mean(points over games played)
+```
+
+Ten knobs — `opening`, `terraform_start_round`, `lattice_radius`,
+`landscaper_count_curve`, `miner_count_curve`, `vaporator_budget`,
+`drone_role`, `net_gun_ring`, `rush_trigger`, `wall_hq_round` — which is the
+year's own published metagame (rush / lattice / passive lattice / turtle) as a
+doctrine surface. Champions:
+
+| policy | doctrine |
+| --- | --- |
+| `battlecode-bc20-latticer` | out-build the flood: wall early, terraform, spend on vaporators |
+| `battlecode-bc20-rusher` | get there before their wall does: rush, swarm landscapers, harass with drones |
+
+`PLAYER_SCRIPTED=bowl-of-chowder` is the strong baseline and the champion
+chassis (behaviour ported from Stone Tao's finals bot);
+`PLAYER_SCRIPTED=examplefuncsplayer` is the ported 2020 example bot,
+deliberately weak.
+
 ## What is in here
 
 | path | what |
 | --- | --- |
-| `src/battlecode/years/bc26/` | the ported rule set: `world.nim` (state, geometry, legality), `cats.nim` (the NPC state machine), `rules.nim` (the round loop), `chassis/` (the two bots and every doctrine knob's site) |
+| `src/battlecode/years/bc26/` | the 2026 rule set: `world.nim` (state, geometry, legality), `cats.nim` (the NPC state machine), `rules.nim` (the round loop), `knobs.nim` (the doctrine table), `chassis/` (the two bots and every knob's site) |
+| `src/battlecode/years/bc20/` | the 2020 rule set: `world.nim`, `flood.nim`, `pollution.nim`, `blockchain.nim`, `cows.nim`, `rules.nim`, `knobs.nim`, `chassis/` |
+| `src/battlecode/years/{registry,dispatch}.nim` | the year boundary: the ONE place the year-neutral machinery meets a year module |
 | `src/battlecode/rng.nim` | `java.util.Random` and `IDGenerator`, bit-exact |
 | `src/battlecode/{sheet,decide,llm,baselines}.nim` | the doctrine schema, the one sealed parallel batch, the provider ladder, the scripted table |
 | `src/battlecode/{replay,results,broadcast,render,server}.nim` | the JSON replay, the closed results document, the chrome channel, the sprite packets, the container |
@@ -59,8 +116,10 @@ weak, and the bot the parity oracle runs.
 
 ## Docs
 
-* [`docs/RULES.md`](docs/RULES.md) — the rule set, the eleven doctrine knobs,
+* [`docs/RULES.md`](docs/RULES.md) — the 2026 rule set, its doctrine knobs,
   and every deliberate divergence from the Java engine.
+* [`docs/RULES-BC20.md`](docs/RULES-BC20.md) — the 2020 rule set, its ten
+  knobs, and its own §Divergences list.
 * [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — `cogame.battlecode.v1`: what a seat
   sends, what a cog sees, and what it never sees.
 * [`docs/REPLAY.md`](docs/REPLAY.md) — the replay document and how the viewer
@@ -70,9 +129,15 @@ weak, and the bot the parity oracle runs.
 
 ## Licence
 
-AGPL-3.0. The rule set, the constants, the maps and the sprite art derive from
-[`battlecode/battlecode26`](https://github.com/battlecode/battlecode26) (AGPL-3.0,
-tag `engine.1.2.5`) and the `awu` chassis distils the strategy of
+AGPL-3.0. The 2026 rule set, constants, maps and sprite art derive from
+[`battlecode/battlecode26`](https://github.com/battlecode/battlecode26)
+(AGPL-3.0, tag `engine.1.2.5`) and the `awu` chassis distils the strategy of
 [`awu7/battlecode-2026`](https://github.com/awu7/battlecode-2026) (AGPL-3.0,
-branch `final`). See [`NOTICE`](NOTICE). **No upstream Java source, and no JVM,
+branch `final`). The 2020 rule set, constants, maps and sprite art derive from
+[`battlecode/battlecode20`](https://github.com/battlecode/battlecode20)
+(**GPL-3.0**, commit `7618f6b`) and the `bowl-of-chowder` chassis distils the
+strategy of
+[`StoneT2000/Battlecode2020`](https://github.com/StoneT2000/Battlecode2020)
+(AGPL-3.0). GPLv3 and AGPLv3 are explicitly compatible for combined works
+(AGPLv3 §13). See [`NOTICE`](NOTICE). **No upstream Java source, and no JVM,
 runs in this image.**

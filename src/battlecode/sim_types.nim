@@ -13,12 +13,26 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV04"
+  GameVersion* = "GV05"
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV05 — the `bc20` year module: Battlecode 2020 "Soup" ported from
+    ##        battlecode20 at commit 7618f6b (round loop, flood, soup and
+    ##        refining, the seven build types, dig/dump, drone carry and
+    ##        drop-in-water, net guns, pollution, the 64-int blockchain and
+    ##        its cost model, the six-rung tiebreak ladder), behind
+    ##        `game_config.year`. bc26 SEMANTICS ARE UNCHANGED: nothing a GV04
+    ##        recording carries changed meaning — the sheet envelope, the
+    ##        results document and the replay all gained year-neutral shape
+    ##        without moving a byte a bc26 recording holds — which is why
+    ##        `ReplayCompatibleGameVersions` keeps GV04 and every hosted bc26
+    ##        replay from that version keeps rendering. GV03 stays out: the D2
+    ##        chassis change in GV04 means a GV03 recording is not re-derivable
+    ##        under either.
     ##
     ## GV04 — `chassis` is no longer a doctrine knob. It is gone from
     ##        `sheet.KnownKeys` and from the prompt preamble's knob list, so
@@ -54,7 +68,7 @@ const
     ##        round loop, cheese, kings, combat, ratnap/throw, traps, dirt,
     ##        formation, squeaks, cats, backstab, float32-narrowed scoring.
 
-  ReplayCompatibleGameVersions* = [GameVersion]
+  ReplayCompatibleGameVersions* = ["GV04", GameVersion]
     ## Versions whose recordings this build can still re-derive. A replay
     ## carrying anything else is refused with a readable message rather than
     ## silently re-simulated under different rules.
