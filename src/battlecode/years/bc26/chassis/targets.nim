@@ -64,6 +64,25 @@ proc nearestCheese*(w: World, clan: Clan, r: Robot): Target =
       bestDist = d
       result = Target(kind: tkCheese, loc: l, robotId: -1)
 
+proc nearestCheeseMine*(w: World, clan: Clan, r: Robot): Target =
+  ## The nearest cheese MINE inside the rat's cone. A mine is a fixed tile
+  ## that drops 20 cheese within four tiles of itself every dozen rounds or
+  ## so, all game; a miner that knows where one is has an income, and one that
+  ## only ever chases cheese already in its cone does not (r2-D2: the clans
+  ## left 2 900 cheese lying on `DefaultSmall` while their kings starved).
+  result = Target(kind: tkNone)
+  if not r.spend(10): return
+  var bestDist = high(int)
+  for l in w.allLocationsWithinRadiusSquared(
+      r.loc, r.visionRadiusSquared, r.chirality):
+    if not r.spend(1): break
+    if not w.hasCheeseMine(l): continue
+    if not r.canSenseLocation(l): continue
+    let d = r.loc.distanceSquaredTo(l)
+    if d < bestDist:
+      bestDist = d
+      result = Target(kind: tkCheese, loc: l, robotId: -1)
+
 proc bestAttackTarget*(w: World, clan: Clan, r: Robot): Target =
   ## The adjacent thing worth biting, ranked by the `cat_engagement` weight
   ## against a flat enemy-rat weight.

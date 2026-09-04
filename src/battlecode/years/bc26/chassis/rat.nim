@@ -8,6 +8,10 @@
 
 import kit, king, targets, traps, dirt, combat, formation, pathing
 
+const MineCampRadiusSquared* = 8
+  ## How close is "at the mine": a miner inside this stays and sweeps its
+  ## cone, a miner outside it walks back.
+
 proc nearestFriendlyKing(w: World, clan: Clan, r: Robot): (bool, Loc) =
   var best = high(int)
   var bestLoc = r.loc
@@ -74,6 +78,26 @@ proc runRat*(w: World, clan: Clan, r: Robot) =
     if cheese.kind == tkCheese:
       moveOrTurn(w, clan, r, cheese.loc)
       return
+    ## Nothing loose in sight. A MINE is worth walking back to: it is a fixed
+    ## tile that drops 20 cheese within four tiles of itself every dozen
+    ## rounds for the whole game, so a miner that remembers one has an income
+    ## instead of a wander.
+    let mine = nearestCheeseMine(w, clan, r)
+    if mine.kind == tkCheese:
+      brain.knownMine = mine.loc
+      brain.hasKnownMine = true
+    if brain.hasKnownMine:
+      if r.loc.distanceSquaredTo(brain.knownMine) > MineCampRadiusSquared:
+        moveOrTurn(w, clan, r, brain.knownMine)
+        return
+      ## CAMP IT. Cheese spawns within four tiles of a mine every dozen rounds
+      ## or so, all game, and a 90-degree cone sees a quarter of that at a
+      ## time — so a miner that has arrived sweeps instead of wandering off.
+      ## Wandering off is why 12 630 cheese was lying on `closeup` at round 900
+      ## while both clans' banks were empty (r2-D2).
+      if w.canTurn(r):
+        w.turn(r, r.dir.rotateRight())
+        return
     ## Nothing in sight: walk toward the mine the king squeaked about.
     let shared = w.readSharedArray(r, 0)
     if shared > 0 and shared < w.width * w.height:
