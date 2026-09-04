@@ -162,10 +162,20 @@ proc decide*(
   while open.len > 0 and attempt < 2:
     if client.disabled: break
     if getMonoTime() - started >= budget:
+      ## The phase budget is spent. These seats fall back with the cause that
+      ## actually stopped them, and `open` is CLEARED: the tail loop below
+      ## records one `doctrine_fallback` per still-open seat, so leaving them
+      ## open recorded a second event for the same seat and overwrote the
+      ## surviving cause with "parse" — a budget timeout that reads as a
+      ## malformed reply in both the replay and the log.
       for slot in open:
         result.fallback[slot] = "timeout"
         result.events.add(ev("doctrine_fallback", ms = 0, fields = %*{
           "slot": slot, "cause": "timeout"}))
+        ## "falling back" is the phrase phase 60 greps the GAME log for.
+        echo "battlecode llm: seat ", slot,
+          " falling back to the scripted doctrine (timeout)"
+      open.setLen(0)
       break
     let deadlineMs =
       if attempt == 0: config.attempt1Ms else: config.retryMs

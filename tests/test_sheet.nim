@@ -2,9 +2,9 @@
 ## unknown keys recorded and ignored; and RUNE-boundary truncation of
 ## `notes`/`motto` including astral-plane characters.
 
-import std/[json, unicode]
+import std/[json, os, unicode]
 import harness
-import battlecode/[sheet, sim_types]
+import battlecode/[baselines, decide, match, sheet, sim_types]
 
 # --- defaults ---------------------------------------------------------------
 block:
@@ -188,5 +188,45 @@ block:
   checkEq("and keeps its numbers", again.doctrine.kingCountTarget,
     s.doctrine.kingCountTarget)
   check("plain words describe every sheet", s.plainWords().len >= 6)
+
+# --- the decision layer records ONE fallback per seat, naming its cause -----
+block:
+  ## A provider that cannot be reached at all (a closed local port -- no
+  ## network is touched): attempt 1 fails, and by the time the retry is
+  ## considered the 1 ms phase budget is spent. Whichever of the two paths
+  ## fires, the invariant is the same and it is what N3 broke: EXACTLY ONE
+  ## `doctrine_fallback` per seat, and the cause the seat keeps is the cause
+  ## the event names. Leaving the budget-timeout seats in `open` recorded a
+  ## second event for the same seat and left "parse" in `results`/the replay
+  ## for what was really a timeout.
+  putEnv("AWS_ENDPOINT_URL_BEDROCK_RUNTIME", "http://127.0.0.1:1")
+  putEnv("AWS_BEARER_TOKEN_BEDROCK", "test-not-a-real-token")
+  var config = defaultGameConfig()
+  config.pool = "small"
+  config.gamesPerMatch = 1
+  config.attempt1Ms = 1000
+  config.retryMs = 1000
+  config.doctrineBudgetMs = 1
+  let sheets = [baselineSheet(blAwu), baselineSheet(blScaffold)]
+  let plan = buildPlan(config, sheets, 11)
+  var seats: array[2, SeatPolicy]
+  for slot in 0 .. 1:
+    seats[slot] = SeatPolicy(isLlm: true, prompt: "doctrine, please",
+      baseline: blAwu, registered: true)
+  let decision = decide(config, plan, seats)
+  delEnv("AWS_ENDPOINT_URL_BEDROCK_RUNTIME")
+  delEnv("AWS_BEARER_TOKEN_BEDROCK")
+  for slot in 0 .. 1:
+    var causes: seq[string]
+    for e in decision.events:
+      if e.kind == "doctrine_fallback" and e.fields{"slot"}.getInt(-1) == slot:
+        causes.add(e.fields{"cause"}.getStr())
+    checkEq("seat " & $slot & " records exactly one doctrine_fallback",
+      causes.len, 1)
+    if causes.len == 1:
+      checkEq("and the cause it keeps is the cause the event names",
+        decision.fallback[slot], causes[0])
+    check("and the seat still has a legal doctrine",
+      decision.sheets[slot].plainWords().len >= 6)
 
 finish("test_sheet")
