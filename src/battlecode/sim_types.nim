@@ -127,6 +127,23 @@ proc truncateRunes*(text: string, limit: int): string =
     return text
   text.runeSubStr(0, limit)
 
+proc truncateBytes*(text: string, limit: int): string =
+  ## Cuts `text` to at most `limit` BYTES, still on a rune boundary. The
+  ## whole-reply cap is the one cap the note states in KB rather than in
+  ## runes, and `truncateRunes(text, 16384)` keeps 16384 RUNES — up to 64 KB
+  ## of astral-plane text, four times the cap it was meant to enforce.
+  if limit <= 0:
+    return ""
+  if text.len <= limit:
+    return text
+  var used = 0
+  for r in text.runes:
+    let size = r.size
+    if used + size > limit:
+      break
+    used += size
+  text[0 ..< used]
+
 proc sanitizeLine*(text: string, limit: int): string =
   ## A recorded free-text line: newlines collapsed so one record stays one
   ## line, then truncated on a rune boundary.

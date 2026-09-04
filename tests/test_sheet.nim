@@ -179,6 +179,43 @@ block:
   check("no newline survives in notes", '\n' notin s.notes)
   check("nor a carriage return", '\r' notin s.notes)
 
+# --- the whole-reply cap is BYTES, cut on a rune boundary -------------------
+block:
+  ## r1-N14: `if text.len > MaxReplyBytes: text.truncateRunes(MaxReplyBytes)`
+  ## measured the cap in bytes and then kept that many RUNES, so a reply of
+  ## astral-plane text survived at four times the 16 KB cap.
+  var astral = ""
+  for i in 0 ..< 10_000: astral.add("\u{1F400}")          # 4 bytes each, 40 KB
+  check("the sample really is over the cap", astral.len > MaxReplyBytes)
+  let cut = astral.truncateBytes(MaxReplyBytes)
+  check("the cut is at most MaxReplyBytes BYTES", cut.len <= MaxReplyBytes)
+  check("and as close to it as a whole rune allows",
+    cut.len > MaxReplyBytes - 4)
+  check("and still valid UTF-8", cut.validateUtf8() < 0)
+  checkEq("a short reply is untouched", "hello".truncateBytes(MaxReplyBytes),
+    "hello")
+  ## And end to end: the object at the front of an over-long reply is still
+  ## parsed, and the padding past the cap is gone.
+  var padded = """{"sheet":{"king_count_target":5}}"""
+  while padded.len < MaxReplyBytes * 2: padded.add("\u{1F400}")
+  let s = parseReply(padded)
+  checkEq("an over-long reply still yields its sheet",
+    s.doctrine.kingCountTarget, 5)
+  ## And the cap really bites: 32 KB of astral text INSIDE the object is cut
+  ## mid-object, so the reply cannot be parsed and the seat retries — which is
+  ## what a 16 KB cap means. Under the rune-based cut this reply came through
+  ## whole, at four times the cap.
+  var notes = ""
+  for i in 0 ..< 8_000: notes.add("\u{1F400}")
+  let overCap = "{\"sheet\":{\"king_count_target\":5},\"notes\":\"" & notes & "\"}"
+  check("the over-cap reply is over the cap", overCap.len > MaxReplyBytes)
+  var raised = false
+  try:
+    discard parseReply(overCap)
+  except CatchableError:
+    raised = true
+  check("a reply whose object runs past the byte cap does not parse", raised)
+
 # --- round trip -------------------------------------------------------------
 block:
   let s = parseReply("""{"sheet":{"chassis":"scaffold","king_count_target":5}}""")

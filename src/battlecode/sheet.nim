@@ -303,9 +303,9 @@ proc parseReply*(text: string): Sheet =
   ## Tolerant end-to-end parse of one model reply. Raises only when there is
   ## no JSON object at all — the one condition the retry and then the
   ## scripted fallback exist for.
-  let capped =
-    if text.len > MaxReplyBytes: text.truncateRunes(MaxReplyBytes)
-    else: text
+  ## MaxReplyBytes is BYTES (the note's cap table says 16 KB), cut on a rune
+  ## boundary — `truncateRunes` here kept 16384 runes, i.e. up to 64 KB.
+  let capped = text.truncateBytes(MaxReplyBytes)
   validate(extractJsonObject(capped))
 
 proc toJson*(sheet: Sheet): JsonNode =
