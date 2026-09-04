@@ -32,6 +32,15 @@ proc spawnThreshold*(w: World, clan: Clan): int =
   of scSteady: floorCheese + base
   of scSwarm: floorCheese div 2 + (base * 7 + 9) div 10
 
+proc famine*(w: World, clan: Clan): bool =
+  ## The bank has fallen under the floor its crowns need. A king eats 2 cheese
+  ## a round and loses 10 hp a round once the bank is empty, so this is the
+  ## clan's death clock starting, not a rainy day: in r1 every king that died
+  ## took 590 of its 600 hp from an empty bank and only 0-140 from a cat
+  ## (r2-D2). Read by `rat.nim`, which puts the whole roster on the cheese.
+  w.teamInfo.globalCheese[ord(clan.team)] <
+    StarvationReserve * max(1, w.teamInfo.numRatKings[ord(clan.team)])
+
 proc digOut(w: World, clan: Clan, r: Robot): bool =
   ## A king whose build ring is buried in dirt can never spawn a rat, never
   ## earn a cheese, and starves where it stands: 2500 cheese at 2 a round runs

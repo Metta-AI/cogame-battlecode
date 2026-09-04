@@ -2,9 +2,11 @@
 ##
 ## Knob site: `cheese_ferry_ratio` — `ferry(id) = (id * 2654435761) mod 100 <
 ## ratio*100` splits the roster into miners (carry cheese home) and
-## skirmishers (fight) at spawn, in `kit.brainFor`.
+## skirmishers (fight) at spawn, in `kit.brainFor`. The split is suspended
+## while the clan is in FAMINE (`king.famine`): a skirmisher is no use to a
+## crown that is about to starve.
 
-import kit, targets, traps, dirt, combat, formation, pathing
+import kit, king, targets, traps, dirt, combat, formation, pathing
 
 proc nearestFriendlyKing(w: World, clan: Clan, r: Robot): (bool, Loc) =
   var best = high(int)
@@ -42,8 +44,10 @@ proc runRat*(w: World, clan: Clan, r: Robot) =
   if tryDirt(w, clan, r):
     return
 
-  ## 4. Economy / aggression, by role.
-  if brain.ferry:
+  ## 4. Economy / aggression, by role. A clan whose bank has fallen under the
+  ##    floor its crowns need puts EVERY rat on the cheese: the skirmishers
+  ##    are chasing points their kings will not live to score (r2-D2).
+  if brain.ferry or famine(w, clan):
     if r.cheese > 0:
       let (haveKing, kingLoc) = nearestFriendlyKing(w, clan, r)
       if haveKing:
