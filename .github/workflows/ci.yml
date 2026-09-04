@@ -20,10 +20,10 @@ name: CI
 
 on:
   push:
-    # `bc20-year-module` and `bc21-year-module` are the branches the second and
-    # third year modules land on. main's trigger semantics are untouched; this
-    # only adds branches.
-    branches: [ main, bc20-year-module, bc21-year-module ]
+    # `bc20-year-module`, `bc21-year-module` and `bc24-year-module` are the
+    # branches the second, third and fourth year modules land on. main's
+    # trigger semantics are untouched; this only adds branches.
+    branches: [ main, bc20-year-module, bc21-year-module, bc24-year-module ]
   pull_request:
   workflow_dispatch:
 
@@ -52,6 +52,13 @@ env:
   # generator, the map converter, the sprite cutter and the bc21 parity
   # oracle. There is no JDK in any image stage.
   BC21_COMMIT: "ed39c1a49574db57e5463d720736220506280294"
+  # The Battlecode 2024 sources the `bc24` year module is a port OF. Used at CI
+  # time by the constants generator, the map converter, the sprite cutter and
+  # the bc24 parity oracle; the PUBLISHED JAR (sha256 pinned in
+  # tools/oracle/bc24/jar.lock) is used only by that oracle. There is no JDK in
+  # any image stage.
+  BC24_COMMIT: "166c79bbf4156c866caf434062cb1f403c01695f"
+  BC24_JAR_URL: "https://releases.battlecode.org/maven/org/battlecode/battlecode24/3.0.5/battlecode24-3.0.5.jar"
 
 jobs:
   # ---------------------------------------------------------------------
@@ -60,10 +67,13 @@ jobs:
   # ---------------------------------------------------------------------
   test:
     runs-on: ubuntu-latest
-    # 75, not 45: the third year module adds nineteen shards, and every shard
-    # runs TWICE (debug and -d:release). The heaviest of them play full
-    # 1500-round games with every range check on.
-    timeout-minutes: 75
+    # 110, not 75: the fourth year module adds twenty-one shards, and every
+    # shard runs TWICE (debug and -d:release). The heaviest of them play full
+    # 2000-round games with every range check on -- bc24's competence gate
+    # plays eight of them in the debug pass alone. Its knob sweep is the one
+    # shard whose SIGNED DELTAS are gated in release only, for the reason its
+    # own header gives; the debug pass still runs the sweep.
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v5
 
@@ -180,6 +190,39 @@ jobs:
             --out data/maps/bc21 --check
           python3 tools/build_sprite_atlas_bc21.py --engine "$BC21_DIR" \
             --out data --check
+
+      # The bc24 year module is generated from a FOURTH pinned checkout, and
+      # every generated artefact is re-generated here and byte-diffed: the
+      # constants table, all twenty-two converted maps and the sprite atlas
+      # cut from the 2024 client. A hand-edited generated file fails the
+      # build.
+      - name: Fetch the pinned Battlecode 2024 sources
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/engine24
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode24/archive/${BC24_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/engine24
+          echo "BC24_DIR=/tmp/engine24/battlecode24-${BC24_COMMIT}" >> "$GITHUB_ENV"
+
+      - name: The bc24 generated files match the pinned 2024 sources
+        run: |
+          set -euo pipefail
+          python3 tools/gen_year_constants.py --year bc24 --engine "$BC24_DIR" --check
+          python3 tools/convert_maps_bc24.py --engine "$BC24_DIR" \
+            --out data/maps/bc24 --check
+          python3 tools/build_sprite_atlas_bc24.py --engine "$BC24_DIR" \
+            --out data --check
+          # And EVERY ONE of the 78 official `.map24` flatbuffers reads with
+          # the converter's own vtable walk, not only the 22 that are
+          # committed: a reader that only works on the maps we ship is a
+          # reader nobody can extend the pool with.
+          parsed="$(python3 tools/convert_maps_bc24.py --engine "$BC24_DIR" \
+            --parse-all 2>&1 >/dev/null | tr -dc '0-9')"
+          echo "official .map24 files parsed: ${parsed}"
+          test "${parsed}" = "78" || {
+            echo "::error::expected all 78 .map24 files to parse, got ${parsed}"
+            exit 1; }
 
       - name: Run tests
         # Every tests/*.nim runs twice: debug (range/overflow checks, stack
@@ -879,6 +922,212 @@ jobs:
           retention-days: 14
 
   # ---------------------------------------------------------------------
+  # THE bc24 PARITY ORACLE. The published battlecode24-3.0.5 jar is a
+  # SELF-CONTAINED fat jar -- 11 612 entries, all 254 battlecode classes,
+  # every bundled dependency (net.sf.jsi among them, so the dead-artifact
+  # problem that shaped the bc20 and bc21 jobs does not arise), MethodCosts.txt
+  # and all 79 .map24 map resources -- so there is no Gradle, no jsi shim, no
+  # 94-file javac, no Maven Central download list and no deps.lock here.
+  #
+  # JDK 8 IS MANDATORY. The instrumenter rewrites java.util classes with ASM
+  # 5.0.4, which refuses class-file versions above 52; under a newer JDK every
+  # player class load throws and the match ends EMPTY -- which is exactly what
+  # a "green" oracle looks like when it is proving nothing. The driver fails
+  # loudly if no duck ever spawns, and `javac` is invoked with plain
+  # `-source 8 -target 8`: `--release` arrived in JDK 9 and dies with "invalid
+  # flag" on a Temurin 8 compiler in seconds (the 2026-09-04 bc21 learning,
+  # which cost that run a CI round).
+  # ---------------------------------------------------------------------
+  parity-oracle-bc24:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache nimby toolchain and nimcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nimby
+            ~/.cache/nim
+          key: nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-${{ hashFiles('nimby.lock') }}
+          restore-keys: |
+            nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-
+
+      - name: Install nimby and Nim
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/nimby" \
+            "https://github.com/treeform/nimby/releases/download/${NIMBY_VERSION}/nimby-Linux-X64"
+          chmod +x "$HOME/.local/bin/nimby"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/nimby" use "$NIM_VERSION"
+
+      - name: Sync Nim dependencies
+        run: nimby --global sync nimby.lock
+
+      - name: Regenerate nim.cfg from the synced package tree
+        run: |
+          set -euo pipefail
+          rm -f nim.cfg
+          for pkg in "$HOME"/.nimby/pkgs/*; do
+            [ -e "$pkg" ] || continue
+            if [ -d "$pkg/src" ]; then
+              echo "--path:\"$pkg/src\"" >> nim.cfg
+            else
+              echo "--path:\"$pkg\"" >> nim.cfg
+            fi
+          done
+          echo '--path:"src"' >> nim.cfg
+
+      # JDK 8, and not a preference: see the block comment above.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+
+      - name: Fetch the pinned Battlecode 2024 sources and the published jar
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/engine24 /tmp/oracle24
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode24/archive/${BC24_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/engine24
+          echo "BC24_DIR=/tmp/engine24/battlecode24-${BC24_COMMIT}" >> "$GITHUB_ENV"
+          curl -fsSL -o /tmp/oracle24/battlecode24.jar "${BC24_JAR_URL}"
+          ls -la /tmp/oracle24/battlecode24.jar
+
+      - name: Build the oracle (jar sha256 verified, JDK 8, -source/-target 8)
+        run: |
+          set -euo pipefail
+          tools/oracle/bc24/build_oracle.sh \
+            /tmp/oracle24/battlecode24.jar "$BC24_DIR" /tmp/oracle24/build
+
+      - name: The jar really is 3.0.5, and its constants are the port's
+        run: |
+          set -euo pipefail
+          JAR=/tmp/oracle24/battlecode24.jar
+          mkdir -p /tmp/oracle24/tables
+          javac -source 8 -target 8 -nowarn -encoding UTF-8 -cp "$JAR" \
+            -d /tmp/oracle24/tables tools/JavaBc24Tables.java
+          spec="$(java -cp "$JAR:/tmp/oracle24/tables" JavaBc24Tables specversion)"
+          echo "GameConstants.SPEC_VERSION in the jar: ${spec}"
+          test "${spec}" = "3.0.5" || {
+            echo "::error::the published jar is not 3.0.5 (${spec})"; exit 1; }
+          # Tier B, half one: the 3.0.5-jar-versus-master-sources gap
+          # (docs/RULES-BC24.md section Divergences item 9) closed by
+          # comparison rather than by assertion.
+          java -cp "$JAR:/tmp/oracle24/tables" JavaBc24Tables constants
+
+      - name: Tier B (BLOCKING) — the WHOLE finite skill domain, byte-diffed
+        run: |
+          set -euo pipefail
+          JAR=/tmp/oracle24/battlecode24.jar
+          java -cp "$JAR:/tmp/oracle24/tables" JavaBc24Tables skills \
+            > /tmp/oracle24/skills.json
+          if ! diff -u data/bc24/skills.json /tmp/oracle24/skills.json; then
+            echo "::error::data/bc24/skills.json is not what the released jar's"
+            echo "::error::own classes emit. bc24 has NO transcendental"
+            echo "::error::anywhere, so this tier is the entire domain rather"
+            echo "::error::than a sample: damage and heal for all 7 levels x"
+            echo "::error::{upgrade on, off}, and cooldown and crumb cost for"
+            echo "::error::all 7 build levels x {explosive, stun, water, dig,"
+            echo "::error::fill}."
+            exit 1
+          fi
+          echo "the committed bc24 skill table is what the 3.0.5 jar generates"
+
+      - name: Build the Nim trace emitters (plain, scenario, teleport)
+        run: |
+          set -euo pipefail
+          nim c --hints:off -d:release --path:src \
+            -o:/tmp/oracle24/parity_trace_bc24 tools/parity_trace_bc24.nim
+          nim c --hints:off -d:release -d:bc24Scenario --path:src \
+            -o:/tmp/oracle24/parity_trace_bc24_scenario tools/parity_trace_bc24.nim
+          nim c --hints:off -d:release -d:bc24Scenario \
+            -d:bc24ScenarioTeleport --path:src \
+            -o:/tmp/oracle24/parity_trace_bc24_teleport tools/parity_trace_bc24.nim
+
+      - name: Run both engines on the fifteen pairs (whole 2000-round games)
+        run: |
+          set -euo pipefail
+          JAR=/tmp/oracle24/battlecode24.jar
+          CLASSES=/tmp/oracle24/build/classes
+          mkdir -p /tmp/oracle24/traces
+          for MAP in DefaultSmall Yinyang BreadPudding Rivers Tunnels; do
+            for BOT in examplefuncsplayer bc24scenario bc24scenariotel; do
+              case "$BOT" in
+                examplefuncsplayer) NIMBIN=/tmp/oracle24/parity_trace_bc24 ;;
+                bc24scenario) NIMBIN=/tmp/oracle24/parity_trace_bc24_scenario ;;
+                *) NIMBIN=/tmp/oracle24/parity_trace_bc24_teleport ;;
+              esac
+              java -Xmx2g -XX:+UseSerialGC -cp "$JAR:$CLASSES" \
+                battlecode.world.Bc24Trace "$MAP" 2000 "$BOT" "$CLASSES" \
+                > "/tmp/oracle24/traces/${BOT}.${MAP}.java" \
+                2> "/tmp/oracle24/traces/${BOT}.${MAP}.log"
+              cat "/tmp/oracle24/traces/${BOT}.${MAP}.log"
+              "$NIMBIN" --map:"$MAP" --rounds:2000 \
+                --out:"/tmp/oracle24/traces/${BOT}.${MAP}.nim"
+              echo "${BOT}/${MAP}: $(wc -l < "/tmp/oracle24/traces/${BOT}.${MAP}.java") java lines, $(wc -l < "/tmp/oracle24/traces/${BOT}.${MAP}.nim") nim lines"
+            done
+          done
+
+      - name: Tier A, Tier A-prime and Tier C (all BLOCKING)
+        run: |
+          set -euo pipefail
+          python3 tools/ci/parity_tiers_bc24.py \
+            --dir /tmp/oracle24/traces \
+            --maps DefaultSmall Yinyang BreadPudding Rivers Tunnels \
+            --bots examplefuncsplayer bc24scenario bc24scenariotel \
+            --ledger tools/ci/parity_ledger_bc24.json \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Tier A-prime coverage — the rare paths really did fire
+        # A scenario bot that agrees bit for bit while doing nothing proves
+        # nothing. These are read off the JAVA trace, so they are facts about
+        # the ENGINE's run, not about the port's.
+        run: |
+          set -euo pipefail
+          cd /tmp/oracle24/traces
+          ups="$(grep -h ' T ' bc24scenario.*.java | grep -c 'up=111' || true)"
+          echo "rounds with all three upgrades bought: ${ups}"
+          test "${ups}" -gt 0 || {
+            echo "::error::the scenario bot never bought all three upgrades"
+            exit 1; }
+          picks="$(grep -h ' T ' bc24scenario.*.java | grep -cv 'picked=0' || true)"
+          echo "team records with a flag pickup: ${picks}"
+          test "${picks}" -gt 0 || {
+            echo "::error::the scenario bot never picked a flag up"; exit 1; }
+          stuns="$(grep -hc 'acd=40 mcd=40' bc24scenario.*.java | paste -sd+ | bc)"
+          echo "duck records under a stun trap: ${stuns}"
+          test "${stuns}" -gt 0 || {
+            echo "::error::no stun trap ever fired: the trap paths are untested"
+            exit 1; }
+          mastery="$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^ax=/) {split($i,a,"="); if (a[2]+0 >= 75) c++}} END {print c+0}' bc24scenario.*.java)"
+          echo "duck records at attack level 4 or better: ${mastery}"
+          test "${mastery}" -gt 0 || {
+            echo "::error::no duck ever reached the mastery threshold"; exit 1; }
+          # And the TELEPORT variant really does fire the round-200
+          # confirmation: a flag whose start location moves back at round 200.
+          tel="$(grep -h '^R 200 F ' bc24scenariotel.DefaultSmall.java | grep -c 'start=1')"
+          echo "flags confirmed at round 200 in the teleport variant: ${tel}"
+          test "${tel}" -eq 6 || {
+            echo "::error::the round-200 confirmation did not run"; exit 1; }
+
+      - name: Upload the parity traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-traces-bc24
+          path: |
+            /tmp/oracle24/traces/*.log
+            /tmp/oracle24/skills.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ---------------------------------------------------------------------
   # Packaging smoke: the production image builds, and one real episode runs
   # end to end in raw docker with the certification fixture's seat mix.
   # ---------------------------------------------------------------------
@@ -983,23 +1232,91 @@ jobs:
           SMOKE_CONTRACT_PROBE: "0"
         run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
 
-      - name: All three smoke replays are present and are different years
+      # The FOURTH episode: the bc24 year module, end to end, in the
+      # production image. Certification stays on bc26 (the design note's Out
+      # of scope), so this is the only thing that proves a bc24 episode runs
+      # in a container at all -- and its replay is what the wasm-viewer job
+      # loads in a real browser.
+      #
+      # 600 ROUNDS, NOT 400: the first 200 are the setup phase, so a
+      # 400-round smoke would record only 200 rounds of open play and might
+      # never show a flag change hands. The seed is pinned to draw `Yinyang`
+      # -- the map where even the WEAK bot manages flag pickups and captures
+      # in the reference engine run -- and `tests/test_bc24_maps.nim` asserts
+      # that draw, so the smoke's map cannot drift silently. At the default
+      # pace 600 rounds records ~25 s of playback, which outlasts the viewer
+      # smoke's 15 s soak (the ecos 2026-08-23 scar).
+      #
+      # SMOKE_REQUIRE_STATS is the episode SUBSTANCE assertion (the LEARNINGS
+      # pin), enforced FOR BOTH SEATS by the script: an episode where a seat
+      # spawned nothing, spent nothing, built nothing, levelled nothing, hit
+      # nothing and healed nothing is a red build rather than a green one
+      # with an empty replay.
+      - name: Raw-Docker episode smoke (bc24, scripted vs scripted)
+        env:
+          SMOKE_SLUG: ${{ env.SLUG }}
+          SMOKE_EXPECT_YEAR: bc24
+          # The manifest declares exactly the two players the certification
+          # fixture seats, and `PLAYER_SCRIPTED` resolves per year: on bc24
+          # `awu` is gone-sharkin and `scaffold` is examplefuncsplayer24
+          # (src/battlecode/baselines.nim).
+          SMOKE_PLAYER_IDS: awu,scaffold
+          SMOKE_CONFIG_OVERRIDE: >-
+            {"year":"bc24","pool":"small","seed":1000,"gamesPerMatch":1,
+             "maxRounds":600,"perGameBudgetSeconds":60,"matchBudgetSeconds":70,
+             "connectTimeoutMs":15000}
+          SMOKE_REQUIRE_STATS: >-
+            {"ducks_spawned":10,"crumbs_spent":100,"traps_built":1,
+             "levels_end":3,"damage_dealt":300,"heal_dealt":80}
+          SMOKE_REPLAY_OUT: ${{ github.workspace }}/dist/smoke/replay-bc24.json
+          SMOKE_CONTRACT_PROBE: "0"
+        run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
+
+      # THE FLAG HALF of the substance assertion. `SMOKE_REQUIRE_STATS` is
+      # per-seat and a 600-round game cannot guarantee that BOTH weak seats
+      # reach a flag, so the flag clause is asserted ACROSS the two seats
+      # here. Together they make an idle win machine-visible, which is
+      # exactly what the 2026-09-03 round-1 degenerate match lacked.
+      #
+      # The key is `flags_picked_up`, the name the results document actually
+      # uses; the design note's jq line says `flag_pickups`, which is not a
+      # key any bc24 results document has ever carried.
+      - name: The bc24 episode really touched a flag
+        run: |
+          set -euo pipefail
+          # Read from the REPLAY, whose `result` block is the results
+          # document verbatim: `dist/smoke/results.json` is overwritten by
+          # every episode in turn and naming it here would make this
+          # assertion depend on which episode happened to run last.
+          picked="$(jq -r '[.result.games[0].flags_picked_up[]] | add' \
+            dist/smoke/replay-bc24.json)"
+          echo "enemy-flag pickups across the two seats: ${picked}"
+          test "${picked}" -ge 1 || {
+            echo "::error::the bc24 smoke episode never touched a flag."
+            echo "::error::A bc24 game where nobody lifts a flag is not this"
+            echo "::error::game being played."
+            exit 1; }
+
+      - name: All four smoke replays are present and are different years
         run: |
           set -euo pipefail
           for f in dist/smoke/replay.json dist/smoke/replay-bc20.json \
-                   dist/smoke/replay-bc21.json; do
+                   dist/smoke/replay-bc21.json dist/smoke/replay-bc24.json; do
             test -s "$f" || { echo "::error::$f is missing"; exit 1; }
           done
           y26="$(jq -r .year dist/smoke/replay.json)"
           y20="$(jq -r .year dist/smoke/replay-bc20.json)"
           y21="$(jq -r .year dist/smoke/replay-bc21.json)"
-          echo "replay.json year=$y26  replay-bc20.json year=$y20  replay-bc21.json year=$y21"
+          y24="$(jq -r .year dist/smoke/replay-bc24.json)"
+          echo "replay.json year=$y26  bc20=$y20  bc21=$y21  bc24=$y24"
           test "$y26" = "bc26" || { echo "::error::replay.json is not bc26"; exit 1; }
           test "$y20" = "bc20" || { echo "::error::replay-bc20.json is not bc20"; exit 1; }
           test "$y21" = "bc21" || { echo "::error::replay-bc21.json is not bc21"; exit 1; }
-          test "$y26" != "$y20" && test "$y20" != "$y21" && test "$y26" != "$y21" || {
-            echo "::error::the three smoke replays are not three different years"
-            exit 1; }
+          test "$y24" = "bc24" || { echo "::error::replay-bc24.json is not bc24"; exit 1; }
+          if [ "$(printf '%s\n' "$y26" "$y20" "$y21" "$y24" | sort -u | wc -l)" -ne 4 ]; then
+            echo "::error::the four smoke replays are not four different years"
+            exit 1
+          fi
 
       # The replay this episode produced is the ONLY replay in CI that is
       # known to be a real, current-format episode of this game. wasm-viewer
@@ -1107,7 +1424,7 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx --yes playwright@1.55.0 install --with-deps chromium
 
-      - name: Load the bundle in a real browser (ALL THREE years' replays)
+      - name: Load the bundle in a real browser (ALL FOUR years' replays)
         run: |
           set -euo pipefail
           # A for-loop, not `ls … | head -1`: under `set -o pipefail` an unmatched
@@ -1115,7 +1432,8 @@ jobs:
           # (cogame-raid 2026-08-23, run 32623414696).
           replays=""
           for candidate in dist/smoke/replay.json dist/smoke/replay-bc20.json \
-                           dist/smoke/replay-bc21.json; do
+                           dist/smoke/replay-bc21.json \
+                           dist/smoke/replay-bc24.json; do
             if [ -f "${candidate}" ]; then replays="${replays} ${candidate}"; fi
           done
           test -n "${replays}" || {
@@ -1142,12 +1460,26 @@ jobs:
           # 720 px and 1280 px and at both FIT and 2x zoom, on EVERY year's
           # replay -- which is what makes it a repair of the shared chrome
           # rather than a bc21 workaround.
-          node tools/ci/viewer_smoke.mjs \
-            --bundle dist/static-replay-viewer \
-            --replay "${replay}" \
-            --timeout 90 \
-            --soak 10 \
-            --killfeed-overlap
+          # bc24 GETS A LONGER LEASH, and for a measured reason: a seek
+          # re-simulates from the start of the game in the Worker, and bc24 is
+          # 2000 rounds x 100 duck-turns. bc21 taught this the expensive way --
+          # a compute-heavy year defeats a fixed-wait scrub probe and the
+          # instrument, not the viewer, is what times out
+          # (docs/RULES-BC24.md, Measured performance).
+          if [ "${replay}" = "dist/smoke/replay-bc24.json" ]; then
+            node tools/ci/viewer_smoke.mjs \
+              --bundle dist/static-replay-viewer \
+              --replay "${replay}" \
+              --timeout 120 --soak 15 \
+              --killfeed-overlap
+          else
+            node tools/ci/viewer_smoke.mjs \
+              --bundle dist/static-replay-viewer \
+              --replay "${replay}" \
+              --timeout 90 \
+              --soak 10 \
+              --killfeed-overlap
+          fi
           # The scrub readouts have to come from the SCRUBBER. This page keeps
           # #viewpanel, whose zoom slider is an input[type=range] ABOVE #scrub
           # in the document; a comma-list selector resolves in document order,
@@ -1204,7 +1536,7 @@ jobs:
       # The wasm module itself, under node: wasm32-only failures (int overflow
       # traps, address-space exhaustion) are invisible to the native tests --
       # and a brand-new year module is exactly where one would live.
-      - name: Smoke the emitted wasm module under node (all three years)
+      - name: Smoke the emitted wasm module under node (all four years)
         run: |
           set -euo pipefail
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
@@ -1222,6 +1554,13 @@ jobs:
           # And the COMMITTED bc21 fixture, for the same reason.
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
             "${{ github.workspace }}/tests/fixtures/replay-bc21.json"
+          # bc24: the smoke episode this run produced, and the COMMITTED bc24
+          # fixture. A brand-new year module is exactly where a wasm32-only
+          # failure would live.
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/dist/smoke/replay-bc24.json"
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/tests/fixtures/replay-bc24.json"
 
       # The text the CI replay never carries. Every replay CI produces is
       # SCRIPTED, so its notes and motto are the short strings baselines.nim
