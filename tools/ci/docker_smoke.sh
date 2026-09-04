@@ -54,6 +54,11 @@
 #                              (empty = the certification fixture's seats)
 #   SMOKE_EXPECT_YEAR          if set, results.year and the replay's year must
 #                              equal it (empty)
+#   SMOKE_REQUIRE_STATS        a JSON object of {"<results.games[0] key>":
+#                              <minimum>} that must hold FOR BOTH SEATS. An
+#                              episode where a seat did nothing is a red build
+#                              rather than a green one with an empty replay
+#                              (the LEARNINGS pin). (empty)
 #   SMOKE_REPLAY_OUT           where to COPY the replay this smoke produced,
 #                              so it outlives the scratch dir the trap deletes
 #                              (dist/smoke/replay.json). ci.yml uploads it as
@@ -84,6 +89,7 @@ replay_out="${SMOKE_REPLAY_OUT:-${repo_dir}/dist/smoke/replay.json}"
 config_override="${SMOKE_CONFIG_OVERRIDE:-}"
 player_ids="${SMOKE_PLAYER_IDS:-}"
 expect_year="${SMOKE_EXPECT_YEAR:-}"
+require_stats="${SMOKE_REQUIRE_STATS:-}"
 
 run_id="$$"
 prefix="${slug}-smoke-${run_id}"
@@ -384,7 +390,7 @@ echo "all ${seats} player containers exited 0"
 # --------------------------------------------------------------------------
 # Assert the artifacts.
 # --------------------------------------------------------------------------
-if ! python3 - "${work_dir}" "${seats}" "${require_replay_json}" "${expect_year}" <<'PY'
+if ! python3 - "${work_dir}" "${seats}" "${require_replay_json}" "${expect_year}" "${require_stats}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -393,6 +399,7 @@ work = Path(sys.argv[1])
 seats = int(sys.argv[2])
 require_replay_json = sys.argv[3] not in ("0", "", "false", "no")
 expect_year = sys.argv[4] if len(sys.argv) > 4 else ""
+require_stats = sys.argv[5] if len(sys.argv) > 5 else ""
 
 failure = work / "player_failure.json"
 if failure.exists():
@@ -448,6 +455,33 @@ for key in ("aliases", "wins", "points", "policy_kind",
     if len(results[key]) != seats:
         raise SystemExit(
             f"results.{key} has {len(results[key])} entries, expected {seats}")
+# THE EPISODE SUBSTANCE ASSERTION (the LEARNINGS pin). A green smoke whose
+# seats never built anything, never bid and never won a vote proves the
+# container starts, not that the game plays.
+if require_stats:
+    try:
+        wanted = json.loads(require_stats)
+    except Exception as exc:
+        raise SystemExit(f"SMOKE_REQUIRE_STATS is not JSON: {exc}") from exc
+    games = results.get("games") or []
+    if not games:
+        raise SystemExit("SMOKE_REQUIRE_STATS was set but results.games is empty")
+    first = games[0]
+    for key, minimum in wanted.items():
+        if key not in first:
+            raise SystemExit(
+                f"SMOKE_REQUIRE_STATS names {key!r}, which results.games[0] "
+                f"does not carry: {sorted(first)}")
+        values = first[key]
+        if not isinstance(values, list) or len(values) != seats:
+            raise SystemExit(
+                f"results.games[0].{key} is {values!r}, expected one value per seat")
+        for slot, value in enumerate(values):
+            if value < minimum:
+                raise SystemExit(
+                    f"seat {slot} did nothing: results.games[0].{key} is "
+                    f"{value}, expected at least {minimum}")
+    print(f"episode substance OK: {sorted(wanted)}")
 # ------------------------------------------------------------- /battlecode
 
 reason = results.get("reason") or results.get("end_reason")

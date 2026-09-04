@@ -25,18 +25,21 @@ import std/[json, tables]
 import sim_types, sheet_common
 import years/bc26/knobs as knobs26
 import years/bc20/knobs as knobs20
+import years/bc21/knobs as knobs21
 
-export sim_types, sheet_common, knobs26, knobs20
+export sim_types, sheet_common, knobs26, knobs20, knobs21
 
 const
   YearBc26* = "bc26"
   YearBc20* = "bc20"
+  YearBc21* = "bc21"
 
 type
   Sheet* = object
     year*: string
     doctrine*: knobs26.Doctrine       ## the bc26 knobs; defaults on a bc20 sheet
-    doctrine20*: knobs20.Doctrine20   ## the bc20 knobs; defaults on a bc26 sheet
+    doctrine20*: knobs20.Doctrine20   ## the bc20 knobs; defaults on another year
+    doctrine21*: knobs21.Doctrine21   ## the bc21 knobs; defaults on another year
     notes*: string
     motto*: string
     defaultsApplied*: seq[string]
@@ -44,14 +47,15 @@ type
     submitted*: string   ## the raw sheet object as received, for the replay
 
 proc knownKeysFor*(year: string): seq[string] =
-  if year == YearBc20:
-    @(knobs20.KnownKeys20)
-  else:
-    @(knobs26.KnownKeys)
+  case year
+  of YearBc20: @(knobs20.KnownKeys20)
+  of YearBc21: @(knobs21.KnownKeys21)
+  else: @(knobs26.KnownKeys)
 
 proc defaultSheet*(year = YearBc26): Sheet =
   Sheet(year: year, doctrine: knobs26.defaultDoctrine(),
         doctrine20: knobs20.defaultDoctrine20(),
+        doctrine21: knobs21.defaultDoctrine21(),
         notes: "", motto: "", submitted: "{}")
 
 proc validate*(payload: JsonNode, year = YearBc26): Sheet =
@@ -85,8 +89,11 @@ proc validate*(payload: JsonNode, year = YearBc26): Sheet =
       ## recorded, never honoured.
       result.unknownFields.add(key.truncateRunes(MaxUnknownFieldRunes))
 
-  if year == YearBc20:
+  case year
+  of YearBc20:
     result.doctrine20 = knobs20.applyKnobs20(seen, result.defaultsApplied)
+  of YearBc21:
+    result.doctrine21 = knobs21.applyKnobs21(seen, result.defaultsApplied)
   else:
     result.doctrine = knobs26.applyKnobs(seen, result.defaultsApplied)
 
@@ -104,15 +111,15 @@ proc parseReply*(text: string, year = YearBc26): Sheet =
   validate(extractJsonObject(capped), year)
 
 proc toJson*(sheet: Sheet): JsonNode =
-  if sheet.year == YearBc20:
-    knobs20.toJson20(sheet.doctrine20)
-  else:
-    knobs26.toJson(sheet.doctrine)
+  case sheet.year
+  of YearBc20: knobs20.toJson20(sheet.doctrine20)
+  of YearBc21: knobs21.toJson21(sheet.doctrine21)
+  else: knobs26.toJson(sheet.doctrine)
 
 proc plainWords*(sheet: Sheet): seq[string] =
   ## The endcard/doctrine-overlay readout: the sheet in words a spectator can
   ## read without knowing the schema.
-  if sheet.year == YearBc20:
-    knobs20.plainWords20(sheet.doctrine20)
-  else:
-    knobs26.plainWords(sheet.doctrine)
+  case sheet.year
+  of YearBc20: knobs20.plainWords20(sheet.doctrine20)
+  of YearBc21: knobs21.plainWords21(sheet.doctrine21)
+  else: knobs26.plainWords(sheet.doctrine)

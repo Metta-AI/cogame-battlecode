@@ -20,8 +20,12 @@ import bc20/maps as maps20
 import bc20/rules as rules20
 import bc20/world as world20
 import bc20/chassis/kit as kit20
-export rules20.ChassisKind, rules20.parseChassisKind
 import bc20/flood as flood20
+import bc21/maps as maps21
+import bc21/economy as economy21
+import bc21/rules as rules21
+import bc21/world as world21
+import bc21/chassis/kit as kit21
 
 export registry
 
@@ -29,6 +33,7 @@ type
   YearId* = enum
     yBc26 = "bc26"
     yBc20 = "bc20"
+    yBc21 = "bc21"
 
   Session* = ref object
     ## One game in progress, in whichever year's sim. `stepRound` advances it;
@@ -44,6 +49,10 @@ type
       w20*: world20.World
       sides20*: array[2, kit20.Side]
       chassis20*: array[2, rules20.ChassisKind]
+    of yBc21:
+      w21*: world21.World
+      sides21*: array[2, kit21.Side]
+      chassis21*: array[2, rules21.ChassisKind21]
 
   GameOutcome* = object
     ## The YEAR-NEUTRAL per-game outcome. `results.games[]`'s five required
@@ -67,10 +76,34 @@ const Bc20UnitNames* = [
 ]
   ## `RobotKind` ordinals as the replay's `first_build.unit` spells them.
 
+const Bc21UnitNames* = [
+  "enlightenment_center", "politician", "slanderer", "muckraker"
+]
+  ## bc21's `RobotKind` ordinals, likewise: `first_build.unit` has a documented
+  ## vocabulary in every year (the r1-F14 lesson).
+
 proc yearIdOf*(year: string): YearId =
   case year.strip().toLowerAscii()
   of "bc20": yBc20
+  of "bc21": yBc21
   else: yBc26
+
+proc strongChassisFor*(year: string): ScriptedChassis =
+  ## The chassis an LLM seat drives, and the fallback for a scripted name that
+  ## belongs to a different year. D1: never a sheet field.
+  case yearIdOf(year)
+  of yBc26: scAwu
+  of yBc20: scBowlOfChowder
+  of yBc21: scCaliforniaRoll
+
+proc parseScriptedChassis*(name: string): ScriptedChassis =
+  ## Year-free reading of a recorded `seats[].chassis` string. An unrecognised
+  ## name is `awu`; `newSession` then maps it onto the year's own strong
+  ## chassis, so an old recording never fails to re-derive.
+  let key = name.strip().toLowerAscii()
+  for value in ScriptedChassis:
+    if $value == key: return value
+  scAwu
 
 # ---------------------------------------------------------------------------
 #  Year-neutral map access
@@ -80,21 +113,25 @@ proc poolNamesFor*(year, pool: string): seq[string] =
   case yearIdOf(year)
   of yBc26: maps26.poolNames(pool)
   of yBc20: maps20.poolNames(pool)
+  of yBc21: maps21.poolNames(pool)
 
 proc drawMapsFor*(year, pool: string, seed, count: int): seq[string] =
   case yearIdOf(year)
   of yBc26: maps26.drawMaps(pool, seed, count)
   of yBc20: maps20.drawMaps(pool, seed, count)
+  of yBc21: maps21.drawMaps(pool, seed, count)
 
 proc sideAslotFor*(year: string, seed, gameIndex: int): int =
   case yearIdOf(year)
   of yBc26: maps26.sideAslotFor(seed, gameIndex)
   of yBc20: maps20.sideAslotFor(seed, gameIndex)
+  of yBc21: maps21.sideAslotFor(seed, gameIndex)
 
 proc mapPathFor*(year, name: string): string =
   case yearIdOf(year)
   of yBc26: maps26.mapPath(name)
   of yBc20: maps20.mapPath(name)
+  of yBc21: maps21.mapPath(name)
 
 proc mapCardFor*(year, name: string, slot, sideAslot, rounds: int): JsonNode =
   ## The per-map facts a seat may legitimately know before writing its
@@ -117,23 +154,18 @@ proc mapCardFor*(year, name: string, slot, sideAslot, rounds: int): JsonNode =
     var card = maps20.mapCard(maps20.loadMap(name), slot, sideAslot)
     card["rounds"] = %rounds
     card
+  of yBc21:
+    var card = maps21.mapCard(maps21.loadMap(name), slot, sideAslot)
+    card["rounds"] = %rounds
+    card
 
 # ---------------------------------------------------------------------------
 #  Sessions
 # ---------------------------------------------------------------------------
 
-proc chassisForYear*(year: string, scripted: string):
-    array[2, rules20.ChassisKind] =
-  ## bc20 selects BOTH the reply sheet and the chassis from `PLAYER_SCRIPTED`
-  ## (D1: the chassis is never a sheet field). bc26 keeps its own mapping
-  ## inside `runControllerFor`.
-  discard year
-  discard scripted
-  [rules20.ckBowlOfChowder, rules20.ckBowlOfChowder]
-
 proc newSession*(year: string, mapName: string, sheets: array[2, Sheet],
                  sideAslot, maxRounds: int,
-                 chassis: array[2, rules20.ChassisKind],
+                 chassis: array[2, ScriptedChassis],
                  gameIndex = 0): Session =
   case yearIdOf(year)
   of yBc26:
@@ -147,38 +179,55 @@ proc newSession*(year: string, mapName: string, sheets: array[2, Sheet],
     result = Session(year: yBc20, mapName: mapName, sideAslot: sideAslot,
                      gameIndex: gameIndex)
     result.w20 = world20.newWorld(spec, maxRounds)
-    result.chassis20 = [chassis[sideAslot], chassis[1 - sideAslot]]
-    result.sides20 = rules20.newSides(sheets, chassis, sideAslot)
+    let kinds20 = [rules20.chassisKindFor(chassis[0]),
+                   rules20.chassisKindFor(chassis[1])]
+    result.chassis20 = [kinds20[sideAslot], kinds20[1 - sideAslot]]
+    result.sides20 = rules20.newSides(sheets, kinds20, sideAslot)
+  of yBc21:
+    let spec = maps21.loadMap(mapName)
+    result = Session(year: yBc21, mapName: mapName, sideAslot: sideAslot,
+                     gameIndex: gameIndex)
+    result.w21 = world21.newWorld(spec, maxRounds)
+    let kinds21 = [rules21.chassisKindFor(chassis[0]),
+                   rules21.chassisKindFor(chassis[1])]
+    result.chassis21 = [kinds21[sideAslot], kinds21[1 - sideAslot]]
+    result.sides21 = rules21.newSides21(sheets, sideAslot)
 
 proc stepRound*(s: Session) =
   case s.year
   of yBc26: rules26.runRound(s.w26, s.clans26)
   of yBc20: rules20.runRound(s.w20, s.sides20, s.chassis20)
+  of yBc21: rules21.runRound(s.w21, s.sides21, s.chassis21)
 
 proc currentRound*(s: Session): int =
   case s.year
   of yBc26: s.w26.currentRound
   of yBc20: s.w20.currentRound
+  of yBc21: s.w21.currentRound
 
 proc running*(s: Session): bool =
   case s.year
   of yBc26: s.w26.running
   of yBc20: s.w20.running
+  of yBc21: s.w21.running
 
 proc hashChainHex*(s: Session): string =
   case s.year
   of yBc26: toHex(s.w26.hashChain)
   of yBc20: toHex(s.w20.hashChain)
+  of yBc21: toHex(s.w21.hashChain)
 
 proc mapWidth*(s: Session): int =
   case s.year
   of yBc26: s.w26.width
   of yBc20: s.w20.width
+  of yBc21: s.w21.width
 
 proc mapHeight*(s: Session): int =
   case s.year
   of yBc26: s.w26.height
   of yBc20: s.w20.height
+  of yBc21: s.w21.height
 
 # ---------------------------------------------------------------------------
 #  Playing a game, and converting the year's outcome to the neutral one
@@ -227,9 +276,41 @@ proc statsJson20*(o: rules20.GameOutcome20): JsonNode =
     "water_level_end": o.waterLevelEnd
   }
 
+proc statsJson21*(o: rules21.GameOutcome21): JsonNode =
+  %*{
+    "centers_owned": [o.centersOwned[0], o.centersOwned[1]],
+    "centers_captured": [o.centersCaptured[0], o.centersCaptured[1]],
+    "centers_lost": [o.centersLost[0], o.centersLost[1]],
+    "neutrals_captured": [o.neutralsCaptured[0], o.neutralsCaptured[1]],
+    "votes": [o.votes[0], o.votes[1]],
+    "bids_placed": [o.bidsPlaced[0], o.bidsPlaced[1]],
+    "bid_influence_spent": [o.bidInfluenceSpent[0], o.bidInfluenceSpent[1]],
+    "top_bid": [o.topBid[0], o.topBid[1]],
+    "influence_spent": [o.influenceSpent[0], o.influenceSpent[1]],
+    "influence_end": [o.influenceEnd[0], o.influenceEnd[1]],
+    "income_end": [o.incomeEnd[0], o.incomeEnd[1]],
+    "units_built": [o.unitsBuilt[0], o.unitsBuilt[1]],
+    "politicians_built": [o.politiciansBuilt[0], o.politiciansBuilt[1]],
+    "slanderers_built": [o.slanderersBuilt[0], o.slanderersBuilt[1]],
+    "muckrakers_built": [o.muckrakersBuilt[0], o.muckrakersBuilt[1]],
+    "units_alive": [o.unitsAlive[0], o.unitsAlive[1]],
+    "politicians_alive": [o.politiciansAlive[0], o.politiciansAlive[1]],
+    "slanderers_alive": [o.slanderersAlive[0], o.slanderersAlive[1]],
+    "muckrakers_alive": [o.muckrakersAlive[0], o.muckrakersAlive[1]],
+    "empowers": [o.empowers[0], o.empowers[1]],
+    "empower_conviction": [o.empowerConviction[0], o.empowerConviction[1]],
+    "conversions": [o.conversions[0], o.conversions[1]],
+    "exposes": [o.exposes[0], o.exposes[1]],
+    "buff_peak": [o.buffPeak[0], o.buffPeak[1]],
+    "camouflaged": [o.camouflaged[0], o.camouflaged[1]],
+    "robots_lost": [o.robotsLost[0], o.robotsLost[1]],
+    "votes_tied": o.votesTied,
+    "rounds_no_bid": o.roundsNoBid
+  }
+
 proc playGameFor*(
   year, mapName: string, sheets: array[2, Sheet],
-  chassis: array[2, rules20.ChassisKind],
+  chassis: array[2, ScriptedChassis],
   index, sideAslot, maxRounds, budgetSeconds: int
 ): (GameOutcome, seq[tuple[round: int, kind: string, a, b, c: int, s: string]]) =
   ## Plays one game and returns the neutral outcome plus the year's own event
@@ -246,13 +327,29 @@ proc playGameFor*(
       stats: statsJson26(o)), w.events)
   of yBc20:
     let spec = maps20.loadMap(mapName)
-    let (w, o) = rules20.playGame(spec, sheets, chassis, index, sideAslot,
-      maxRounds, budgetSeconds)
+    let (w, o) = rules20.playGame(spec, sheets,
+      [rules20.chassisKindFor(chassis[0]), rules20.chassisKindFor(chassis[1])],
+      index, sideAslot, maxRounds, budgetSeconds)
     (GameOutcome(index: o.index, mapName: o.mapName, sideAslot: o.sideAslot,
       roundsPlayed: o.roundsPlayed, winnerSlot: o.winnerSlot,
       endReason: o.endReason, points: o.points, hashChain: o.hashChain,
       roundChains: o.roundChains, aborted: o.aborted,
       stats: statsJson20(o)), w.events)
+  of yBc21:
+    let spec = maps21.loadMap(mapName)
+    let (w, o) = rules21.playGame(spec, sheets,
+      [rules21.chassisKindFor(chassis[0]), rules21.chassisKindFor(chassis[1])],
+      index, sideAslot, maxRounds, budgetSeconds)
+    (GameOutcome(index: o.index, mapName: o.mapName, sideAslot: o.sideAslot,
+      roundsPlayed: o.roundsPlayed, winnerSlot: o.winnerSlot,
+      endReason: o.endReason, points: o.points, hashChain: o.hashChain,
+      roundChains: o.roundChains, aborted: o.aborted,
+      stats: statsJson21(o)), w.events)
+
+proc bc21Breakpoints*(): seq[int] =
+  ## The slanderer influence breakpoints, for the bc21 doctrine brief. Read
+  ## from the committed JDK-generated table, never typed in.
+  economy21.slandererBreakpoints()
 
 proc floodTableJson*(): JsonNode =
   ## The round each integer elevation floods at — the single most important

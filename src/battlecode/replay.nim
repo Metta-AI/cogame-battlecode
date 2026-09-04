@@ -236,7 +236,8 @@ proc parseReplay*(text: string): ReplayDoc =
   result.plan.sheets[1] = result.seats[1].sheet
   for slot in 0 .. 1:
     result.plan.chassis[slot] =
-      parseChassisKind(doc["seats"][slot]{"chassis"}.getStr("bowl-of-chowder"))
+      parseScriptedChassis(
+        doc["seats"][slot]{"chassis"}.getStr($strongChassisFor(result.year)))
 
 proc startGame(d: Deriver, index: int) =
   d.gameIndex = index

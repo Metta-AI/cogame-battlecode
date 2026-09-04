@@ -114,12 +114,25 @@ const Bc20GameKeys* = [
   "global_pollution_peak", "flooded_tiles_end", "water_level_end"
 ]
 
+const Bc21GameKeys* = [
+  "centers_owned", "centers_captured", "centers_lost", "neutrals_captured",
+  "votes", "bids_placed", "bid_influence_spent", "top_bid", "influence_spent",
+  "influence_end", "income_end", "units_built", "politicians_built",
+  "slanderers_built", "muckrakers_built", "units_alive", "politicians_alive",
+  "slanderers_alive", "muckrakers_alive", "empowers", "empower_conviction",
+  "conversions", "exposes", "buff_peak", "camouflaged", "robots_lost",
+  "votes_tied", "rounds_no_bid"
+]
+  ## bc21 REUSES `units_built` and `units_alive`, which already exist with the
+  ## same meaning and type; the rest are new optional siblings.
+
 const EndReasons* = [
   "kings_destroyed", "cats_cleared", "round_limit", "abandoned",
   "hq_destroyed", "quantity", "quality", "broadcasts", "highest_id",
-  "coin_flip"
+  "coin_flip", "annihilated", "more_votes", "more_enlightenment_centers",
+  "more_influence"
 ]
-  ## The union of both years' `DominationFactor` renderings plus our own
+  ## The union of all three years' `DominationFactor` renderings plus our own
   ## wall-clock `abandoned`.
 
 const ResultsKeys* = [

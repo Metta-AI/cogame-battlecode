@@ -15,7 +15,7 @@ import battlecode/[baselines, broadcast, match, replay, results, sheet,
 import battlecode/years/dispatch
 import battlecode/years/bc20/[maps, rules, world]
 
-const Chassis = [ckBowlOfChowder, ckExamplefuncsplayer]
+const Chassis = [scBowlOfChowder, scExamplefuncsplayer]
 
 proc sheets(): array[2, Sheet] =
   [baselineSheet("bc20", blBowlOfChowder),
@@ -190,7 +190,7 @@ block:
   ## which is the recorder's real code path and not a mocked one.
   let s = sheets()
   let slow = proc (w: World, round: int) {.closure.} = sleep(40)
-  let (_, aborted) = playGame(loadMap("Hourglass"), s, Chassis, 0, 0, 400, 1,
+  let (_, aborted) = playGame(loadMap("Hourglass"), s, [chassisKindFor(Chassis[0]), chassisKindFor(Chassis[1])], 0, 0, 400, 1,
     slow)
   check("the wall-clock guard fired", aborted.aborted)
   checkEq("and the game is recorded as abandoned", aborted.endReason,

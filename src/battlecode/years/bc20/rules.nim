@@ -75,6 +75,13 @@ proc parseChassisKind*(name: string): ChassisKind =
   of "examplefuncsplayer", "scaffold", "example": ckExamplefuncsplayer
   else: ckBowlOfChowder
 
+proc chassisKindFor*(sc: ScriptedChassis): ChassisKind =
+  ## The year-neutral `ScriptedChassis` mapped into bc20's own kind. A name
+  ## belonging to another year falls back to bc20's STRONG chassis.
+  case sc
+  of scExamplefuncsplayer, scScaffold: ckExamplefuncsplayer
+  else: ckBowlOfChowder
+
 proc slotOf*(outcome: GameOutcome20, team: Team): int =
   if team == teamA: outcome.sideAslot else: 1 - outcome.sideAslot
 

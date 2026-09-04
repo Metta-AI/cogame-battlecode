@@ -177,3 +177,59 @@ draws as the `build` beat, which has CSS.
 `hq_buried` and `hq_drowned` are derived from the recorded per-game statistics
 rather than from a sim event, so the same two facts drive the endcard, the
 scrubber and `results.games[]`.
+
+---
+
+## bc21
+
+A `bc21` recording is the same document with `"year": "bc21"` and
+`"game_version": "GV06"`. Everything the year-neutral reader looks at is in the
+same place; the differences are the sheet, the per-game statistics and the
+event vocabulary.
+
+**No `.bc21` bytes, no per-round state dump, and no flag or bid dump.** Flags
+and the auction are pure functions of the sim, so the browser re-derives them
+from events + config + seed: `#bc21-votes` and `#bc21-bids` read the
+re-derived tally, and `tests/test_bc21_replay.nim` asserts that nothing about
+either is stored. There is no `match_b64` field.
+
+`seats[].chassis` records the year-neutral `ScriptedChassis` string —
+`california-roll` or `examplefuncsplayer21` on bc21 — beside the policy kind,
+because bc21 has no `chassis` field on its doctrine (D1).
+
+bc21's optional per-game keys, each a 2-array in **seat** order unless marked
+scalar: `centers_owned`, `centers_captured`, `centers_lost`,
+`neutrals_captured`, `votes`, `bids_placed`, `bid_influence_spent`, `top_bid`,
+`influence_spent`, `influence_end`, `income_end`, `units_built`,
+`politicians_built`, `slanderers_built`, `muckrakers_built`, `units_alive`,
+`politicians_alive`, `slanderers_alive`, `muckrakers_alive`, `empowers`,
+`empower_conviction`, `conversions`, `exposes`, `buff_peak`, `camouflaged`,
+`robots_lost`; scalars `votes_tied` and `rounds_no_bid`. `units_built` and
+`units_alive` are **reused** from bc20 with the same meaning and type.
+
+`end_reason` gains the 2021 `DominationFactor` values in snake_case:
+`annihilated`, `more_votes`, `more_enlightenment_centers`, `more_influence`.
+`coin_flip` and `abandoned` were already there.
+
+### The bc21 event vocabulary
+
+Every kind is **bounded per game** — a 1500-round match with hundreds of robots
+cannot be allowed to emit an event per empower — and every one has CSS in the
+appended bc21 game block. `tests/test_bc21_replay.nim` asserts each bound
+against a real 1500-round match.
+
+| kind | bound / game | beat |
+| --- | --- | --- |
+| `game_start` | 1 | `game` |
+| `first_build` | 6 | `build` |
+| `center_taken` | 24 | `capture` |
+| `vote_lead` (only when the lead changes hands) | 40 | `votes` |
+| `bid_spike` (the largest bid per 100-round window per team) | 30 | `bid` |
+| `expose_wave` (each 5 % step of the speech buff) | 20 | `expose` |
+| `empower_big` (converts a Centre, or removes ≥ 200 enemy conviction) | 40 | `empower` |
+| `annihilated` | 1 | `wipe` (chapter marker) |
+| `game_end` | 1 | `end` |
+| `game_abandoned` | 1 | `end` |
+
+The pre-match `doctrine_*` events and `episode_start` / `episode_end` are
+year-neutral and unchanged.

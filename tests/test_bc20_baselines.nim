@@ -45,8 +45,18 @@ block:
     baselineFor("bc20", "nonsense"), blBowlOfChowder)
   checkEq("and `examplefuncsplayer` takes the weak floor",
     baselineFor("bc20", "examplefuncsplayer"), blExamplefuncsplayer)
+  ## `baselineChassis` now returns the YEAR-NEUTRAL `ScriptedChassis`;
+  ## `years/dispatch.nim`'s `newSession` maps it into bc20's own kind.
   checkEq("the chassis follows the name, not the sheet",
-    baselineChassis(blExamplefuncsplayer), parseChassisKind("examplefuncsplayer"))
+    baselineChassis(blExamplefuncsplayer), scExamplefuncsplayer)
+  checkEq("and bc20 maps it onto its own weak floor",
+    chassisKindFor(baselineChassis(blExamplefuncsplayer)),
+    parseChassisKind("examplefuncsplayer"))
+  checkEq("while the strong one maps onto bowl-of-chowder",
+    chassisKindFor(baselineChassis(blBowlOfChowder)),
+    parseChassisKind("bowl-of-chowder"))
+  checkEq("and a bc21 name on a bc20 game falls back to bc20's STRONG chassis",
+    chassisKindFor(scCaliforniaRoll), parseChassisKind("bowl-of-chowder"))
 
 # --- (b) every emitted action is legal, and the budget is never exceeded ----
 proc assertInvariants(w: World, label: string) =

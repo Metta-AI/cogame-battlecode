@@ -196,3 +196,93 @@ Ten knobs, and **no `chassis`** (D1). The caps are the year-neutral ones: 16 KB
 of bytes for the whole reply, ≤ 32 sheet keys, 280 runes of `notes`, 48 of
 `motto`, ≤ 16 unknown keys recorded at ≤ 40 runes each — every one cut on a
 rune boundary.
+
+---
+
+## bc21
+
+The protocol id is **unchanged** — `cogame.battlecode.v1`. The wire shape is
+identical; only the year-dependent *payload* differs.
+
+The registration blob gains two `scripted` values, `"california-roll"` and
+`"examplefuncsplayer21"`. A seat that sets neither env var takes the ACTIVE
+YEAR's default baseline: `awu` on bc26, `bowl-of-chowder` on bc20,
+`california-roll` on bc21 — the strong published doctrine, never the weak
+floor. `PLAYER_SCRIPTED=awu` and `PLAYER_SCRIPTED=scaffold` — the only two ids
+the manifest declares, because they are the only two the certification fixture
+seats — resolve per year, to `california-roll` and `examplefuncsplayer21` on
+bc21.
+
+### The bc21 observation
+
+One sealed, simultaneous doctrine request per episode, exactly as bc26 and
+bc20. The payload differs in three places:
+
+```jsonc
+{"protocol":"cogame.battlecode.v1","game_version":"GV06","year":"bc21",
+ "slot":0,"alias":"Clan Ash","opponent_alias":"Clan Basil","seed":871345,
+ "games":[{"map":"PaperWindmill","width":48,"height":48,
+           "symmetry":"rotational","symmetries":["rotational"],
+           "you_are":"A","rounds":1500,
+           "your_centers":[{"x":11,"y":36,"influence":150}, …],
+           "enemy_centers":2,
+           "neutral_centers":[{"x":24,"y":24,"influence":400}, …],
+           "center_separation":21,
+           "passability":{"min":0.1,"mean":0.806,"swamp_pct":16.8}}, …],
+ "economy":{"center_passive":"ceil(0.2*sqrt(round)) per center per round; 8507 total over 1500 rounds",
+            "center_start_influence":150,
+            "slanderer_breakpoints":[21,41,63,85,107,130, …],
+            "slanderer_payments":51,"camouflage_round":300,
+            "expose_buff":"+0.001 x slanderer influence, for 50 rounds",
+            "empower_tax":10,"votes_on_offer":1500,
+            "losing_bid_cost":"ceil(bid/2)"},
+ "sheet_schema":{ …all ten knobs, their values, ranges and defaults… },
+ "scoring":{"weights":{"survival":40,"vote_share":35,"center_share":15,
+                       "influence_share":10},
+            "win_bonus_per_game":100,"games":3,
+            "note":"shares are float32; points truncate to an integer"},
+ "budget":{"attempt1_ms":20000,"retry_ms":12000,"one_shot":true}}
+```
+
+* **the map cards** carry the seat's OWN Enlightenment Centres with their
+  influence, how many the enemy has, every neutral Centre with its position and
+  influence, the Centre separation, and a passability summary. Because every
+  map is symmetric the two seats' cards are mirror images and numerically
+  identical in every aggregate; the only asymmetry is `you_are` and which of
+  the two mirrored coordinate sets is labelled "yours".
+  `passability.swamp_pct` is the percentage of tiles below passability 0.5 —
+  this coworld's bucket, not the engine's, which has no terrain categories at
+  all (`docs/RULES-BC21.md` §Divergences item 13);
+* **`economy`** carries the two curves a 2021 doctrine has to plan around: the
+  Centre's passive income and the slanderer breakpoints, read from the
+  committed JDK-generated table rather than re-typed;
+* **`sheet_schema`** is generated from the knob table itself, so a knob cannot
+  exist in the sim and be missing from the brief;
+* **`scoring`** carries bc21's four weights.
+
+The condensed rule set ships in the **system preamble**
+(`decide.nim`'s `Bc21Preamble`), which every seat receives as the system
+message and which the replay records once, at document level, as
+`prompt_preamble` — exactly as for bc20.
+
+**Hidden**, as ever: the opponent's doctrine, sheet, notes, motto, real name
+and fallback status; every in-match state (a cog receives **no** per-round
+observation). The only cross-team channel inside a match is what a robot can
+sense and the flags it can read.
+
+### The bc21 reply
+
+```json
+{"sheet":{"opening":"muck_spam","slanderer_ratio":10,"muck_ratio":70,
+          "politician_size_curve":"cheap","bid_policy":"fixed",
+          "expansion":"neutral_centers_first","flank_policy":"flank_wide",
+          "empower_threshold":20,"convert_over_kill":false,
+          "eco_exponential_round":250},
+ "notes":"Kill their slanderers before round 200; buff-mucks carry the politicians in.",
+ "motto":"No lies survive daylight."}
+```
+
+Ten knobs, and **no `chassis`** (D1). The caps are the year-neutral ones: 16 KB
+of bytes for the whole reply, ≤ 32 sheet keys, 280 runes of `notes`, 48 of
+`motto`, ≤ 16 unknown keys recorded at ≤ 40 runes each — every one cut on a
+rune boundary.

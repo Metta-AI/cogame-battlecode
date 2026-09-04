@@ -13,7 +13,7 @@ hand-edited constant fails the build.
         --out src/battlecode/years/bc26/constants.nim
     tools/gen_year_constants.py --engine ... --check   # diff, exit 1 on drift
 
-`--year bc20` does the same job for Battlecode 2020 "Soup" against a checkout
+`--year bc20` and `--year bc21` do the same job for Battlecode 2020 "Soup" against a checkout
 of github.com/battlecode/battlecode20 at the pinned commit, reading
 `common/GameConstants.java` and `common/RobotType.java`:
 
@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import pathlib
 import re
+import struct
 import sys
 
 TAG = "engine.1.2.5"
@@ -75,8 +76,15 @@ def nim_literal(java_type: str, raw: str) -> tuple[str, str]:
     return "float64", repr(float(text))
 
 
-def read_constants_from(path: pathlib.Path) -> list[tuple[str, str, str]]:
+def read_constants_from(path: pathlib.Path,
+                        strip_comments: bool = False) -> list[tuple[str, str, str]]:
     src = path.read_text()
+    if strip_comments:
+        # 2021 keeps MAX_ROBOT_ID as a COMMENTED-OUT declaration ("Cannot be
+        # guaranteed in Battlecode 2021", because conversions mint new ids).
+        # A regex over the raw text picks it up as a live constant, which is
+        # exactly the sort of thing a generator is supposed to prevent.
+        src = re.sub(r"//[^\n]*", "", src)
     out = []
     for java_type, name, raw in CONST_RE.findall(src):
         nim_type, literal = nim_literal(java_type, raw)
@@ -287,9 +295,131 @@ def render_bc20(engine: pathlib.Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+# ---------------------------------------------------------------------------
+#  bc21 — Battlecode 2021 "Campaign"
+# ---------------------------------------------------------------------------
+
+BC21_COMMIT = "ed39c1a49574db57e5463d720736220506280294"
+
+# `common/RobotType.java`'s enum entries. Unlike 2020 the 2021 entries carry a
+# javadoc block each, so they are matched by name and argument list rather than
+# by indentation, and the arguments are:
+#   spawnSource, convictionRatio, actionCooldown, initialCooldown,
+#   actionRadiusSquared, sensorRadiusSquared, detectionRadiusSquared,
+#   bytecodeLimit
+BC21_ROBOT_RE = re.compile(
+    r"^\s{4}(ENLIGHTENMENT_CENTER|POLITICIAN|SLANDERER|MUCKRAKER)"
+    r"\s*\(([^)]*)\)\s*,\s*$", re.M
+)
+
+# The per-robot DECISION BUDGET that replaces the JVM bytecode limit, at one
+# tenth of the Java limit. Hand-authored, not generated: it is this port's own
+# rule (docs/RULES-BC21.md §Divergences item 1).
+BC21_DECISION_OPS = {
+    "ENLIGHTENMENT_CENTER": 2000,
+    "POLITICIAN": 1500,
+    "SLANDERER": 750,
+    "MUCKRAKER": 1500,
+}
+
+
+def f32_literal(text: str) -> str:
+    """The EXACT value a Java `float` literal holds, as a Nim float literal.
+
+    Nim keeps a `const` of type `float32` at its COMPILE-TIME double value, so
+    `float64(SomeFloat32Const)` yields the double nearest the decimal source
+    rather than the float32 the Java constant actually is. `0.2f` is
+    0.20000000298023224, and `ceil(0.2f * sqrt(25))` is 2 in Java and 1 under
+    the naive transcription — a real, silent, once-every-25-rounds divergence
+    that the `ec_passive` table caught. Emitting the widened float32 value
+    makes the two identical whichever way Nim folds it.
+    """
+    value = struct.unpack("<f", struct.pack("<f", float(text)))[0]
+    return repr(value)
+
+
+def read_bc21_robots(engine: pathlib.Path):
+    src = (engine / "engine/src/main/battlecode/common/RobotType.java").read_text()
+    body = src.split("RobotType(RobotType spawnSource", 1)[0]
+    out = []
+    for name, args in BC21_ROBOT_RE.findall(body):
+        parts = [v.strip() for v in args.split(",")]
+        if len(parts) != 8:
+            continue
+        out.append((name, parts))
+    return out
+
+
+def render_bc21(engine: pathlib.Path) -> str:
+    consts = read_constants_from(
+        engine / "engine/src/main/battlecode/common/GameConstants.java",
+        strip_comments=True)
+    robots = read_bc21_robots(engine)
+    if len(robots) != 4:
+        raise SystemExit(
+            f"::error::expected 4 RobotType entries, saw {len(robots)}")
+
+    lines: list[str] = []
+    add = lines.append
+    add('## Battlecode 2021 "Campaign" gameplay constants -- GENERATED, do not edit.')
+    add("##")
+    add(f"## Source: github.com/battlecode/battlecode21 at commit `{BC21_COMMIT}`")
+    add("## (release 2021.3.0.5), files `common/GameConstants.java` and")
+    add("## `common/RobotType.java`, read by")
+    add("## `tools/gen_year_constants.py --year bc21`. The `test` job of")
+    add("## `.github/workflows/ci.yml` re-runs that generator with `--check`,")
+    add("## which byte-diffs this file, so an edit here fails the build instead")
+    add("## of quietly changing the rules under a `GameVersion` that no longer")
+    add("## describes them.")
+    add("##")
+    add("## `RobotType.getPassiveInfluence` is NOT a constant: the Enlightenment")
+    add("## Center curve and the slanderer embezzle formula live in")
+    add("## `economy.nim`, backed by the committed JDK-generated tables in")
+    add("## `data/bc21/`.")
+    add("")
+    add(f'const EngineCommit* = "{BC21_COMMIT}"')
+    add('const EngineRelease* = "2021.3.0.5"')
+    add("")
+    add("type")
+    add("  RobotKind* = enum")
+    for name, _ in robots:
+        add(f'    rt{camel(name)} = "{name}"')
+    add("")
+    add("  RobotSpec* = object")
+    add("    ## `common/RobotType.java`'s constructor arguments, verbatim.")
+    add("    ## `convictionRatio`, `actionCooldown` and `initialCooldown` are")
+    add("    ## Java `float`s; widening them changes which round a robot is")
+    add("    ## ready, so they stay float32 here.")
+    add("    convictionRatio*, actionCooldown*, initialCooldown*: float32")
+    add("    actionRadiusSquared*, sensorRadiusSquared*: int")
+    add("    detectionRadiusSquared*, bytecodeLimit*: int")
+    add("    decisionOps*: int")
+    add("")
+    add("const")
+    for name, nim_type, literal in consts:
+        if nim_type == "float32":
+            literal = f32_literal(literal)
+        add(f"  {camel(name)}*: {nim_type} = {literal}")
+    add("")
+    add("  RobotSpecs*: array[RobotKind, RobotSpec] = [")
+    for name, a in robots:
+        add(f"    rt{camel(name)}: RobotSpec("
+            f"convictionRatio: {f32_literal(bc20_num(a[1]))}'f32,")
+        add(f"      actionCooldown: {f32_literal(bc20_num(a[2]))}'f32, "
+            f"initialCooldown: {f32_literal(bc20_num(a[3]))}'f32,")
+        add(f"      actionRadiusSquared: {bc20_num(a[4])}, "
+            f"sensorRadiusSquared: {bc20_num(a[5])},")
+        add(f"      detectionRadiusSquared: {bc20_num(a[6])}, "
+            f"bytecodeLimit: {bc20_num(a[7])},")
+        add(f"      decisionOps: {BC21_DECISION_OPS[name]}),")
+    add("  ]")
+    add("")
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--year", default="bc26", choices=["bc26", "bc20"])
+    ap.add_argument("--year", default="bc26", choices=["bc26", "bc20", "bc21"])
     ap.add_argument("--engine", required=True, type=pathlib.Path)
     ap.add_argument("--out", type=pathlib.Path, default=None)
     ap.add_argument("--check", action="store_true",
@@ -298,8 +428,9 @@ def main() -> int:
 
     out = args.out or pathlib.Path(
         f"src/battlecode/years/{args.year}/constants.nim")
-    label = TAG if args.year == "bc26" else BC20_COMMIT
-    text = render(args.engine) if args.year == "bc26" else render_bc20(args.engine)
+    label = {"bc26": TAG, "bc20": BC20_COMMIT, "bc21": BC21_COMMIT}[args.year]
+    text = {"bc26": render, "bc20": render_bc20,
+            "bc21": render_bc21}[args.year](args.engine)
     if args.check:
         current = out.read_text() if out.exists() else ""
         if current != text:

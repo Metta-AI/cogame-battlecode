@@ -1257,7 +1257,17 @@ body.sidelanes-both #killfeed {
   /* Bottom-right, clear of the blue scorebug/roster (top) and the transport
      bar (bottom). column-reverse so the newest row sits lowest, nearest the
      transport, and older kills stack upward — a broadcast lower-third feed. */
-  bottom: calc(76 * var(--u));
+  /* THE KILLFEED / STAT-BOX OVERLAP FIX (bc20 judge, advisory).
+     `76 * --u` scales with the BOARD, and the year stat boxes are anchored in
+     PIXELS off the transport band, so at FIT zoom on a small board the feed's
+     offset falls below the boxes and — being eight z-levels higher — overdraws
+     them. `--statrail` is the measured height of the visible stat-box stack
+     for the CURRENT data-year (relayout() sets it in the same fixed-point
+     loop as --band), so the feed is lifted clear of whatever is actually
+     there rather than of a number somebody typed. Nothing else changes: same
+     right anchor, same width, same column-reverse, same pointer-events. */
+  bottom: max(calc(76 * var(--u)),
+              calc(var(--band, 0px) + var(--statrail, 0px) + 8px));
   right: calc(12 * var(--u));
   display: flex;
   flex-direction: column-reverse;
@@ -2760,6 +2770,132 @@ html:not([data-year="bc20"]) #bc20-chain { display: none !important; }
   #bc20-flood .lbl, #bc20-flood .hqelev { display: none; }
   #bc20-doctrines { max-width: 62%; }
 }
+
+/* ========================================================================
+   BC21 additions to the inherited cogame-battlecode chrome
+   ------------------------------------------------------------------------
+   The game block for the `bc21` year. Everything above this banner is the
+   page as it shipped for `bc26` and `bc20`. NOTHING is removed and no
+   existing id is reused for a different purpose: every id below is new and
+   `#bc21-` prefixed, and the three blocks are switched by ONE attribute —
+   `document.documentElement.dataset.year`, set from the replay header — plus
+   the rules right here. `#viewpanel` is KEPT: a 48x48 board renders 768 px
+   wide against a 360 px featured-match frame.
+   ======================================================================== */
+html[data-year="bc21"] #coopchip,
+html[data-year="bc21"] #bars,
+html[data-year="bc21"] #econ,
+html[data-year="bc21"] #doctrines,
+html[data-year="bc21"] #bc20-flood,
+html[data-year="bc21"] #bc20-soup,
+html[data-year="bc21"] #bc20-units,
+html[data-year="bc21"] #bc20-doctrines,
+html[data-year="bc21"] #bc20-doctrines-toggle,
+html[data-year="bc21"] #bc20-chain { display: none !important; }
+
+html:not([data-year="bc21"]) #bc21-votes,
+html:not([data-year="bc21"]) #bc21-influence,
+html:not([data-year="bc21"]) #bc21-units,
+html:not([data-year="bc21"]) #bc21-doctrines,
+html:not([data-year="bc21"]) #bc21-doctrines-toggle,
+html:not([data-year="bc21"]) #bc21-bids { display: none !important; }
+
+/* The election readout, in the same top-centre pill slot bc20 uses for its
+   flood gauge: `ASH 412 — 388 BASIL`, a proportional two-colour bar, and
+   `751 to clinch`. It flashes when the lead changes hands. */
+#bc21-votes {
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 10px; align-items: center;
+  max-width: calc(100% - 16px); box-sizing: border-box; overflow: hidden;
+  padding: 2px 10px; border-radius: 999px; font-size: 11px;
+  letter-spacing: .06em; background: rgba(11,7,4,.72); color: #d8c48a;
+  border: 1px solid #d8c48a; z-index: 6; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+#bc21-votes > span { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+#bc21-votes.flip { color: #f2e8d8; border-color: #f2e8d8; }
+#bc21-votes .gauge {
+  width: 72px; height: 4px; border-radius: 2px; overflow: hidden;
+  background: rgba(242,232,216,.14); display: flex;
+}
+#bc21-votes .gauge > i { display: block; height: 100%; }
+#bc21-votes .gauge > i.a { background: #e0523a; }
+#bc21-votes .gauge > i.b { background: #2f6fb0; }
+
+/* Both readouts sit ABOVE the reserved transport band -- nothing this block
+   adds is ever overlaid inside it. */
+#bc21-influence {
+  position: absolute; right: 8px; bottom: calc(var(--band, 0px) + 8px);
+  display: grid; grid-template-columns: auto auto auto; gap: 1px 8px;
+  font-size: 10px; color: #cbbfae; background: rgba(11,7,4,.6);
+  padding: 5px 8px; border-radius: 6px; z-index: 5; pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+#bc21-influence b { color: #f2e8d8; font-weight: 600; }
+
+#bc21-units {
+  position: absolute; right: 8px; bottom: calc(var(--band, 0px) + 74px);
+  font-size: 10px; color: #cbbfae; background: rgba(11,7,4,.6);
+  padding: 5px 8px; border-radius: 6px; z-index: 5; pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+#bc21-units b { color: #f2e8d8; font-weight: 600; }
+#bc21-units .buff { color: #d8c48a; }
+
+/* D3, and THE BOARD IS THE PICTURE. Same discipline as the bc26 and bc20
+   panels: it opens with the replay, CLOSES ITSELF the moment playback
+   advances (or after six seconds for a viewer who never presses play), a
+   close control, Escape and a re-open chip drive it by hand, and its body is
+   capped and scrolls so even opened over a 360 px frame it can never own the
+   board. It sits above the board area -- never inside var(--band). */
+#bc21-doctrines {
+  position: absolute; left: 8px; bottom: calc(var(--band, 0px) + 8px);
+  max-width: 46%; font-size: 10px; color: #cbbfae;
+  background: rgba(11,7,4,.72); padding: 5px 22px 5px 8px;
+  border-radius: 6px; z-index: 7;
+}
+#bc21-doctrines.dismissed { display: none !important; }
+#bc21-doctrines-body {
+  max-height: calc(30vh - var(--band, 0px)); overflow-y: auto;
+}
+#bc21-doctrines .dline { margin-bottom: 3px; }
+#bc21-doctrines .dname { color: #f2e8d8; font-weight: 600; }
+#bc21-doctrines .dfall { color: #e0523a; }
+#bc21-doctrines-close {
+  position: absolute; top: 2px; right: 4px; width: 16px; height: 16px;
+  line-height: 14px; padding: 0; border: 0; border-radius: 4px; cursor: pointer;
+  background: rgba(242,232,216,.14); color: #f2e8d8; font-size: 12px;
+}
+#bc21-doctrines-close:hover { background: rgba(242,232,216,.3); }
+#bc21-doctrines-toggle {
+  font-size: 10px; padding: 1px 8px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(242,232,216,.3); color: #cbbfae;
+  background: rgba(11,7,4,.6); margin-top: 3px;
+}
+#bc21-doctrines-toggle[hidden] { display: none !important; }
+
+#bc21-bids { margin-top: 6px; font-size: 11px; color: #cbbfae; }
+#bc21-bids b { color: #f2e8d8; }
+#bc21-bids .msg { opacity: .8; }
+
+/* CSS for EVERY beat kind this year emits. A kind with no rule is an
+   invisible marker. */
+.beat-marker.doctrine { background: #d8c48a; }
+.beat-marker.capture { background: #8fbf6a; width: 3px; }
+.beat-marker.votes { background: #d8c48a; }
+.beat-marker.bid { background: #b08a3a; }
+.beat-marker.expose { background: #7fb2e8; }
+.beat-marker.empower { background: #e0523a; }
+.beat-marker.wipe { background: #e0523a; width: 3px; }
+
+@media (max-width: 760px) {
+  #bc21-influence, #bc21-units, #bc21-doctrines { font-size: 9px; }
+  #bc21-units { bottom: calc(var(--band, 0px) + 66px); }
+  #bc21-votes { gap: 5px; font-size: 10px; }
+  #bc21-votes .gauge { width: 40px; }
+  #bc21-votes .lbl, #bc21-votes .clinch { display: none; }
+  #bc21-doctrines { max-width: 62%; }
+}
 </style>
 </head>
 <body>
@@ -2796,6 +2932,9 @@ html:not([data-year="bc20"]) #bc20-chain { display: none !important; }
           <div class="caption" id="clock-caption">In the locker room</div>
           <!-- BC20: re-opens #bc20-doctrines after it has been dismissed. -->
           <button type="button" id="bc20-doctrines-toggle" hidden
+                  aria-label="Show doctrines">doctrines</button>
+          <!-- BC21: re-opens #bc21-doctrines after it has been dismissed. -->
+          <button type="button" id="bc21-doctrines-toggle" hidden
                   aria-label="Show doctrines">doctrines</button>
         </div>
       </div>
@@ -2859,6 +2998,17 @@ html:not([data-year="bc20"]) #bc20-chain { display: none !important; }
       <div id="bc20-doctrines-body"></div>
     </div>
 
+    <!-- BC21 additions to the inherited cogame-battlecode chrome -->
+    <div id="bc21-votes"></div>
+    <div id="bc21-units"></div>
+    <div id="bc21-influence"></div>
+    <div id="bc21-doctrines" role="region" aria-label="Doctrines">
+      <button type="button" id="bc21-doctrines-close"
+              aria-label="Dismiss doctrines"
+              title="Dismiss doctrines (Esc)">&times;</button>
+      <div id="bc21-doctrines-body"></div>
+    </div>
+
     <div id="transport">
       <!-- Buttons on top, scrubber/timeline below (the transport sits in its own
            reserved band under the board, so nothing here overlaps play). -->
@@ -2900,6 +3050,9 @@ html:not([data-year="bc20"]) #bc20-chain { display: none !important; }
       <!-- BC20: the blockchain panel. Nothing about the chain is stored in
            the replay -- the wasm sim re-derives every block. -->
       <div id="bc20-chain"></div>
+      <!-- BC21: the auction panel. Nothing about the auction is stored in
+           the replay -- the wasm sim re-derives every round. -->
+      <div id="bc21-bids"></div>
       <div class="ec-replay" id="ec-replay"></div>
     </div>
   </div>
@@ -3212,6 +3365,310 @@ html:not([data-year="bc20"]) #bc20-chain { display: none !important; }
 })();
 </script>
 
+
+<!-- ======================================================================
+     BC21 additions to the inherited cogame-battlecode chrome
+     ----------------------------------------------------------------------
+     The game block for the `bc21` year. It registers itself on
+     `window.Bc21Block` BEFORE the inherited block runs, and the inherited
+     block calls into it: two lines there, everything else here. No function
+     name in this file collides with `chrome_common.js`, with the bc26 block
+     or with the bc20 one -- the beat builder is `buildBc21BeatButtons`, never
+     `markBeat` (the tandem 2026-08-23 hoisting collision), never
+     `buildBeatButtons` (bc26) and never `buildBc20BeatButtons` (bc20).
+     ====================================================================== -->
+<script>
+(function () {
+  'use strict';
+
+  var api = null;                    // {C, send, seek, dismissEndcard}
+  var beatsBuilt = false;
+  var beatEls = [];
+  var dismissed = false;
+  var pinned = false;                // the viewer opened it themselves
+  var lastFrame = -1;
+  var lastLeader = -2;
+  var feedShown = {};
+
+  function $(id) { return document.getElementById(id); }
+  function esc(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ---- the dismissible doctrine overlay (D3) ---------------------------
+  function setDoctrinesOpen(open) {
+    dismissed = !open;
+    var panel = $('bc21-doctrines');
+    var chip = $('bc21-doctrines-toggle');
+    if (panel) panel.classList.toggle('dismissed', dismissed);
+    if (chip) chip.hidden = !dismissed;
+  }
+
+  function wireDoctrines() {
+    var close = $('bc21-doctrines-close');
+    if (close) {
+      close.addEventListener('click', function (event) {
+        event.stopPropagation();
+        pinned = false;
+        setDoctrinesOpen(false);
+      });
+    }
+    var chip = $('bc21-doctrines-toggle');
+    if (chip) {
+      chip.addEventListener('click', function (event) {
+        event.stopPropagation();
+        // A panel the viewer opened by hand STAYS open -- that is their
+        // choice, not a lid the page left on the board.
+        pinned = true;
+        setDoctrinesOpen(true);
+      });
+    }
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape' && event.key !== 'Esc') return;
+      if (document.documentElement.getAttribute('data-year') !== 'bc21') return;
+      pinned = false;
+      setDoctrinesOpen(false);
+    });
+    // The viewer who never presses play still gets the board back.
+    setTimeout(function () {
+      if (!pinned) setDoctrinesOpen(false);
+    }, 6000);
+  }
+
+  // ---- beats ------------------------------------------------------------
+  function buildBc21BeatButtons(s) {
+    if (beatsBuilt || !s.beats || !s.beats.length) return;
+    beatsBuilt = true;
+    var scrub = $('scrub');
+    var span = Math.max(1, (s.mx || 1) - (s.st || 0));
+    s.beats.forEach(function (b) {
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'beat-marker ' + (b.k || 'game');
+      el.style.left =
+        (Math.min(1, Math.max(0, (b.t - (s.st || 0)) / span)) * 100) + '%';
+      el.setAttribute('aria-label', b.label || b.k);
+      el.title = b.label || b.k;
+      el.__tick = b.t;
+      el.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (api) api.seek(b.t / span);
+      });
+      scrub.appendChild(el);
+      beatEls.push(el);
+    });
+  }
+
+  function applyBc21BeatSpoilers(s) {
+    if (!api || !beatEls.length) return;
+    var spoilers = api.C.getSpoilers();
+    beatEls.forEach(function (el) {
+      var hide = !spoilers && el.__tick > s.t;
+      if (el.__hidden !== hide) {
+        el.__hidden = hide;
+        el.style.display = hide ? 'none' : '';
+      }
+    });
+  }
+
+  // ---- readouts ---------------------------------------------------------
+  function renderVotes(s) {
+    var v = s.bc21_votes || {};
+    var host = $('bc21-votes');
+    if (!host) return;
+    var votes = v.votes || [0, 0];
+    var total = Math.max(1, votes[0] + votes[1]);
+    var pctA = Math.round((votes[0] / total) * 100);
+    var leader = votes[0] > votes[1] ? 0 : (votes[1] > votes[0] ? 1 : -1);
+    if (lastLeader !== -2 && leader !== lastLeader) {
+      host.classList.add('flip');
+      setTimeout(function () { host.classList.remove('flip'); }, 900);
+    }
+    lastLeader = leader;
+    host.innerHTML =
+      '<span class="lbl">' + esc(s.aliases[0]) + '</span> <b>' + votes[0] +
+        '</b>' +
+      '<span class="gauge"><i class="a" style="width:' + pctA + '%"></i>' +
+        '<i class="b" style="width:' + (100 - pctA) + '%"></i></span>' +
+      '<b>' + votes[1] + '</b> <span class="lbl">' + esc(s.aliases[1]) +
+        '</span>' +
+      '<span class="clinch">' + (v.to_clinch || 0) + ' to clinch</span>';
+  }
+
+  function renderInfluence(s) {
+    var rows = s.bc21_influence || [{}, {}];
+    var host = $('bc21-influence');
+    if (!host) return;
+    var html = '<span></span><span>' + esc(s.aliases[0]) + '</span><span>' +
+      esc(s.aliases[1]) + '</span>';
+    html += '<span>influence</span><b>' + (rows[0].influence || 0) +
+      '</b><b>' + (rows[1].influence || 0) + '</b>';
+    html += '<span>income</span><b>' + (rows[0].income || 0) + '/r</b><b>' +
+      (rows[1].income || 0) + '/r</b>';
+    html += '<span>centres</span><b>' + (rows[0].centers || 0) + ' / ' +
+      (rows[0].centers_on_map || 0) + '</b><b>' + (rows[1].centers || 0) +
+      ' / ' + (rows[1].centers_on_map || 0) + '</b>';
+    host.innerHTML = html;
+  }
+
+  var UNIT_ROWS = [
+    ['politician', 'Po'], ['slanderer', 'Sl'], ['muckraker', 'Mu']
+  ];
+
+  function renderUnits(s) {
+    var rows = s.bc21_units || [{}, {}];
+    var host = $('bc21-units');
+    if (!host) return;
+    var html = '';
+    for (var slot = 0; slot < 2; slot++) {
+      var u = rows[slot] || {};
+      var line = [];
+      UNIT_ROWS.forEach(function (r) {
+        line.push(r[1] + ' <b>' + (u[r[0]] || 0) + '</b>');
+      });
+      html += '<div>' + esc(s.aliases[slot]) + ' ' + line.join(' ') +
+        ' <span class="buff">&times;' +
+        Number(u.buff_factor || 1).toFixed(3) + '</span></div>';
+    }
+    host.innerHTML = html;
+  }
+
+  function renderDoctrines(s) {
+    var host = $('bc21-doctrines-body');
+    if (!host) return;
+    var html = '';
+    (s.doctrines || []).forEach(function (d, slot) {
+      html += '<div class="dline"><span class="dname">' +
+        esc(s.aliases[slot]) + '</span> ' + esc(d.name || '') + ' \u2014 ' +
+        esc((d.words || []).join(', ')) +
+        (d.fallback ? ' <span class="dfall">[fallback: ' +
+          esc(d.fallback) + ']</span>' : '') +
+        (d.notes ? '<br><i>' + esc(d.notes) + '</i>' : '') + '</div>';
+    });
+    host.innerHTML = html;
+  }
+
+  function renderFeed(s) {
+    var feed = $('killfeed');
+    if (!feed || !s.beats) return;
+    s.beats.forEach(function (b) {
+      var key = b.t + '|' + b.k + '|' + b.label;
+      if (feedShown[key] || b.t > s.t) return;
+      feedShown[key] = true;
+      var row = document.createElement('div');
+      row.className = 'kf-row ' + b.k;
+      row.textContent = b.label;
+      feed.appendChild(row);
+      while (feed.childNodes.length > 8) feed.removeChild(feed.firstChild);
+    });
+  }
+
+  function renderBids(s) {
+    var host = $('bc21-bids');
+    var c = s.bc21_bids;
+    if (!host || !c) return;
+    var clans = c.clans || [];
+    var html = '<b>the auction</b>';
+    clans.forEach(function (clan) {
+      html += '<br><span class="msg">' + esc(clan.alias) + ' \u2014 ' +
+        (clan.votes || 0) + ' votes from ' + (clan.bids || 0) + ' bids, ' +
+        (clan.burned || 0) + ' influence burned, biggest bid ' +
+        (clan.top_bid || 0) + '</span>';
+    });
+    html += '<br><span class="msg">' + (c.tied_rounds || 0) +
+      ' rounds tied and nobody voted, ' + (c.no_bid_rounds || 0) +
+      ' with no bid at all</span>';
+    host.innerHTML = html;
+  }
+
+  function renderEndcardExtras(s) {
+    if (s.ph !== 'gameover') return;
+    var r = s.result || {};
+    var last = (r.games || [])[(r.games || []).length - 1];
+    if (!last) return;
+    var wincond = $('ec-wincond');
+    if (wincond) {
+      var who = last.winner >= 0 ? s.aliases[last.winner] : 'nobody';
+      var loser = last.winner >= 0 ? s.aliases[1 - last.winner] : 'nobody';
+      var votes = last.votes || [0, 0];
+      var centres = last.centers_owned || [0, 0];
+      var text;
+      if (last.end_reason === 'annihilated') {
+        text = who + ' wiped ' + loser + ' off the map at round ' +
+          last.rounds_played;
+      } else if (last.end_reason === 'more_votes') {
+        text = who + ' won the election ' + votes[last.winner] + ' votes to ' +
+          votes[1 - last.winner];
+      } else if (last.end_reason === 'more_enlightenment_centers') {
+        text = 'votes tied ' + votes[0] + '\u2013' + votes[1] + ' \u2014 ' +
+          who + ' held ' + centres[last.winner] +
+          ' Enlightenment Centers to ' + centres[1 - last.winner];
+      } else if (last.end_reason === 'more_influence') {
+        var infl = last.influence_end || [0, 0];
+        text = 'votes and centres tied \u2014 ' + who + ' ended on ' +
+          infl[last.winner] + ' influence to ' + infl[1 - last.winner];
+      } else {
+        text = 'the ' + String(last.end_reason).replace(/_/g, ' ') +
+          ' rung of the ladder decided it';
+      }
+      wincond.textContent = text;
+    }
+    var how = $('ec-how');
+    if (how) {
+      var scores = r.scores || [0, 0];
+      how.innerHTML =
+        'score ' + scores[0] + ' \u2014 ' + scores[1] +
+        ' \u00b7 influence spent ' + ((last.influence_spent || [])[0] || 0) +
+        '/' + ((last.influence_spent || [])[1] || 0) +
+        ' \u00b7 slanderers built ' + ((last.slanderers_built || [])[0] || 0) +
+        '/' + ((last.slanderers_built || [])[1] || 0) +
+        ' \u00b7 exposed ' + ((last.exposes || [])[0] || 0) + '/' +
+        ((last.exposes || [])[1] || 0) +
+        ' \u00b7 politicians built ' +
+        ((last.politicians_built || [])[0] || 0) + '/' +
+        ((last.politicians_built || [])[1] || 0) +
+        ' \u00b7 centres taken ' + ((last.centers_captured || [])[0] || 0) +
+        '/' + ((last.centers_captured || [])[1] || 0) +
+        ' \u00b7 lost ' + ((last.centers_lost || [])[0] || 0) + '/' +
+        ((last.centers_lost || [])[1] || 0) +
+        ' \u00b7 biggest speech ' +
+        ((last.empower_conviction || [])[0] || 0) + '/' +
+        ((last.empower_conviction || [])[1] || 0) + ' conviction delivered';
+    }
+    renderBids(s);
+  }
+
+  window.Bc21Block = {
+    attach: function (host) {
+      api = host;
+      wireDoctrines();
+    },
+    // True while a bc21 replay is on screen; the inherited block asks before
+    // it draws its own year's readouts.
+    active: function (s) { return s && s.year === 'bc21'; },
+    onFrame: function (s) {
+      if (s.year !== 'bc21') return;
+      buildBc21BeatButtons(s);
+      // THE BOARD IS THE PICTURE: the first frame that advances the playhead
+      // closes the panel, unless the viewer opened it by hand.
+      if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {
+        setDoctrinesOpen(false);
+      }
+      lastFrame = s.t;
+      renderVotes(s);
+      renderInfluence(s);
+      renderUnits(s);
+      renderDoctrines(s);
+      renderFeed(s);
+      applyBc21BeatSpoilers(s);
+      renderEndcardExtras(s);
+    }
+  };
+})();
+</script>
+
 <script>
 (function () {
   'use strict';
@@ -3254,6 +3711,16 @@ html:not([data-year="bc20"]) #bc20-chain { display: none !important; }
   // are hoisted, so this runs before either is defined and still binds them.
   if (window.Bc20Block) {
     window.Bc20Block.attach({
+      C: C,
+      send: send,
+      seek: function (frac) { seek(frac); },
+      dismissEndcard: function () { dismissEndcard(); }
+    });
+  }
+
+  // BC21 HOOK (1 of 2): the same two lines for the third year.
+  if (window.Bc21Block) {
+    window.Bc21Block.attach({
       C: C,
       send: send,
       seek: function (frac) { seek(frac); },
@@ -3548,6 +4015,23 @@ html:not([data-year="bc20"]) #bc20-chain { display: none !important; }
       root.setProperty('--hudscale', String(scale));
       root.setProperty('--topband', topband + 'px');
       root.setProperty('--band', band + 'px');
+      // The FOURTH :root variable: the height of the union of the VISIBLE
+      // year stat boxes, measured inside the same fixed-point loop. #killfeed
+      // is lifted above it (see the #killfeed rule). 0px when the stack is
+      // empty, which is the bc26 case.
+      var railTop = Infinity;
+      var railBottom = -Infinity;
+      ['econ', 'bc20-soup', 'bc20-units', 'bc21-influence', 'bc21-units']
+        .forEach(function (id) {
+          var el = document.getElementById(id);
+          if (!el || !el.offsetParent) return;
+          var box = el.getBoundingClientRect();
+          if (box.width <= 0 || box.height <= 0) return;
+          if (box.top < railTop) railTop = box.top;
+          if (box.bottom > railBottom) railBottom = box.bottom;
+        });
+      var rail = (railBottom > railTop) ? Math.round(railBottom - railTop) : 0;
+      root.setProperty('--statrail', rail + 'px');
     }
   }
   window.addEventListener('resize', function () {
@@ -3654,9 +4138,21 @@ html:not([data-year="bc20"]) #bc20-chain { display: none !important; }
     // draws. The scorebug, the clock, the transport, the scrubber and the
     // endcard shell are SHARED and stay here; only the year's own readouts
     // are switched, by `html[data-year]` in CSS and by this branch.
+    // The replay header's `year` drives the CSS switch. It is set HERE, in
+    // the shared block, so it does not depend on which year block happens to
+    // run; and a year CHANGE re-runs relayout(), because --statrail is a
+    // measurement of the stat boxes that year makes visible.
+    var year = s.year || 'bc26';
+    if (document.documentElement.getAttribute('data-year') !== year) {
+      document.documentElement.setAttribute('data-year', year);
+      relayout();
+    }
     var isBc20 = !!(window.Bc20Block && window.Bc20Block.active(s));
+    var isBc21 = !!(window.Bc21Block && window.Bc21Block.active(s));
     if (window.Bc20Block) window.Bc20Block.onFrame(s);
-    if (!isBc20) {
+    // BC21 HOOK (2 of 2).
+    if (window.Bc21Block) window.Bc21Block.onFrame(s);
+    if (!isBc20 && !isBc21) {
       buildBeatButtons(s);
       renderCoop(s);
       renderEcon(s);
@@ -3667,7 +4163,7 @@ html:not([data-year="bc20"]) #bc20-chain { display: none !important; }
     renderGameChips(s);
     C.renderClock(s);
     C.renderTransport(s);
-    if (!isBc20) applyBeatSpoilers(s);
+    if (!isBc20 && !isBc21) applyBeatSpoilers(s);
     $('clock-caption').textContent = s.ph === 'gameover'
       ? 'Match over'
       : 'game ' + s.game + ' of ' + s.games + ' — ' + s.map;

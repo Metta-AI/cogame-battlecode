@@ -1,0 +1,25 @@
+# The eleven Maven Central coordinates the bc21 parity oracle downloads, and
+# the sha256 of each. CI-TIME ONLY: no jar and no JDK exists in any image
+# stage. `net.sf.jsi:jsi:1.1.0-SNAPSHOT` is the twelfth dependency in
+# `engine/build.gradle` and is NOT here: it was published only to jcenter
+# (shut down 2022) and to the Sonatype OSS SNAPSHOTS repository (expired),
+# and it is replaced by the four no-op files in `jsi-shim/`.
+#
+# format: <sha256>  <path under https://repo1.maven.org/maven2/>
+1d5aeb6bd98b0fdd151269eae941c05f6468a791ea0f1e68d8e7fe518af3e7df  org/slf4j/slf4j-api/1.7.21/slf4j-api-1.7.21.jar
+a20179cc3ded2d7e2f5def4ccb34b2d0836e2f8c9e79352a6babd6a6559cc8e0  org/slf4j/slf4j-simple/1.7.21/slf4j-simple-1.7.21.jar
+734c8356420cc8e30c795d64fd1fcd5d44ea9d90342a2cc3262c5158fbc6d98b  org/apache/commons/commons-lang3/3.4/commons-lang3-3.4.jar
+3a2f057041aa6a8813f5b59b695f726c5e85014a703d208d7e1689098e92d8c0  commons-cli/commons-cli/1.3.1/commons-cli-1.3.1.jar
+cc6a41dc3eaacc9e440a6bd0d2890b20d36b4ee408fe2d67122f328bb6e01581  commons-io/commons-io/2.4/commons-io-2.4.jar
+896618ed8ae62702521a78bc7be42b7c491a08e6920a15f89a3ecdec31e9a220  org/ow2/asm/asm/5.0.4/asm-5.0.4.jar
+c3670fa836fac4cde743840f671a7d52a32eb0a844e2824eaedaf3a47f5c8399  org/ow2/asm/asm-tree/5.0.4/asm-tree-5.0.4.jar
+6fed778972fd555d4b8a539142b055d2aa7ff820c1b360a5c8435505fe68cbb2  com/google/flatbuffers/flatbuffers-java/1.11.0/flatbuffers-java-1.11.0.jar
+01fa37060692b85bb704567081b61eee133b529540ce9143e258e267f5738a74  org/java-websocket/Java-WebSocket/1.3.0/Java-WebSocket-1.3.0.jar
+449c27cefebbd3f9b3cd5942a6b87f0389a9997ff1bc8c6055249b9086110ea7  org/hibernate/hibernate-search/3.1.0.GA/hibernate-search-3.1.0.GA.jar
+3c8616203d61a12a7e3487e8b34f3c198c2b5ba9e90da0c7ea32d99cd4958012  net/sf/trove4j/trove4j/3.0.3/trove4j-3.0.3.jar
+
+# THE SHIM'S OWN PROOF. `world/ObjectInfo.java` calls only
+# `robotIndex.init/add/delete` and never queries the index, so the no-op
+# shim can affect nothing. If upstream ever starts READING it, this hash
+# changes and the job fails loudly rather than lying.
+objectinfo-sha256 b4e7605feb8181ae74b69ceadddef72826550c152cadebb99c40856eadfbc362

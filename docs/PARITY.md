@@ -204,3 +204,160 @@ One upstream fact the port reproduces rather than corrects: `tryBlockchain`
 builds `new int[10]`, and `assertCanSubmitTransaction` refuses anything whose
 length is not `BLOCKCHAIN_TRANSACTION_LENGTH = 7`. **`examplefuncsplayer`
 never mints a transaction in 2020**, and neither does the port.
+
+---
+
+# bc21 — a real round-loop oracle, and the one divergence it leaves
+
+<a id="bc21"></a>
+
+The `bc21` year module has its own oracle job, **`parity-oracle-bc21`**. Unlike
+bc20's, it is a **real round-loop oracle**: it builds the whole 2021 engine
+from the pinned `battlecode21` sources at commit
+`ed39c1a49574db57e5463d720736220506280294` (release 2021.3.0.5) under **JDK 8**,
+runs the engine's own `GameWorld.runRound()` loop head to head against the Nim
+port on five map pairs, and diffs the two traces line for line. As above, **the
+toolchain exists only in that job**: no JDK, no JRE and no upstream Java source
+is in any image this repository builds.
+
+## Why the 2021 engine builds when the 2020 one did not
+
+The 2021 engine has the **same single dead dependency** as the 2020 one —
+`net.sf.jsi:jsi:1.1.0-SNAPSHOT`, published only to jcenter (shut down 2022) and
+Sonatype OSS SNAPSHOTS (expired) — and **nothing else**. Every other coordinate
+in `engine/build.gradle` resolves from Maven Central today; the eleven of them
+are pinned by sha256 in `tools/oracle/bc21/deps.lock`.
+
+And `net.sf.jsi` is **write-only dead weight**: `world/ObjectInfo.java` calls
+only `robotIndex.init/add/delete` and never queries the index — seven call
+sites, all writes — so nothing it computes can reach the game. The job
+therefore **bypasses Gradle entirely** (which also sidesteps the dead
+`jcenter()` repository and the `$JAVA_HOME/lib/tools.jar` javadoc dependency),
+stands four ~30-line no-op files in `tools/oracle/bc21/jsi-shim/` in for the
+dead artifact, and compiles the **94** gameplay sources with a bare `javac` (no `--release 8`:
+that flag arrived in JDK 9, and the compiler here IS 8).
+`battlecode/doc/**` is excluded: it is javadoc taglets against
+`com.sun.tools.doclets` (the only thing that ever needed `tools.jar`) and
+contains no gameplay.
+
+**The shim re-proves itself on every run.** The job asserts
+`world/ObjectInfo.java`'s sha256 against the value in `deps.lock`: if upstream
+ever starts *reading* the spatial index, the hash changes and the job fails
+loudly rather than lying.
+
+**JDK 8 is mandatory**, and for a reason worth recording. The instrumenter
+rewrites `java.util` classes with ASM 5.0.4, which refuses class-file versions
+above 52; under JDK 21 every player class load throws
+`IllegalArgumentException` from `ClassReader` and the match silently ends in a
+coin flip on round 1500 with two robots on the board. That is exactly what a
+green oracle looks like when it is proving nothing, so the driver **asserts a
+non-trivial robot count at round 50** before anything is diffed.
+
+## The trace
+
+`tools/oracle/bc21/Bc21Trace.java` (package `battlecode.world`, so it needs no
+reflection) constructs the engine's own `LiveMap` through `GameMapIO`, a
+`TeamControlProvider` over two `PlayerControlProvider`s plus the
+`NullControlProvider` every map with a neutral Centre needs, and
+`new GameMaker(gameInfo, null, false)` — the null packet sink is explicitly
+supported (`GameMaker.createEvent` guards on it). It then calls
+`GameWorld.runRound()` in a loop and prints the trace **from the live
+objects**, which carry every field the `.bc21` does not: cooldowns, flags,
+bids, buff counts and bytecodes used. **No flatbuffers reader, no `flatc`, no
+`pip install` on either side.**
+
+```
+R <round> T <team> votes=<n> buffs=<n> ecs=<n> infl=<n> pol=<n> sla=<n> muc=<n> topbid=<n> bidder=<id>
+R <round> U <id> t=<TYPE> team=<A|B|N> x=<n> y=<n> inf=<n> conv=<n> cd=<%.9f> flag=<n> bid=<n> ra=<n> bc=<n>
+R <round> W winner=<A|B|-> dom=<NAME|->
+```
+
+Units are printed **in exec order**, not id order, which is what makes an
+ordering bug visible. `tools/parity_trace_bc21.nim` prints the same lines from
+the Nim port; the job strips the Java side's `bc=` column before diffing, since
+there is no bytecode counter on this side to compare it with.
+
+The five pairs are `maptestsmall`, `Arena`, `Bog`, `Smile` and `Star` — the
+`small` pool minus `FrogOrBath`, so five maps of engine time fit the runner.
+Each is a 1500-round `examplefuncsplayer21`-versus-itself game and takes about
+13 s of JVM.
+
+## The tiers
+
+**Tier A (BLOCKING) — bit-exact over the whole window in which the comparison
+is DEFINED.** Every field, including ids and the `%.9f` cooldown. The window is
+`1 .. (first mid-turn bytecode cut-off) − 1`, computed by the job from the
+engine's own `bc=` column rather than guessed, with a floor of 20 rounds so a
+regression cannot silently shrink it to nothing. Measured:
+
+| map | Tier A window, bit-exact | trace lines |
+| --- | --- | --- |
+| `maptestsmall` | 1..26 | 228 |
+| `Arena` | 1..22 | 349 |
+| `Bog` | 1..32 | 414 |
+| `Smile` | 1..22 | 252 |
+| `Star` | **1..245** | 8 635 |
+
+**Tier B (BLOCKING) — the arithmetic, over its whole domain.**
+`tools/JavaBc21Tables.java` regenerates `data/bc21/ec_passive.json` (all 1500
+rounds of `ceil(0.2f·√t)`, totalling 8 507) and `data/bc21/embezzle.json` (all
+4 096 influences of `floor(x·(1/50 + 0.03f·e^(−0.001f·x)))`, plus the derived
+breakpoints) under the CI JDK and the job **byte-diffs** them against the
+committed files. It also cross-checks `Math.exp` against `StrictMath.exp` over
+`x ∈ [1, 4096]` (**0 disagreements**), and compares Java's own
+`getPassiveInfluence` against the Nim `fdlibm` port for **4 096 log-spaced
+values in `(4096, 10⁸]`** (**0 disagreements**). Any disagreeing `x` fails the
+job and is written here with its exact value; there are none.
+
+**Tier C (BLOCKING against a ledger) — the first divergent round of the whole
+1500-round game.** The job computes it per map and compares it against
+`tools/ci/parity_ledger_bc21.json`. It **fails** if (a) a map diverges and has
+no ledger entry, (b) a map diverges **earlier** than its entry, or (c) a ledger
+entry no longer reproduces — a stale excuse is as bad as a missing one.
+
+## THE ONE DIVERGENCE, root-caused: round + map + cause
+
+The ledger is **not empty**, and every entry has the same single root cause. It
+is a property of the **oracle bot**, not of the ported rule set.
+
+| map | first bytecode cut-off | first divergent round |
+| --- | --- | --- |
+| `maptestsmall` | 27 | **34** |
+| `Arena` | 23 | **112** |
+| `Bog` | 33 | **138** |
+| `Smile` | 23 | **74** |
+| `Star` | 246 | **273** |
+
+**Cause.** `examplefuncsplayer21`'s Enlightenment Center builds with a flat
+50 influence and then calls `rc.bid(1)`. The first time a build leaves it with
+**exactly zero** influence, `assertCanBid` throws, the exception is uncaught in
+`runEnlightenmentCenter`, and `run()`'s catch block calls
+`e.printStackTrace()` — which costs **20 498** of the Center's 20 000-bytecode
+budget. The JVM instrumenter therefore **pauses the robot mid-turn** and
+resumes it on the next round, where it finishes the turn and reaches
+`rc.bid(1)` but never re-enters the loop. That round consumes **one fewer**
+`RNG.nextDouble()` than a port that has **no bytecode counter by design**
+(`docs/RULES-BC21.md` §Divergences item 1) and completes the turn. From then on
+the two per-robot RNG streams are one draw apart; the offset first becomes
+*observable* on the next round the Center can afford to build, which is the
+"first divergent round" column above.
+
+**Why this is not fixable here, and what it is not.** The port cannot
+reproduce the cut-off without a Java bytecode counter, which is the very thing
+§Divergences item 1 says this coworld does not have. The bot cannot be
+corrected either: it is the oracle's *other side* and may not gain behaviour —
+wrapping the bid in a `try` would make the two sides different bots and the
+comparison meaningless. What the divergence is **not** is a rules bug: up to
+the cut-off the two engines agree on every id, every cooldown to nine decimal
+places, every flag, every bid, every buff and every conviction, on all five
+maps — including 245 rounds and 8 635 lines of it on `Star`.
+
+## What is NOT compared
+
+* **The `bc=` column.** There is no bytecode counter on the Nim side; it is
+  stripped from the Java trace before the diff and used only to compute the
+  Tier A window and to report the peak.
+* **Anything after the Tier A window on four of the five maps.** Tier C
+  measures where it starts to differ and gates on that number; it does not
+  claim the rounds after it agree.
+* **The `.bc21` flatbuffer.** Nothing in this repository reads or writes one.
