@@ -26,6 +26,15 @@ const
     ##        still sends `chassis` is recorded in `sheet_unknown_fields`,
     ##        ignored and logged. `scaffold` is selectable only by
     ##        `PLAYER_SCRIPTED=scaffold`, which sets the chassis directly.
+    ##        The same version carries the `awu` cat-defence and economy fix
+    ##        (r2-D2): the chassis digs a buried king out, puts the whole
+    ##        roster on the cheese in famine, remembers and camps the mines,
+    ##        paths with the world's BFS and digs through dirt, refuses a
+    ##        crown the income cannot feed, stops the dirt shell eating the
+    ##        crowns' food, stops the king squeaking cats onto itself and
+    ##        rings a threatened crown with cat traps. Every one of those
+    ##        changes what a round resolves to, so a GV03 recording is not
+    ##        re-derivable here — which is what the version stamp is for.
     ##
     ## GV03 — `backstab_policy: never` no longer opens hostilities after the
     ##        alliance breaks. `never` and `retaliate_only` both fought back
