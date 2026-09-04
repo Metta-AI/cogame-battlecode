@@ -207,12 +207,21 @@ const args = parseArgs(process.argv.slice(2));
 // It measures CLIENT RECTS, not CSS: a rule that is present and wrong fails
 // here exactly as a rule that is missing does.
 // --------------------------------------------------------------------------
-const OVERLAP_SCRIPT = `((zoomValue) => {
+// Both are real FUNCTIONS, not source strings: `page.evaluate("((v) => …)", v)`
+// sends `isFunction: false`, so Playwright evaluates the expression WITHOUT
+// calling it and serialises a function as `undefined` -- the probe returned
+// `undefined` for all 18 rows and the gate below could never go red (r1-F1).
+// The zoom is driven in its OWN evaluate, because a slider set and a rect read
+// in the same synchronous evaluate measure the layout from BEFORE the zoom.
+const ZOOM_SCRIPT = (zoomValue) => {
   const slider = document.getElementById('zoom-slider');
-  if (slider) {
-    slider.value = String(zoomValue);
-    slider.dispatchEvent(new Event('input', { bubbles: true }));
-  }
+  if (!slider) return null;
+  slider.value = String(zoomValue);
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  return slider.value;
+};
+
+const OVERLAP_SCRIPT = () => {
   const feed = document.getElementById('killfeed');
   if (!feed) return { ok: true, skipped: 'no #killfeed' };
   const feedStyle = getComputedStyle(feed);
@@ -246,7 +255,7 @@ const OVERLAP_SCRIPT = `((zoomValue) => {
     boxes,
     hits,
   };
-})`;
+};
 
 async function killfeedOverlapGate(page) {
   const results = [];
@@ -256,10 +265,11 @@ async function killfeedOverlapGate(page) {
   for (const width of [360, 720, 1280]) {
     await page.setViewportSize({ width, height: 720 });
     for (const [label, value] of zooms) {
+      await page.evaluate(ZOOM_SCRIPT, value);
       await sleep(350);
       let probe;
       try {
-        probe = await page.evaluate(OVERLAP_SCRIPT, value);
+        probe = await page.evaluate(OVERLAP_SCRIPT);
       } catch (error) {
         probe = { ok: false, error: String(error && error.message) };
       }
@@ -785,7 +795,9 @@ async function main() {
   let overlapFailure = "";
   if (loaded && args.killfeedOverlap) {
     overlap = await killfeedOverlapGate(page);
-    const bad = overlap.filter((r) => r.ok === false);
+    // `!== true`, not `=== false`: a probe that returns nothing at all is a
+    // dead gate, and a dead gate must be red rather than silent (r1-F1).
+    const bad = overlap.filter((r) => r.ok !== true);
     if (bad.length) {
       overlapFailure = bad.map((r) =>
         `#killfeed overlaps ${JSON.stringify(r.hits || r.error)} at ` +
