@@ -5,11 +5,15 @@
 ## and needs no signalling. It builds, in this order and only when the team
 ## pool can afford it without stalling miner production:
 ##   1 Design School at Chebyshev 2 from the HQ, on the side away from the water
+##   1 Refinery at Chebyshev 4 — the second drop-off a walled-in HQ needs
 ##   `net_gun_ring` Net Guns, also at Chebyshev 2 (a net gun ON the HQ ring
 ##       would be buried by our own wall — see docs/RULES-BC20.md)
 ##   1 Fulfillment Center
 ##   `vaporator_budget` Vaporators inside the lattice
 ##   a second Design School after round 600
+##
+## The design note's order has no Refinery and puts the net guns on the HQ
+## ring; both moves are §Divergences item 16 in `docs/RULES-BC20.md`.
 ##
 ## Behaviour, not code, from `StoneT2000/Battlecode2020` (AGPL-3.0; see NOTICE).
 

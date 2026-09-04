@@ -190,6 +190,22 @@ Every one of these is deliberate and is the reason the parity oracle compares
     arrives. `SigNeedDrones = 5` keeps its code point — renumbering the signal
     table would change the meaning of every message in every recorded match —
     and is marked reserved in `chassis/signals.nim`.
+16. **The builder-miner's order carries a Refinery, and its net guns stand off
+    the HQ ring.** The design note's order is: Design School → `net_gun_ring`
+    Net Guns *on the HQ ring* → Fulfillment Center → Vaporators → a second
+    Design School after round 600. What `chassis/miner.nim` builds is Design
+    School → **Refinery** → Net Guns → Fulfillment Center → Vaporators → second
+    Design School, with every building at Chebyshev 2 from the own HQ and the
+    Refinery at Chebyshev 4. Both moves are forced by rules the note's order
+    fights:
+    * a **walled** HQ sits eight elevation steps above the ground outside its
+      ring and `MAX_DIRT_DIFFERENCE` is 3, so once the wall closes a miner can
+      no longer climb to the HQ to deposit. Without a second drop-off the
+      economy stops at exactly the moment the wall succeeds. The Refinery also
+      refines its own 20 a round;
+    * **dirt dropped on a building buries it** (rule 6.6), and the HQ ring is
+      precisely what the landscapers raise. A net gun on the ring is buried by
+      its own team's wall, so the ring is the one place it may not stand.
 
 ## Where the archetypes come from
 
