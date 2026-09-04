@@ -2613,7 +2613,9 @@ body[data-noviewpanel] #viewpanel { display: none !important; }
 #doctrines .dname { color: #f2e8d8; font-weight: 600; }
 #doctrines .dfall { color: #e0523a; }
 #doctrines .dbody {
-  max-height: calc(33vh - var(--band, 0px));
+  /* max(): a short embed frame would make the subtraction negative, and a
+     negative max-height is an invalid declaration — i.e. no cap at all. */
+  max-height: max(calc(60 * var(--u)), calc(33vh - var(--band, 0px)));
   overflow-y: auto;
   margin-top: 4px;
 }

@@ -238,7 +238,7 @@ block:
   let start = page.find("#doctrines {")
   check("the page has a #doctrines rule", start >= 0)
   check("the panel body is height-capped", "#doctrines .dbody {" in page and
-    "max-height: calc(33vh" in page)
+    "calc(33vh - var(--band, 0px))" in page)
   check("and scrolls rather than growing over the board",
     "overflow-y: auto;" in page)
   check("a closed panel hides its body", "#doctrines.closed .dbody { display: none; }" in page)

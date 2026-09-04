@@ -180,11 +180,18 @@
     econ += '<span>' + r[0] + '</span><span>' + r[1] + '</span><span>' +
       r[2] + '</span>';
   });
-  var doctrines = '';
+  // The panel EXACTLY as the page builds it (r2-D3): a header button that
+  // re-opens it and a capped, scrollable body. Full-cap notes on both seats
+  // is the case that put the doctrine card over the board in the live
+  // featured match, and the case a scripted CI replay can never produce.
+  var doctrines = '<button id="doctrines-toggle" type="button" ' +
+    'aria-expanded="true" aria-controls="doctrines-body">▾ Doctrines</button>' +
+    '<div class="dbody" id="doctrines-body">';
   for (var i = 0; i < 2; i++) {
     doctrines += '<div class="dline"><span class="dname">' + ALIASES[i] +
       '</span> — ' + WORDS[i] + '<br><i>' + notes + '</i></div>';
   }
+  doctrines += '</div>';
 
   document.body.innerHTML =
     '<div id="viewport"><div id="stage"><div id="chrome">' +
@@ -236,7 +243,14 @@
       '#doctrines, #doctrines *');
     for (var j = 0; j < filled.length; j++) {
       var node = filled[j];
-      if (getComputedStyle(node).display === 'none') continue;
+      var nodeStyle = getComputedStyle(node);
+      if (nodeStyle.display === 'none') continue;
+      // A box that SCROLLS is not a box that hides: the doctrine body is
+      // capped and scrollable on purpose so the panel can never own the
+      // board, and its own bound is measured below.
+      if (nodeStyle.overflowY === 'auto' || nodeStyle.overflowY === 'scroll') {
+        continue;
+      }
       if (node.scrollWidth > node.clientWidth + 1 ||
           node.scrollHeight > node.clientHeight + 1) {
         return (node.id || node.className || node.tagName) +
@@ -245,6 +259,17 @@
           node.clientHeight + ')';
       }
     }
+    // THE BOARD IS THE PICTURE (r2-D3). Even opened, at full-cap notes on
+    // both seats, at 360 px, the doctrine panel may not take half the frame:
+    // that is how a working replay came to look like a still image in two
+    // live screenshots a minute apart.
+    var panel = document.getElementById('doctrines').getBoundingClientRect();
+    if (panel.height > frame.height * 0.5) {
+      return 'the doctrine panel takes ' +
+        Math.round((panel.height / frame.height) * 100) + '% of the frame ' +
+        'height with full-cap notes — the board is the picture';
+    }
+
     // The strings must still be at their caps: one quietly shortened remark
     // leaves this fixture passing while testing nothing.
     var sub = document.querySelector('.plate-sub');
