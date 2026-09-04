@@ -198,6 +198,20 @@ jobs:
           done
           exit "${fail}"
 
+      # A GameVersion is claimed across BRANCHES, and nothing else in the build
+      # enforces that: two branches can each be current with main and still
+      # pick the same next number, and the collision lands silently -- the
+      # replay still LOADS and then re-simulates wrong. tools/ci/
+      # check_gameversion.sh has always been in the tree; until now nothing
+      # ran it. Same number + same rule headline (the overwhelmingly common
+      # case, every PR that does not touch the rules) is fine and exits 0.
+      - name: The GameVersion does not collide with main's
+        if: github.ref != 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin main
+          tools/ci/check_gameversion.sh FETCH_HEAD HEAD
+
       # The manifest is validated by the CLI THAT WILL PUBLISH IT, not only
       # by tests/test_manifest.nim's own reading of the schema. `coworld
       # build` runs `_load_template_manifest` -> `validate_upload_manifest`

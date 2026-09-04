@@ -1,5 +1,6 @@
-## The converted bc20 maps: every one re-converts identically (checked by
-## `tools/ci/check_bc20_maps.sh` in CI, and by shape here), the sizes and
+## The converted bc20 maps: every one re-converts identically (byte-diffed by
+## `tools/convert_maps_bc20.py --check` in the `test` job of
+## `.github/workflows/ci.yml`, and checked for shape here), the sizes and
 ## symmetries match the pinned table, the sim's own per-spawn detector agrees
 ## with the converter, and every array is `width x height`.
 
