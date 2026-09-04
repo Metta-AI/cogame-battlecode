@@ -233,3 +233,49 @@ against a real 1500-round match.
 
 The pre-match `doctrine_*` events and `episode_start` / `episode_end` are
 year-neutral and unchanged.
+
+## bc24
+
+`year: "bc24"`, `game_version: "GV07"`, everything else the same shape. The
+replay stores the events, the config, the seed, both doctrine sheets, the
+chassis each seat drove and the per-round hash chain — and **nothing else**.
+Traps, water, crumb piles, skill levels, flag positions and the jail rail are
+pure functions of the sim, so the browser re-derives them and the endcard
+reads the re-derived totals. There are **no `.map24` bytes, no per-round state
+dump, no per-duck dump and no trap dump** anywhere in the document, and
+`tests/test_bc24_replay.nim` asserts each of those absences by string.
+
+### The bc24 event vocabulary
+
+Every kind is bounded PER GAME — a 2000-round match with a hundred ducks
+cannot be allowed to emit an event per attack — and every one has CSS in the
+appended bc24 game block.
+
+| `kind` | fields | bound | beat |
+|---|---|---|---|
+| `game_start` | `map`, `width`, `height`, `sides` | 1/game | `game` |
+| `setup_end` | `traps` (per clan), `teleported` | 2/game | `setup` |
+| `first_action` | `alias`, **`action`** | 4/game | `build` |
+| `flag_taken` | `alias`, `flag`, `x`, `y` | ≤ 24/game | `steal` |
+| `flag_dropped` | `alias`, `flag`, `x`, `y`, `cause` | ≤ 24/game | `return` |
+| `flag_returned` | `alias`, `flag` | ≤ 24/game | `return` |
+| `flag_captured` | `alias`, `flag`, `total` | ≤ 6/game | `capture` |
+| `trap_wave` | `alias`, `triggered_total`, `damage_total` | ≤ 20/game | `trap` |
+| `upgrade` | `alias`, `upgrade` | ≤ 6/game | `upgrade` |
+| `mastery` | `alias`, `skill`, `level` | ≤ 9/game | `level` |
+| `rout` | `alias`, `jailed` | ≤ 20/game | `rout` |
+| `game_end` | `winner_alias`, `winner_slot`, `end_reason`, `points` | 1/game | `end` |
+| `game_abandoned` | `map` | ≤ 1/game | `end` |
+
+**`first_action`'s field is `action`, not the design note's `kind`.**
+`MatchEvent.toJson` flattens `fields` into the same object as the event's own
+`kind` key, so a field called `kind` SILENTLY OVERWRITES THE EVENT KIND and the
+replay comes back carrying events of kind `move` and `spawn`. bc20 and bc21
+avoided it by calling their field `unit`; bc24 calls its field `action`, and
+`tests/test_bc24_replay.nim` asserts that no `first_action` event carries a
+field called `kind`.
+
+`action` takes its value from `Bc24ActionNames` (`spawn`, `move`, `attack`,
+`heal`, `build`, `dig`, `fill`, `pickup`, `drop`, `upgrade`), `upgrade` from
+`Bc24UpgradeNames` (`attack`, `capture`, `heal` — `TeamInfo`'s own slot order)
+and `mastery.skill` from `Bc24SkillNames` (`attack`, `build`, `heal`).
