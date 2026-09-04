@@ -1,6 +1,12 @@
 ## The Fulfillment Center: build a Delivery Drone whenever the roster is under
-## `4 + round/300` (capped 14) and the pool can pay, and always when
-## `NEED_DRONES` is on the chain.
+## `4 + round/300` (capped 14) and the pool can pay.
+##
+## The design note's second clause — "and always when `NEED_DRONES` is on the
+## chain" — is NOT implemented: nothing in this chassis broadcasts
+## `NEED_DRONES`, so the branch would be dead code guarding a signal that never
+## arrives. `SigNeedDrones` keeps its code point (removing it would renumber
+## the signal table and change every recorded message) and is marked reserved
+## in `signals.nim`. §Divergences item 15 in `docs/RULES-BC20.md`.
 ##
 ## Behaviour, not code, from `StoneT2000/Battlecode2020` (AGPL-3.0; see NOTICE).
 

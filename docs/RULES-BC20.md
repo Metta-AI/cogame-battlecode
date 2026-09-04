@@ -182,6 +182,14 @@ Every one of these is deliberate and is the reason the parity oracle compares
     spawn. `TeamControlProvider` delegates `robotSpawned` **by team**, and only
     the cow provider recomputes; cows exist only at map load, so the value is
     fixed for the match. The port reproduces the delegation, not the prose.
+15. **The Fulfillment Center has no `NEED_DRONES` branch.** The design note has
+    it build "whenever the roster is under `4 + round/300` (capped 14) and the
+    pool can pay, and always when `NEED_DRONES` is on the chain". Only the
+    first half is implemented: no role in this chassis ever broadcasts
+    `NEED_DRONES`, so the second branch would guard a signal that never
+    arrives. `SigNeedDrones = 5` keeps its code point — renumbering the signal
+    table would change the meaning of every message in every recorded match —
+    and is marked reserved in `chassis/signals.nim`.
 
 ## Where the archetypes come from
 

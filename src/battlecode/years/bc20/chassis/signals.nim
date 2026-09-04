@@ -20,6 +20,10 @@ const
   SigWallIn* = 3
   SigHqUnderAttack* = 4
   SigNeedDrones* = 5
+    ## RESERVED. Nothing broadcasts it and `readBlocks` does not act on it: the
+    ## Fulfillment Center builds off its own roster count. The code point is
+    ## kept so the table's numbering — which every recorded message carries —
+    ## does not move. §Divergences item 15 in `docs/RULES-BC20.md`.
   SigRushNow* = 6
   SigWallClosed* = 7
 
