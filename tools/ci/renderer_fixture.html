@@ -333,7 +333,10 @@
     // both seats, at 360 px, the doctrine panel may not take half the frame:
     // that is how a working replay came to look like a still image in two
     // live screenshots a minute apart.
-    var panel = document.getElementById('doctrines').getBoundingClientRect();
+    // `probe` is the year's own doctrine panel: under data-year="bc20" the
+    // inherited #doctrines is `display: none !important`, so measuring it
+    // there would report a 0x0 rect and pass this rule vacuously (r1-F1).
+    var panel = document.getElementById(probe).getBoundingClientRect();
     if (panel.height > frame.height * 0.5) {
       return 'the doctrine panel takes ' +
         Math.round((panel.height / frame.height) * 100) + '% of the frame ' +
