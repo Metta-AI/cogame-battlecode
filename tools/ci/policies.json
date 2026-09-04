@@ -72,5 +72,42 @@
       "PLAYER_SCRIPTED": "examplefuncsplayer",
       "PLAYER_POLICY_LABEL": "examplefuncsplayer"
     }
+  },
+  {
+    "name": "battlecode-bc21-turtle",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a Battlecode 2021 party. A slanderer built for 130 influence pays your Enlightenment Center 6 influence per round for 51 rounds - a 2.3x return - and then becomes a free politician 300 rounds later. Your doctrine: print money and buy the election. Set opening to \"slanderer_turtle\", slanderer_ratio 60-80, muck_ratio 10-20, politician_size_curve \"ramp\", expansion \"neutral_centers_first\" and flank_policy \"screen_home\" so enemy muckrakers never reach your slanderer ring. Set eco_exponential_round late (900-1200): the longer you compound, the more votes you can buy at the end. Use bid_policy \"escalate_when_ahead\" - there are exactly 1500 votes and the loser of each auction still pays half its bid, so bid when you are winning and bank when you are not. Keep empower_threshold high (100-180) and convert_over_kill true. In notes, say what round you expect to be out-earning them by and what you do if a muckraker rush arrives before round 200.",
+      "PLAYER_POLICY_LABEL": "turtle"
+    }
+  },
+  {
+    "name": "battlecode-bc21-muckrush",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a Battlecode 2021 party. A muckraker costs 1 influence and kills any enemy slanderer it can reach, and every slanderer it exposes buffs all of your speeches by 0.1% of that slanderer's influence for 50 rounds. Your doctrine: their economy never starts. Set opening to \"muck_spam\", muck_ratio 55-80, slanderer_ratio 5-20, flank_policy \"flank_wide\" so your muckrakers arrive on the far side of their Center where the slanderers sit, and politician_size_curve \"cheap\" or \"ramp\" so the follow-up politicians arrive while the buff is still up. Set eco_exponential_round early (150-400) and expansion \"neutral_centers_first\" - a neutral Center you take is a Center they cannot. Keep empower_threshold low (0-40) and convert_over_kill false: you are killing slanderers, not collecting politicians. Use bid_policy \"fixed\" or \"never\"; you intend to win by annihilation or on Centers, not by outbidding a bank. In notes, say what you do if their turtle survives to round 600.",
+      "PLAYER_POLICY_LABEL": "muckrush"
+    },
+    "player": "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d"
+  },
+  {
+    "name": "battlecode-california-roll",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "california-roll",
+      "PLAYER_POLICY_LABEL": "california-roll"
+    }
+  },
+  {
+    "name": "battlecode-examplefuncsplayer21",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "examplefuncsplayer21",
+      "PLAYER_POLICY_LABEL": "examplefuncsplayer21"
+    }
   }
 ]
