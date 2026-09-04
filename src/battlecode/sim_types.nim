@@ -90,6 +90,11 @@ type
     maxRounds*: int
     numAgents*: int
     playerNames*: seq[string]
+    tokens*: seq[string]
+      ## The runner's per-seat connection tokens, injected into every
+      ## episode's `game_config`. They are a CREDENTIAL: a seat that dials
+      ## with the wrong one is refused the upgrade, which the certifier
+      ## probes for directly (`Bad player token was accepted`).
     attempt1Ms*: int
     retryMs*: int
     doctrineBudgetMs*: int

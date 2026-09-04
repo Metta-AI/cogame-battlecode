@@ -16,7 +16,7 @@
 import std/[json, locks, monotimes, os, strutils, times]
 import mummy, mummy/routers
 import bitworld/[runtime, spriteprotocol]
-import sim_types, sheet, baselines, decide, match, replay, results
+import seats, sim_types, sheet, baselines, decide, match, replay, results
 import years/[registry]
 import years/bc26/maps
 
@@ -59,6 +59,14 @@ proc globalJson(): string =
 proc slotOfRequest(request: Request): int =
   let raw = request.queryParams.getOrDefault("slot", "0")
   try: clamp(parseInt(raw), 0, 1) except CatchableError: 0
+
+var seatTokens: seq[string]
+  ## Set ONCE from the resolved config, before the listener opens, and only
+  ## read after — so every handler thread shares an immutable value.
+
+proc joinError(slot: int, token: string): string {.gcsafe.} =
+  {.gcsafe.}:
+    return seatJoinError(seatTokens, slot, token)
 
 proc applyRegistration(slot: int, payload: string) =
   var node: JsonNode
@@ -119,6 +127,16 @@ proc handleClient(request: Request) =
 
 proc handlePlayerSocket(request: Request) =
   let slot = request.slotOfRequest()
+  let token = request.queryParams.getOrDefault("token", "")
+  let refusal = joinError(slot, token)
+  if refusal.len > 0:
+    ## Refused BEFORE the upgrade, so the dialler sees a failed handshake
+    ## rather than a socket that is silently ignored.
+    var headers: HttpHeaders
+    headers["Content-Type"] = "text/plain"
+    request.respond(403, headers, refusal & "\n")
+    echo "battlecode: refused a seat-", slot, " connection: ", refusal
+    return
   discard request.upgradeToWebSocket()
   echo "battlecode: seat ", slot, " connected"
 
@@ -211,6 +229,10 @@ proc parseConfig*(text: string): GameConfig =
   opt("connectTimeoutMs", result.connectTimeoutMs, node["connectTimeoutMs"].getInt())
   opt("model", result.model, node["model"].getStr())
   opt("maxOutputTokens", result.maxOutputTokens, node["maxOutputTokens"].getInt())
+  if node.hasKey("tokens"):
+    result.tokens = @[]
+    for t in node["tokens"]:
+      result.tokens.add(t.getStr())
   if node.hasKey("players"):
     result.playerNames = @[]
     for p in node["players"]:
@@ -332,6 +354,7 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
 
 proc runServer*(runtimeConfig: RuntimeConfig, config: GameConfig) =
   initAppState()
+  seatTokens = config.tokens
   var router: Router
   router.get("/healthz", handleHealth)
   router.get("/health", handleHealth)
