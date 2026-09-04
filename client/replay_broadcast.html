@@ -3034,8 +3034,14 @@ button.beat-marker { border: 0; padding: 0; cursor: pointer; }
       send(BUTTONS[id]);
     });
   });
-  // "+5s" means nothing on a round clock; the starter's own id keeps its
-  // place in the bar and gets the label the design note asks for.
+  // "+5s" means nothing on a round clock, so the forward button is relabelled
+  // "+25" — the design note's §Transport rules asks for a "+25 rounds" button
+  // and names #btn-skip for it, but in THIS lineage (paintbot) #btn-skip is
+  // the auto-skip-quiet-stretches TOGGLE ('f' -> skipLulls,
+  // src/battlecode/broadcast.nim:54) and #btn-fwd is the forward step
+  // ('.' -> +25 rounds, broadcast.nim:51 + replay-viewer/bc_replay.nim:113).
+  // The label goes on the button that does the thing; putting "+25 rounds" on
+  // the toggle would name it after a behaviour it does not have.
   $('btn-fwd').textContent = '+25';
   $('btn-fwd').title = 'Forward 25 rounds (.)';
   $('btn-skip').title = 'Auto-skip quiet stretches (f)';

@@ -158,6 +158,20 @@ check("the scorebug stays legible at 360 px",
 check("and labels drop under 640 px", "@media (max-width: 640px)" in page)
 check("every seek dismisses the endcard", "dismissEndcard" in page)
 
+## The "+25 rounds" label goes on the button that steps forward 25 rounds.
+## The note names #btn-skip; in this lineage that id is the auto-skip toggle
+## ('f'), and #btn-fwd is the forward step ('.'), which broadcast.nim resolves
+## to +25 rounds. Pinned so a later edit cannot swap them.
+check("the forward button is labelled +25",
+  "$('btn-fwd').textContent = '+25';" in page)
+check("and titled for the rounds it steps",
+  "$('btn-fwd').title = 'Forward 25 rounds (.)';" in page)
+check("while #btn-skip stays the auto-skip toggle",
+  "$('btn-skip').title = 'Auto-skip quiet stretches (f)';" in page)
+check("and #btn-fwd sends '.', the +25 command",
+  "'btn-fwd': '.'" in page)
+check("while #btn-skip sends 'f'", "'btn-skip': 'f'" in page)
+
 ## B1: the endcard is TOGGLED WITH THE CLASS ITS OWN RULE USES. The inherited
 ## sheet styles `#endcard.on`; there is no `#endcard.show` rule and no bare
 ## `.show` rule anywhere in the page, so a card raised with `.show` is filled
