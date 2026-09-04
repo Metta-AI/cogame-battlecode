@@ -1,0 +1,58 @@
+{
+  "_comment": [
+    "THE bc21 ACCEPTED-DIVERGENCE LEDGER. `parity-oracle-bc21`'s Tier C is",
+    "BLOCKING AGAINST THIS FILE: the job computes the first divergent round of",
+    "a whole 1500-round game per map and FAILS if (a) a map diverges and has no",
+    "entry here, (b) a map diverges EARLIER than its entry, or (c) an entry no",
+    "longer reproduces - a stale excuse is as bad as a missing one.",
+    "",
+    "The target state is an EMPTY ledger. It is not empty, and every entry has",
+    "the same single root cause, which is a property of the ORACLE BOT and not",
+    "of the ported rule set: see docs/PARITY.md section bc21 and",
+    "docs/RULES-BC21.md section Divergences item 1.",
+    "",
+    "`first_cutoff_round` is the round the Java trace's own `bc=` column says",
+    "the JVM instrumenter first cut a robot off mid-turn. It is also the Tier A",
+    "boundary: up to and including `first_cutoff_round - 1` the two traces are",
+    "BIT-EXACT, every field including ids and the %.9f cooldown, and the job",
+    "asserts exactly that."
+  ],
+  "measured_at": "GV06, battlecode21 ed39c1a4, JDK 8 (temurin)",
+  "entries": [
+    {
+      "map": "maptestsmall",
+      "first_cutoff_round": 27,
+      "first_divergent_round": 34,
+      "cause": "the Java examplefuncsplayer21 Enlightenment Center spends its last influence on a build, lets rc.bid(1) throw, and pays 20 498 of its 20 000-bytecode budget for the uncaught exception's stack trace; the instrumenter pauses it mid-turn at round 27 and resumes it at round 28, so it consumes one fewer RNG.nextDouble() than the port, which has no bytecode counter by design and completes the turn. The offset first shows at round 34, the next round the Center can afford to build.",
+      "docs": "PARITY.md#bc21"
+    },
+    {
+      "map": "Arena",
+      "first_cutoff_round": 23,
+      "first_divergent_round": 112,
+      "cause": "the same bytecode cut-off, at round 23; the RNG offset first shows at round 112.",
+      "docs": "PARITY.md#bc21"
+    },
+    {
+      "map": "Bog",
+      "first_cutoff_round": 33,
+      "first_divergent_round": 138,
+      "cause": "the same bytecode cut-off, at round 33; the RNG offset first shows at round 138.",
+      "docs": "PARITY.md#bc21"
+    },
+    {
+      "map": "Smile",
+      "first_cutoff_round": 23,
+      "first_divergent_round": 74,
+      "cause": "the same bytecode cut-off, at round 23; the RNG offset first shows at round 74.",
+      "docs": "PARITY.md#bc21"
+    },
+    {
+      "map": "Star",
+      "first_cutoff_round": 246,
+      "first_divergent_round": 273,
+      "cause": "the same bytecode cut-off, at round 246 - the Center's income keeps it solvent far longer here, so Tier A is bit-exact for 245 rounds; the RNG offset first shows at round 273.",
+      "docs": "PARITY.md#bc21"
+    }
+  ]
+}

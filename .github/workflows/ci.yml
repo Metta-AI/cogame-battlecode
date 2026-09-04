@@ -20,9 +20,10 @@ name: CI
 
 on:
   push:
-    # `bc20-year-module` is the branch the second year module lands on. main's
-    # trigger semantics are untouched; this only adds a branch.
-    branches: [ main, bc20-year-module ]
+    # `bc20-year-module` and `bc21-year-module` are the branches the second and
+    # third year modules land on. main's trigger semantics are untouched; this
+    # only adds branches.
+    branches: [ main, bc20-year-module, bc21-year-module ]
   pull_request:
   workflow_dispatch:
 
@@ -46,6 +47,11 @@ env:
   # time by the constants generator, the map converter, the sprite cutter and
   # the bc20 parity oracle. There is no JDK in any image stage.
   BC20_COMMIT: "7618f6be7d12da39f2e6e25801e578f1fecfbd86"
+  # The Battlecode 2021 sources the `bc21` year module is a port OF (release
+  # 2021.3.0.5, the last of the season). Used at CI time by the constants
+  # generator, the map converter, the sprite cutter and the bc21 parity
+  # oracle. There is no JDK in any image stage.
+  BC21_COMMIT: "ed39c1a49574db57e5463d720736220506280294"
 
 jobs:
   # ---------------------------------------------------------------------
@@ -54,7 +60,10 @@ jobs:
   # ---------------------------------------------------------------------
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 75, not 45: the third year module adds nineteen shards, and every shard
+    # runs TWICE (debug and -d:release). The heaviest of them play full
+    # 1500-round games with every range check on.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v5
 
@@ -148,6 +157,28 @@ jobs:
           python3 tools/convert_maps_bc20.py --engine "$BC20_DIR" \
             --out data/maps/bc20 --check
           python3 tools/build_sprite_atlas_bc20.py --engine "$BC20_DIR" \
+            --out data --check
+
+      # The bc21 year module is generated from a THIRD pinned checkout, and
+      # every generated artefact is re-generated here and byte-diffed: the
+      # constants table, all eighteen converted maps and the sprite atlas cut
+      # from the 2021 client. A hand-edited generated file fails the build.
+      - name: Fetch the pinned Battlecode 2021 sources
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/engine21
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode21/archive/${BC21_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/engine21
+          echo "BC21_DIR=/tmp/engine21/battlecode21-${BC21_COMMIT}" >> "$GITHUB_ENV"
+
+      - name: The bc21 generated files match the pinned 2021 sources
+        run: |
+          set -euo pipefail
+          python3 tools/gen_year_constants.py --year bc21 --engine "$BC21_DIR" --check
+          python3 tools/convert_maps_bc21.py --engine "$BC21_DIR" \
+            --out data/maps/bc21 --check
+          python3 tools/build_sprite_atlas_bc21.py --engine "$BC21_DIR" \
             --out data --check
 
       - name: Run tests
@@ -589,6 +620,261 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+
+  # ---------------------------------------------------------------------
+  # THE bc21 PARITY ORACLE. A REAL ROUND-LOOP ORACLE: JDK 8 + the pinned 2021
+  # engine SOURCES, compiled with a bare `javac` and driven head to head
+  # against the Nim port on five map pairs.
+  #
+  # WHY IT BUILDS WHEN bc20's DID NOT. The 2020 engine could not be built
+  # because `net.sf.jsi:jsi:1.1.0-SNAPSHOT` was published only to jcenter
+  # (dead) and Sonatype OSS SNAPSHOTS (expired). The 2021 engine has the SAME
+  # single dead dependency and nothing else -- every other coordinate in
+  # `engine/build.gradle` resolves from Maven Central today -- and
+  # `net.sf.jsi` is write-only dead weight: `world/ObjectInfo.java` calls only
+  # `robotIndex.init/add/delete` and never queries it. So the job bypasses
+  # Gradle entirely (which also sidesteps the dead `jcenter()` repository and
+  # the `$JAVA_HOME/lib/tools.jar` javadoc dependency), stands a four-file
+  # no-op shim in for the dead artifact, and compiles the 94 gameplay sources
+  # with plain javac.
+  #
+  # JDK 8 IS MANDATORY. The instrumenter rewrites java.util classes with ASM
+  # 5.0.4, which refuses class-file versions above 52; under JDK 21 every
+  # player class load throws IllegalArgumentException from ClassReader and the
+  # match silently ends in a coin flip on round 1500 with two robots on the
+  # board. That is exactly what a green oracle looks like when it is proving
+  # nothing, so the driver asserts a non-trivial robot count at round 50
+  # before anything is diffed.
+  #
+  # There is no JDK in any image stage -- only here. docs/PARITY.md section
+  # bc21 records exactly what each tier proves and what it does not.
+  # ---------------------------------------------------------------------
+  parity-oracle-bc21:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache nimby toolchain and nimcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nimby
+            ~/.cache/nim
+          key: nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-${{ hashFiles('nimby.lock') }}
+          restore-keys: |
+            nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-
+
+      - name: Install nimby and Nim
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/nimby" \
+            "https://github.com/treeform/nimby/releases/download/${NIMBY_VERSION}/nimby-Linux-X64"
+          chmod +x "$HOME/.local/bin/nimby"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/nimby" use "$NIM_VERSION"
+
+      - name: Sync Nim dependencies
+        run: nimby --global sync nimby.lock
+
+      - name: Regenerate nim.cfg from the synced package tree
+        run: |
+          set -euo pipefail
+          rm -f nim.cfg
+          for pkg in "$HOME"/.nimby/pkgs/*; do
+            [ -e "$pkg" ] || continue
+            if [ -d "$pkg/src" ]; then
+              echo "--path:\"$pkg/src\"" >> nim.cfg
+            else
+              echo "--path:\"$pkg\"" >> nim.cfg
+            fi
+          done
+          echo '--path:"src"' >> nim.cfg
+
+      # JDK 8, and not a preference: see the block comment above.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+
+      - name: Fetch the pinned Battlecode 2021 sources
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/engine21 /tmp/oracle/classes /tmp/oracle/bot /tmp/oracle/jars
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode21/archive/${BC21_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/engine21
+          echo "BC21_DIR=/tmp/engine21/battlecode21-${BC21_COMMIT}" >> "$GITHUB_ENV"
+
+      - name: Download the eleven Maven Central jars and verify every sha256
+        run: |
+          set -euo pipefail
+          cd /tmp/oracle/jars
+          while read -r sha path; do
+            case "$sha" in ''|'#'*) continue ;; esac
+            case "$sha" in objectinfo-sha256) continue ;; esac
+            name="$(basename "$path")"
+            curl -fsSL -o "$name" "https://repo1.maven.org/maven2/${path}"
+            echo "${sha}  ${name}" | sha256sum -c -
+          done < "$GITHUB_WORKSPACE/tools/oracle/bc21/deps.lock"
+          ls -la
+
+      - name: The jsi shim can still affect nothing
+        # `world/ObjectInfo.java` calls only `robotIndex.init/add/delete` and
+        # NEVER queries the index, so the four no-op files that stand in for
+        # the dead `net.sf.jsi` artifact cannot reach the game. If upstream
+        # ever starts READING it, this hash changes and the job says so rather
+        # than lying.
+        run: |
+          set -euo pipefail
+          want="$(awk '/^objectinfo-sha256/ {print $2}' tools/oracle/bc21/deps.lock)"
+          got="$(sha256sum "$BC21_DIR/engine/src/main/battlecode/world/ObjectInfo.java" | awk '{print $1}')"
+          echo "ObjectInfo.java sha256: $got"
+          if [ "$got" != "$want" ]; then
+            echo "::error::world/ObjectInfo.java changed ($got != $want). The"
+            echo "::error::no-op net.sf.jsi shim is only safe while the engine"
+            echo "::error::never READS the spatial index. Re-check"
+            echo "::error::\`grep robotIndex world/ObjectInfo.java\` before"
+            echo "::error::updating tools/oracle/bc21/deps.lock."
+            exit 1
+          fi
+
+      - name: Compile the shim, the 94 engine sources and the oracle driver
+        run: |
+          set -euo pipefail
+          CP="$(ls /tmp/oracle/jars/*.jar | tr '\n' ':')"
+          javac -nowarn -d /tmp/oracle/classes \
+            tools/oracle/bc21/jsi-shim/net/sf/jsi/SpatialIndex.java \
+            tools/oracle/bc21/jsi-shim/net/sf/jsi/Rectangle.java \
+            tools/oracle/bc21/jsi-shim/net/sf/jsi/Point.java \
+            tools/oracle/bc21/jsi-shim/net/sf/jsi/rtree/RTree.java
+          # `battlecode/doc/**` is EXCLUDED: it is javadoc taglets against
+          # com.sun.tools.doclets (the only thing that ever needed tools.jar)
+          # and contains no gameplay.
+          mapfile -t SRC < <(find "$BC21_DIR/engine/src/main/battlecode" \
+            -name '*.java' -not -path '*/battlecode/doc/*')
+          echo "engine sources: ${#SRC[@]}"
+          test "${#SRC[@]}" -eq 94 || {
+            echo "::error::expected 94 engine sources, found ${#SRC[@]}"; exit 1; }
+          javac -nowarn --release 8 -cp "${CP}/tmp/oracle/classes" \
+            -d /tmp/oracle/classes "${SRC[@]}"
+          # Every non-.java file under battlecode/ (MethodCosts.txt,
+          # AllowedPackages.txt, DisallowedClasses.txt and the 76 .map21).
+          (cd "$BC21_DIR/engine/src/main" && \
+            find battlecode -type f ! -name '*.java' \
+              -exec cp --parents {} /tmp/oracle/classes/ \;)
+          javac -nowarn --release 8 -cp "${CP}/tmp/oracle/classes" \
+            -d /tmp/oracle/classes tools/oracle/bc21/Bc21Trace.java
+          javac -nowarn --release 8 -cp "${CP}/tmp/oracle/classes" \
+            -d /tmp/oracle/bot \
+            tools/oracle/bc21/examplefuncsplayer21/RobotPlayer.java
+
+      - name: The oracle bot is upstream's, plus exactly one committed hunk
+        run: |
+          set -euo pipefail
+          sed 's/^package examplefuncsplayer21;/package examplefuncsplayer;/' \
+            tools/oracle/bc21/examplefuncsplayer21/RobotPlayer.java \
+            > /tmp/oracle/bot-repackaged.java
+          if diff -u \
+            "$BC21_DIR/example-bots/src/main/examplefuncsplayer/RobotPlayer.java" \
+            /tmp/oracle/bot-repackaged.java > /tmp/oracle/bot.diff; then
+            echo "::error::the oracle bot is byte-identical to upstream, so the"
+            echo "::error::determinism hunk is missing and the trace is not"
+            echo "::error::reproducible"
+            exit 1
+          fi
+          echo "the oracle bot differs from upstream in $(grep -c '^[+-]' /tmp/oracle/bot.diff) line(s)"
+          grep -q 'Math.random' tools/oracle/bc21/examplefuncsplayer21/RobotPlayer.java && {
+            echo "::error::Math.random() survives in the oracle bot: the trace"
+            echo "::error::is wall-clock seeded and not reproducible"; exit 1; }
+          true
+
+      - name: Build the Nim trace emitter
+        run: |
+          nim c --hints:off -d:release --path:src \
+            -o:/tmp/oracle/parity_trace_bc21 tools/parity_trace_bc21.nim
+
+      - name: Run both engines on the five pairs
+        run: |
+          set -euo pipefail
+          CP="$(ls /tmp/oracle/jars/*.jar | tr '\n' ':')"
+          for MAP in maptestsmall Arena Bog Smile Star; do
+            java -Xmx2g -XX:+UseSerialGC \
+              -Dbc.engine.silence-a=true -Dbc.engine.silence-b=true \
+              -cp "${CP}/tmp/oracle/classes:/tmp/oracle/bot" \
+              battlecode.world.Bc21Trace "$MAP" 1500 examplefuncsplayer21 \
+              /tmp/oracle/bot \
+              > "/tmp/oracle/${MAP}.java" 2> "/tmp/oracle/${MAP}.log"
+            grep -E 'robots at round 50|BC21_FIRST_CUTOFF' "/tmp/oracle/${MAP}.log"
+            awk '/^BC21_FIRST_CUTOFF/ {print $2}' "/tmp/oracle/${MAP}.log" \
+              > "/tmp/oracle/${MAP}.cutoff"
+            /tmp/oracle/parity_trace_bc21 --map:"$MAP" --rounds:1500 \
+              --out:"/tmp/oracle/${MAP}.nim"
+            echo "$MAP: $(wc -l < "/tmp/oracle/${MAP}.java") java lines, $(wc -l < "/tmp/oracle/${MAP}.nim") nim lines"
+          done
+
+      - name: Tier A (BLOCKING) and Tier C (BLOCKING against the ledger)
+        run: |
+          set -euo pipefail
+          python3 tools/ci/parity_tiers_bc21.py \
+            --dir /tmp/oracle \
+            --maps maptestsmall Arena Bog Smile Star \
+            --ledger tools/ci/parity_ledger_bc21.json \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Tier B (BLOCKING) — regenerate both economy tables and byte-diff
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle/tables
+          javac -nowarn -d /tmp/oracle/tables tools/JavaBc21Tables.java
+          java -cp /tmp/oracle/tables JavaBc21Tables ec_passive \
+            > /tmp/oracle/ec_passive.json
+          java -cp /tmp/oracle/tables JavaBc21Tables embezzle \
+            > /tmp/oracle/embezzle.json
+          if ! diff -u data/bc21/ec_passive.json /tmp/oracle/ec_passive.json; then
+            echo "::error::data/bc21/ec_passive.json is not what this JDK emits"
+            exit 1
+          fi
+          if ! diff -u data/bc21/embezzle.json /tmp/oracle/embezzle.json; then
+            echo "::error::data/bc21/embezzle.json is not what this JDK emits"
+            exit 1
+          fi
+          echo "both committed bc21 economy tables are what the JDK generates"
+          # And Math.exp really does agree with StrictMath.exp over the whole
+          # committed range, which is why the fdlibm port can stand in for it.
+          java -cp /tmp/oracle/tables JavaBc21Tables strictcheck
+
+      - name: Tier B (BLOCKING) — the (4096, 1e8] embezzle tail, Java vs Nim
+        run: |
+          set -euo pipefail
+          java -cp /tmp/oracle/tables JavaBc21Tables tail > /tmp/oracle/tail.java
+          /tmp/oracle/parity_trace_bc21 --tail > /tmp/oracle/tail.nim
+          echo "tail samples: $(wc -l < /tmp/oracle/tail.java)"
+          if ! diff -u /tmp/oracle/tail.java /tmp/oracle/tail.nim \
+               > /tmp/oracle/tail.diff; then
+            echo "::error::the fdlibm port and the JDK disagree about"
+            echo "::error::getPassiveInfluence above the committed table."
+            echo "::error::Every disagreeing x goes into docs/PARITY.md."
+            head -40 /tmp/oracle/tail.diff
+            exit 1
+          fi
+          echo "Java and the fdlibm port agree on all 4096 log-spaced samples"
+
+      - name: Upload the parity traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-traces-bc21
+          path: |
+            /tmp/oracle/*.cutoff
+            /tmp/oracle/*.log
+            /tmp/oracle/tail.diff
+            /tmp/oracle/bot.diff
+          if-no-files-found: ignore
+          retention-days: 14
+
   # ---------------------------------------------------------------------
   # Packaging smoke: the production image builds, and one real episode runs
   # end to end in raw docker with the certification fixture's seat mix.
@@ -661,17 +947,56 @@ jobs:
           SMOKE_CONTRACT_PROBE: "0"
         run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
 
-      - name: Both smoke replays are present and are different years
+      # The THIRD episode: the bc21 year module, end to end, in the production
+      # image. Certification stays on bc26 (the design note's Out of scope),
+      # so this is the only thing that proves a bc21 episode runs in a
+      # container at all -- and its replay is what the wasm-viewer job loads
+      # in a real browser.
+      #
+      # seed 2 draws `Arena` (32x32, six neutral Enlightenment Centres), which
+      # gives the 400 rounds something to be about: at the default pace the
+      # recording runs ~16 s, so it outlasts the viewer smoke's 10 s soak (the
+      # ecos 2026-08-23 scar).
+      #
+      # SMOKE_REQUIRE_STATS is the episode SUBSTANCE assertion (the LEARNINGS
+      # pin): an episode where a seat built nothing, bid nothing and won no
+      # vote is now a red build rather than a green one with an empty replay.
+      - name: Raw-Docker episode smoke (bc21, scripted vs scripted)
+        env:
+          SMOKE_SLUG: ${{ env.SLUG }}
+          SMOKE_EXPECT_YEAR: bc21
+          # The manifest declares exactly the two players the certification
+          # fixture seats, and `PLAYER_SCRIPTED` resolves per year: on bc21
+          # `awu` is california-roll and `scaffold` is examplefuncsplayer21
+          # (src/battlecode/baselines.nim).
+          SMOKE_PLAYER_IDS: awu,scaffold
+          SMOKE_CONFIG_OVERRIDE: >-
+            {"year":"bc21","pool":"small","seed":2,"gamesPerMatch":1,
+             "maxRounds":400,"perGameBudgetSeconds":45,"matchBudgetSeconds":50,
+             "connectTimeoutMs":15000}
+          SMOKE_REQUIRE_STATS: >-
+            {"units_built":5,"influence_spent":100,"bids_placed":1,"votes":1}
+          SMOKE_REPLAY_OUT: ${{ github.workspace }}/dist/smoke/replay-bc21.json
+          SMOKE_CONTRACT_PROBE: "0"
+        run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
+
+      - name: All three smoke replays are present and are different years
         run: |
           set -euo pipefail
-          for f in dist/smoke/replay.json dist/smoke/replay-bc20.json; do
+          for f in dist/smoke/replay.json dist/smoke/replay-bc20.json \
+                   dist/smoke/replay-bc21.json; do
             test -s "$f" || { echo "::error::$f is missing"; exit 1; }
           done
           y26="$(jq -r .year dist/smoke/replay.json)"
           y20="$(jq -r .year dist/smoke/replay-bc20.json)"
-          echo "replay.json year=$y26  replay-bc20.json year=$y20"
+          y21="$(jq -r .year dist/smoke/replay-bc21.json)"
+          echo "replay.json year=$y26  replay-bc20.json year=$y20  replay-bc21.json year=$y21"
           test "$y26" = "bc26" || { echo "::error::replay.json is not bc26"; exit 1; }
           test "$y20" = "bc20" || { echo "::error::replay-bc20.json is not bc20"; exit 1; }
+          test "$y21" = "bc21" || { echo "::error::replay-bc21.json is not bc21"; exit 1; }
+          test "$y26" != "$y20" && test "$y20" != "$y21" && test "$y26" != "$y21" || {
+            echo "::error::the three smoke replays are not three different years"
+            exit 1; }
 
       # The replay this episode produced is the ONLY replay in CI that is
       # known to be a real, current-format episode of this game. wasm-viewer
@@ -779,14 +1104,15 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx --yes playwright@1.55.0 install --with-deps chromium
 
-      - name: Load the bundle in a real browser (BOTH years' replays)
+      - name: Load the bundle in a real browser (ALL THREE years' replays)
         run: |
           set -euo pipefail
           # A for-loop, not `ls … | head -1`: under `set -o pipefail` an unmatched
           # glob makes ls exit 2 and kills the step before the harness ever runs
           # (cogame-raid 2026-08-23, run 32623414696).
           replays=""
-          for candidate in dist/smoke/replay.json dist/smoke/replay-bc20.json; do
+          for candidate in dist/smoke/replay.json dist/smoke/replay-bc20.json \
+                           dist/smoke/replay-bc21.json; do
             if [ -f "${candidate}" ]; then replays="${replays} ${candidate}"; fi
           done
           test -n "${replays}" || {
@@ -805,11 +1131,20 @@ jobs:
           # through the same harness in its place -- a CI replay is always
           # scripted and carries no LLM text (the cogchemists 2026-08-24
           # scar).
+          # --killfeed-overlap is the bc21 addition: #killfeed is anchored in
+          # board-scaled units and the year stat boxes in pixels off the
+          # transport band, so at FIT zoom on a small board the feed used to
+          # overdraw them (bc20 judge, advisory). The fix is a fourth :root
+          # variable, --statrail; this gate measures CLIENT RECTS at 360 px,
+          # 720 px and 1280 px and at both FIT and 2x zoom, on EVERY year's
+          # replay -- which is what makes it a repair of the shared chrome
+          # rather than a bc21 workaround.
           node tools/ci/viewer_smoke.mjs \
             --bundle dist/static-replay-viewer \
             --replay "${replay}" \
             --timeout 90 \
-            --soak 10
+            --soak 10 \
+            --killfeed-overlap
           # The scrub readouts have to come from the SCRUBBER. This page keeps
           # #viewpanel, whose zoom slider is an input[type=range] ABOVE #scrub
           # in the document; a comma-list selector resolves in document order,
@@ -866,19 +1201,24 @@ jobs:
       # The wasm module itself, under node: wasm32-only failures (int overflow
       # traps, address-space exhaustion) are invisible to the native tests --
       # and a brand-new year module is exactly where one would live.
-      - name: Smoke the emitted wasm module under node (both years)
+      - name: Smoke the emitted wasm module under node (all three years)
         run: |
           set -euo pipefail
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
             "${{ github.workspace }}/dist/smoke/replay.json"
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
             "${{ github.workspace }}/dist/smoke/replay-bc20.json"
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/dist/smoke/replay-bc21.json"
           # And against the COMMITTED bc20 fixture (design note §Tests item
           # 17): bytes recorded at a known GameVersion, not bytes this run
           # produced. tests/test_bc20_replay.nim proves the same file
           # re-derives natively, so a divergence here is wasm32's alone.
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
             "${{ github.workspace }}/tests/fixtures/replay-bc20.json"
+          # And the COMMITTED bc21 fixture, for the same reason.
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/tests/fixtures/replay-bc21.json"
 
       # The text the CI replay never carries. Every replay CI produces is
       # SCRIPTED, so its notes and motto are the short strings baselines.nim
