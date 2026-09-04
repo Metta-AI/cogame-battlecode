@@ -11,6 +11,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 const bundle = path.resolve(process.argv[2] || '');
 const replayPath = path.resolve(process.argv[3] || '');
@@ -36,6 +37,7 @@ global.Module.printErr = (text) => console.error('  [wasm] ' + text);
 
 global.Module.onRuntimeInitialized = () => {
   const Module = global.Module;
+  console.log('runtime initialized; loading ' + path.basename(replayPath));
   const bytes = fs.readFileSync(replayPath);
   const pointer = Module._malloc(bytes.length);
   Module.HEAPU8.set(bytes, pointer);
@@ -111,4 +113,29 @@ global.Module.onRuntimeInitialized = () => {
   process.exit(0);
 };
 
-require(path.resolve(bundle, 'bc_replay.js'));
+// LOAD IT IN GLOBAL SCOPE, NOT WITH require().
+//
+// The glue opens with `var Module = typeof Module != "undefined" ? Module : {}`.
+// Inside a CommonJS module that `var` is hoisted into the module scope and
+// shadows `global.Module`, so `typeof Module` is "undefined" at that line and
+// the glue silently builds its OWN empty Module: `locateFile` is not ours,
+// `onRuntimeInitialized` above is never called, node runs out of work and
+// exits 0 having tested NOTHING. That is what this file did from the day it
+// was written — 0.1 s, no output, green.
+//
+// Run the same bytes with `vm.runInThisContext` and the declaration sees the
+// global object, which already has `Module`, so the glue adopts it. The three
+// bindings below are the ones a CommonJS wrapper would have supplied and the
+// glue uses under ENVIRONMENT_IS_NODE.
+global.__dirname = bundle;
+global.__filename = path.join(bundle, 'bc_replay.js');
+global.require = require;
+vm.runInThisContext(fs.readFileSync(global.__filename, 'utf8'),
+  { filename: global.__filename });
+
+// And if it still never boots, say so instead of exiting 0.
+setTimeout(() => {
+  console.error('the wasm runtime never initialized: ' +
+    'Module.onRuntimeInitialized was not called within 60 s');
+  process.exit(1);
+}, 60000);
