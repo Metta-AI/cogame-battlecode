@@ -3125,7 +3125,10 @@ button.beat-marker { border: 0; padding: 0; cursor: pointer; }
     var mm = $('mmwarn');
     var mismatch = document.documentElement
       .getAttribute('data-replay-mismatch-round');
-    if (mm && mismatch && Number(mismatch) >= 0) mm.classList.add('show');
+    // `.on` is the class the inherited rule uses (#mmwarn.on { display: block })
+    // -- there is no #mmwarn.show rule, so `.show` left the banner hidden and
+    // the fidelity flag was raised only on <html> as data-replay-mismatch-round.
+    if (mm && mismatch && Number(mismatch) >= 0) mm.classList.add('on');
     if (statusEl.classList.contains('show') && !s.error) {
       statusEl.classList.remove('show');
     }

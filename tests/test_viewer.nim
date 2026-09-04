@@ -175,6 +175,16 @@ check("and nothing toggles the endcard with a class that has no rule",
   "$('endcard').classList.remove('show')" notin page)
 check("there is no #endcard.show rule to justify one",
   "#endcard.show {" notin page)
+
+## N1: the same rule for the hash-mismatch banner. `#mmwarn.on` is the only
+## rule that displays it, so raising it with any other class leaves the
+## fidelity flag on <html> and nothing on screen.
+check("the inherited rule shows the mismatch banner on .on",
+  "#mmwarn.on { display: block; }" in page)
+check("the game block raises it with that class",
+  "mm.classList.add('on')" in page)
+check("and not with a class that has no rule",
+  "mm.classList.add('show')" notin page and "#mmwarn.show {" notin page)
 check("the page uses the renamed static-replay adapter",
   "BcStaticReplay" in page)
 
