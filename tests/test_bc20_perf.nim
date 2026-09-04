@@ -36,8 +36,8 @@ proc timeGame(sheets: array[2, Sheet],
 
 let boc = baselineSheet("bc20", blBowlOfChowder)
 let scaffold = baselineSheet("bc20", blExamplefuncsplayer)
-let ckBoc = parseChassis("bowl-of-chowder")
-let ckScaffold = parseChassis("examplefuncsplayer")
+let ckBoc = parseChassisKind("bowl-of-chowder")
+let ckScaffold = parseChassisKind("examplefuncsplayer")
 
 block:
   let (seconds, outcome) = timeGame([boc, boc], [ckBoc, ckBoc])

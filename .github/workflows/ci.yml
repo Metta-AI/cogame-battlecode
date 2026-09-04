@@ -823,6 +823,23 @@ jobs:
             echo "::error::#endcard is displayed but carries no clan line: ${card}"
             exit 1
           fi
+          # THE BOARD IS THE PICTURE. The featured match on softmax.com showed
+          # the doctrine card lying over the rats in two live screenshots a
+          # minute apart (r2-D3): a panel that opens over the board and never
+          # closes makes a working replay look like a dead one. The harness
+          # measures the largest visible absolute/fixed element covering the
+          # board canvas; after the soak -- playback advancing, t > 0 -- no
+          # panel may hold more than half of it. The endcard is exempt only
+          # where it belongs, at the 100 % seek, which is checked above.
+          obscured_id="$(jq -r '.soak.obscured.id // .obscured.id // "none"' viewer-smoke.json)"
+          obscured_pct="$(jq -r '.soak.obscured.pct // .obscured.pct // 0' viewer-smoke.json)"
+          echo "largest overlay over the board after the soak: ${obscured_id} ${obscured_pct}%"
+          if [ "${obscured_pct}" -gt 50 ]; then
+            echo "::error::'${obscured_id}' covers ${obscured_pct}% of the board"
+            echo "::error::while playback is advancing. The rats are the picture;"
+            echo "::error::a panel that opens over them must dismiss itself."
+            exit 1
+          fi
           mv viewer-smoke.json "viewer-smoke-$(basename "${replay}" .json).json"
           mv viewer-smoke.png "viewer-smoke-$(basename "${replay}" .json).png"
           done

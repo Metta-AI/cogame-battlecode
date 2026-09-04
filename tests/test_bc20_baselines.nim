@@ -46,7 +46,7 @@ block:
   checkEq("and `examplefuncsplayer` takes the weak floor",
     baselineFor("bc20", "examplefuncsplayer"), blExamplefuncsplayer)
   checkEq("the chassis follows the name, not the sheet",
-    baselineChassis(blExamplefuncsplayer), parseChassis("examplefuncsplayer"))
+    baselineChassis(blExamplefuncsplayer), parseChassisKind("examplefuncsplayer"))
 
 # --- (b) every emitted action is legal, and the budget is never exceeded ----
 proc assertInvariants(w: World, label: string) =
@@ -88,9 +88,9 @@ block:
   let spec = loadMap("WateredDown")
   var w = newWorld(spec, 1500)
   var sides = newSides([bocSheet(), scaffoldSheet()],
-    [parseChassis("bowl-of-chowder"), parseChassis("examplefuncsplayer")], 0)
-  let chassis = [parseChassis("bowl-of-chowder"),
-                 parseChassis("examplefuncsplayer")]
+    [parseChassisKind("bowl-of-chowder"), parseChassisKind("examplefuncsplayer")], 0)
+  let chassis = [parseChassisKind("bowl-of-chowder"),
+                 parseChassisKind("examplefuncsplayer")]
   for round in 1 .. 466:
     runRound(w, sides, chassis)
     if round mod 50 == 0:
@@ -105,8 +105,8 @@ for seed in GateSeeds:
     let sideAslot = ((seed shr 8) and 1) xor (games and 1)
     let spec = loadMap(mapName)
     let sheets = [bocSheet(), scaffoldSheet()]
-    let chassis = [parseChassis("bowl-of-chowder"),
-                   parseChassis("examplefuncsplayer")]
+    let chassis = [parseChassisKind("bowl-of-chowder"),
+                   parseChassisKind("examplefuncsplayer")]
     let (w, o) = playGame(spec, sheets, chassis, 0, sideAslot, 1500, 0)
     let tag = mapName & "/seed" & $seed
     ## `GameOutcome20`'s arrays are re-indexed BY SEAT in `harvest`; the raw
@@ -158,8 +158,8 @@ block:
   ## must still stand at the cap.
   let spec = loadMap("ALandDivided")
   let sheets = [bocSheet(), bocSheet()]
-  let chassis = [parseChassis("bowl-of-chowder"),
-                 parseChassis("bowl-of-chowder")]
+  let chassis = [parseChassisKind("bowl-of-chowder"),
+                 parseChassisKind("bowl-of-chowder")]
   let (w, o) = playGame(spec, sheets, chassis, 0, 0, 1500, 0)
   checkEq("a bowl-of-chowder mirror runs to the cap", o.roundsPlayed, 1499)
   check("and both HQs are alive at round 1499", o.hqAlive[0] and o.hqAlive[1])
