@@ -737,7 +737,8 @@ proc dropHeldUnit*(w: World, drone: Robot, target: Loc) =
   if w.isFlooded(target):
     if dropped.team != drone.team and drone.team != teamNeutral:
       w.stats.droneWaterDrops[ord(drone.team)] += 1
-    w.emit("drone_water_drop", drone.id, ord(drone.team), ord(dropped.kind))
+    w.emit("drone_water_drop", drone.id, ord(drone.team), ord(dropped.kind),
+      $ord(dropped.team))
     w.destroyRobot(id)
 
 proc dropUnit*(w: World, r: Robot, d: Dir) =
@@ -754,7 +755,8 @@ proc dropUnit*(w: World, r: Robot, d: Dir) =
   if w.isFlooded(target):
     if dropped.team != r.team and r.team != teamNeutral:
       w.stats.droneWaterDrops[ord(r.team)] += 1
-    w.emit("drone_water_drop", r.id, ord(r.team), ord(dropped.kind))
+    w.emit("drone_water_drop", r.id, ord(r.team), ord(dropped.kind),
+      $ord(dropped.team))
     w.destroyRobot(id)
 
 proc canShootUnit*(w: World, r: Robot, id: int): bool =
