@@ -288,7 +288,9 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
       policyKind: decision.policyKind[slot],
       sheet: decision.sheets[slot],
       decisionMs: decision.decisionMs[slot],
-      fallback: decision.fallback[slot])
+      fallback: decision.fallback[slot],
+      fallbackDetail: decision.fallbackDetail[slot],
+      brief: decision.briefs[slot])
 
   events.add(ev("episode_end", ms = 0, fields = %*{"reason": $reason}))
   let wallClock = (getMonoTime() - episodeStart).inMilliseconds.float / 1000.0
@@ -300,7 +302,9 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
       "year": config.year, "pool": config.pool, "seed": seed,
       "gamesPerMatch": config.gamesPerMatch, "maxRounds": config.maxRounds,
       "num_agents": config.numAgents},
-    seed: seed, seats: seats, events: events, result: resultsDoc, plan: plan)
+    seed: seed, seats: seats, events: events, result: resultsDoc, plan: plan,
+    promptPreamble: (if decision.briefs[0].len > 0 or
+                        decision.briefs[1].len > 0: SystemPreamble else: ""))
   for slot in 0 .. 1:
     doc.names[slot] = seats[slot].name
   for g in games:

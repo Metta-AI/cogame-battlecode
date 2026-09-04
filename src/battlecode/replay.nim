@@ -42,6 +42,10 @@ type
     events*: seq[MatchEvent]
     result*: JsonNode
     plan*: MatchPlan
+    promptPreamble*: string
+      ## The system half of the doctrine prompt — identical for both seats, so
+      ## recorded once here and the per-seat half in `seats[].prompt`. Empty
+      ## when no seat ever composed one (an all-scripted episode).
 
 proc sha256Hex*(data: string): string =
   ## The provenance tag on each converted map, so a viewer can prove it is
@@ -73,10 +77,22 @@ proc seatJson(seat: SeatReport, slot: int): JsonNode =
     "motto": seat.sheet.motto,
     "decision_ms": seat.decisionMs
   }
+  ## The observation, verbatim: decisions are taken server-side, so the prompt
+  ## payload the server composed for this seat IS what the seat saw.
+  if seat.brief.len > 0:
+    result["prompt"] =
+      try: parseJson(seat.brief) except CatchableError: %seat.brief
+  else:
+    result["prompt"] = newJNull()
   if seat.fallback.len > 0:
     result["fallback"] = %seat.fallback
   else:
     result["fallback"] = newJNull()
+  ## The provider's own last words, already cut to MaxFallbackDetailRunes.
+  if seat.fallbackDetail.len > 0:
+    result["fallback_detail"] = %seat.fallbackDetail
+  else:
+    result["fallback_detail"] = newJNull()
 
 proc toJson*(doc: ReplayDoc): JsonNode =
   var seats = newJArray()
@@ -109,6 +125,7 @@ proc toJson*(doc: ReplayDoc): JsonNode =
     "aliases": [AliasA, AliasB],
     "names": [doc.names[0], doc.names[1]],
     "seats": seats,
+    "prompt_preamble": doc.promptPreamble,
     "games": games,
     "plan": %*{
       "maps": doc.plan.maps,
@@ -148,6 +165,10 @@ proc parseSeat(node: JsonNode): SeatReport =
   result.decisionMs = node{"decision_ms"}.getInt()
   if node{"fallback"} != nil and node["fallback"].kind == JString:
     result.fallback = node["fallback"].getStr()
+  if node{"fallback_detail"} != nil and node["fallback_detail"].kind == JString:
+    result.fallbackDetail = node["fallback_detail"].getStr()
+  if node{"prompt"} != nil and node["prompt"].kind == JObject:
+    result.brief = $node["prompt"]
   var wrapper = newJObject()
   wrapper["sheet"] = node{"sheet"}
   wrapper["notes"] = %node{"notes"}.getStr()
@@ -171,6 +192,7 @@ proc parseReplay*(text: string): ReplayDoc =
   result.year = doc{"year"}.getStr("bc26")
   result.config = doc{"config"}
   result.seed = doc{"seed"}.getInt()
+  result.promptPreamble = doc{"prompt_preamble"}.getStr()
   for slot in 0 .. 1:
     result.names[slot] = doc["names"][slot].getStr()
     result.seats[slot] = parseSeat(doc["seats"][slot])

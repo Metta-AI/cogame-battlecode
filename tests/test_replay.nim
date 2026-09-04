@@ -64,6 +64,40 @@ block:
   again.result = back.result
   checkEq("a second serialisation is identical", $again.toJson(), text)
 
+# --- the observation is IN the replay ---------------------------------------
+block:
+  ## Decisions are taken server-side, so the "observation" is the prompt
+  ## payload the server composed per seat — and the replay records it
+  ## verbatim, with the provider's own last words beside the one-word cause.
+  ## Neither reached the document before r1-N10.
+  var (doc, _) = buildDoc("DefaultSmall", "", "")
+  doc.seats[0].brief = """{"protocol":"cogame.battlecode.v1","slot":0,"alias":"Clan Ash"}"""
+  doc.seats[0].policyKind = "llm"
+  doc.seats[1].fallback = "parse"
+  var detail = ""
+  for i in 0 ..< 400: detail.add("\u{1F400}")
+  doc.seats[1].fallbackDetail = sanitizeLine(detail, MaxFallbackDetailRunes)
+  doc.promptPreamble = "You command a clan of robot rats."
+  let node = doc.toJson()
+  checkEq("the seat's prompt payload is recorded",
+    node["seats"][0]["prompt"]["alias"].getStr(), "Clan Ash")
+  checkEq("the shared preamble is recorded once",
+    node["prompt_preamble"].getStr(), "You command a clan of robot rats.")
+  check("a scripted seat records no prompt",
+    node["seats"][1]["prompt"].kind == JNull)
+  checkEq("the provider's own words ride with the cause",
+    node["seats"][1]["fallback_detail"].getStr().runeLen,
+    MaxFallbackDetailRunes)
+  check("and are still valid UTF-8",
+    node["seats"][1]["fallback_detail"].getStr().validateUtf8() < 0)
+  let back = parseReplay($node)
+  checkEq("the prompt survives a re-parse",
+    parseJson(back.seats[0].brief)["slot"].getInt(), 0)
+  checkEq("and so does the detail", back.seats[1].fallbackDetail.runeLen,
+    MaxFallbackDetailRunes)
+  checkEq("and the preamble", back.promptPreamble,
+    "You command a clan of robot rats.")
+
 # --- strict UTF-8 -----------------------------------------------------------
 block:
   ## Astral-plane text in the notes: the written bytes must parse as STRICT

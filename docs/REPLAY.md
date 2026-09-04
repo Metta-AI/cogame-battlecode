@@ -14,7 +14,10 @@ re-derivation, not by bulk**.
            "sheet":{…as applied…},"sheet_submitted":"{…as received…}",
            "sheet_defaults_applied":["cat_trap_budget"],
            "sheet_unknown_fields":["swarm_mode"],
-           "notes":"…","motto":"…","decision_ms":8123,"fallback":null}, …],
+           "notes":"…","motto":"…","decision_ms":8123,
+           "prompt":{ /* THE OBSERVATION: the payload composed for this seat */ },
+           "fallback":null,"fallback_detail":null}, …],
+ "prompt_preamble":"…",                 // the system half, identical per seat
  "games":[{"index":0,"map":"DefaultSmall","map_json_sha256":"…",
            "sides":["A","B"],"side_a_slot":0,"rounds":451,
            "hash_chain_sha256":"…",        // the chain after the LAST round
@@ -23,6 +26,14 @@ re-derivation, not by bulk**.
  "events":[ … ],
  "result":{ /* identical to COGAME_RESULTS_URI */ }}
 ```
+
+Decisions are taken server-side, so a seat's **observation** is the prompt
+payload the server composed for it: `seats[].prompt` is that object verbatim
+and `prompt_preamble` is the system half both seats received (recorded once —
+it is the same string). A seat that never called the provider records
+`null`. When a seat falls back, `fallback` names the cause in one word and
+`fallback_detail` carries the provider's own last words, cut to
+`MaxFallbackDetailRunes` (200) on a rune boundary.
 
 ## Why this is enough
 

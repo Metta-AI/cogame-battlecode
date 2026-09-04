@@ -16,6 +16,8 @@ type
     sheet*: Sheet
     decisionMs*: int
     fallback*: string         ## "" when the seat's own doctrine was used
+    fallbackDetail*: string   ## the provider's own words, <= 200 runes
+    brief*: string            ## the prompt payload composed for this seat
 
 proc gamesJson(games: seq[GameOutcome]): JsonNode =
   result = newJArray()

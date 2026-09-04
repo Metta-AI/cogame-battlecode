@@ -2,7 +2,7 @@
 ## unknown keys recorded and ignored; and RUNE-boundary truncation of
 ## `notes`/`motto` including astral-plane characters.
 
-import std/[json, os, unicode]
+import std/[json, os, strutils, unicode]
 import harness
 import battlecode/[baselines, decide, match, sheet, sim_types]
 
@@ -228,5 +228,12 @@ block:
         decision.fallback[slot], causes[0])
     check("and the seat still has a legal doctrine",
       decision.sheets[slot].plainWords().len >= 6)
+    ## r1-N10: the observation and the provider's own words are kept, so the
+    ## replay can record them.
+    check("the composed prompt payload is kept",
+      decision.briefs[slot].contains("opponent_alias"))
+    check("and the provider's own words, within the 200-rune cap",
+      decision.fallbackDetail[slot].len > 0 and
+      decision.fallbackDetail[slot].runeLen <= MaxFallbackDetailRunes)
 
 finish("test_sheet")

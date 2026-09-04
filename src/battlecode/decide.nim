@@ -30,6 +30,13 @@ type
     sheets*: array[2, Sheet]
     decisionMs*: array[2, int]
     fallback*: array[2, string]
+    fallbackDetail*: array[2, string]
+      ## The provider's own last words for this seat, one line, capped at
+      ## `MaxFallbackDetailRunes`. Recorded in the replay beside the one-word
+      ## cause so a fallback can be read after the fact.
+    briefs*: array[2, string]
+      ## The prompt payload composed for this seat, verbatim — the "observation"
+      ## of a game whose decisions are taken server-side. Recorded in the replay.
     policyKind*: array[2, string]
     events*: seq[MatchEvent]
 
@@ -182,6 +189,10 @@ proc decide*(
     var batch: RequestBatch
     for slot in open:
       var user = briefFor(config, plan, slot)
+      ## The observation, as sent. `SystemPreamble` (the rules digest and the
+      ## sheet schema the note's payload lists) is the same for both seats and
+      ## is recorded once, at the document level.
+      if result.briefs[slot].len == 0: result.briefs[slot] = user
       if attempt > 0:
         user.add("\n\nYour previous reply was not usable. Reply with ONLY " &
           "the JSON object described above, starting with '{'.")
@@ -213,6 +224,8 @@ proc decide*(
                     "timeout" else: "transport"
         elif error.msg.startsWith("llm throttled"):
           cause = "throttled"
+        result.fallbackDetail[slot] =
+          sanitizeLine(error.msg, MaxFallbackDetailRunes)
         result.events.add(ev("doctrine_retry", ms = latency, fields = %*{
           "slot": slot, "cause": cause}))
         echo "battlecode llm: seat ", slot, " attempt ", attempt + 1,
