@@ -571,9 +571,22 @@ proc movePickedUpUnit(w: World, drone: Robot, center: Loc) =
     w.robotsById[drone.heldId].loc = center
 
 proc move*(w: World, r: Robot, d: Dir) =
-  ## `RobotControllerImpl.move`. The engine checks the destination for flooding
-  ## AFTER the legality assert and disintegrates the mover — a non-flying unit
-  ## that walks into water dies instead of moving.
+  ## `RobotControllerImpl.move`
+  ## (`engine/src/main/battlecode/world/RobotControllerImpl.java:382-401` at
+  ## the pinned commit `7618f6b`): `assertCanMove` does NOT test flooding, and
+  ## the destination is checked for it AFTERWARDS —
+  ##
+  ##     assertCanMove(center);
+  ##     // now check if the location is flooded and the robot can't fly
+  ##     if (gameWorld.isFlooded(center) && !getType().canFly()) {
+  ##         disintegrate();   // throws RobotDeathException (:937-939)
+  ##     }
+  ##
+  ## so a non-flying unit that walks into water dies where it stands and never
+  ## occupies the tile. The engine destroys it at the end of that same turn
+  ## (`GameWorld.updateRobot:190-191`); nothing else acts in between, so
+  ## destroying it here is the same match. §Divergences item 17 in
+  ## `docs/RULES-BC20.md`.
   let center = r.loc + d
   if not w.canMove(r, d): return
   if w.isFlooded(center) and not r.kind.canFly():
@@ -737,7 +750,8 @@ proc dropHeldUnit*(w: World, drone: Robot, target: Loc) =
   if w.isFlooded(target):
     if dropped.team != drone.team and drone.team != teamNeutral:
       w.stats.droneWaterDrops[ord(drone.team)] += 1
-    w.emit("drone_water_drop", drone.id, ord(drone.team), ord(dropped.kind))
+    w.emit("drone_water_drop", drone.id, ord(drone.team), ord(dropped.kind),
+      $ord(dropped.team))
     w.destroyRobot(id)
 
 proc dropUnit*(w: World, r: Robot, d: Dir) =
@@ -754,7 +768,8 @@ proc dropUnit*(w: World, r: Robot, d: Dir) =
   if w.isFlooded(target):
     if dropped.team != r.team and r.team != teamNeutral:
       w.stats.droneWaterDrops[ord(r.team)] += 1
-    w.emit("drone_water_drop", r.id, ord(r.team), ord(dropped.kind))
+    w.emit("drone_water_drop", r.id, ord(r.team), ord(dropped.kind),
+      $ord(dropped.team))
     w.destroyRobot(id)
 
 proc canShootUnit*(w: World, r: Robot, id: int): bool =

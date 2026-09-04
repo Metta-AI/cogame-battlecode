@@ -42,7 +42,6 @@ proc initAppState() =
   app.phase = "waiting for seats"
   app.resultsDoc = "{}"
   for slot in 0 .. 1:
-    app.policy[slot].baseline = blAwu
     app.policy[slot].label = "awu"
 
 proc globalJson(): string {.gcsafe.}

@@ -18,6 +18,13 @@ proc flat(width, height, elevation: int, wet: seq[int] = @[]): MapSpec =
 
 proc ready(w: World, r: Robot) = r.cooldownTurns = 0.0'f32
 
+proc lastWaterDropVictim(w: World): string =
+  ## The `drone_water_drop` event carries the DROPPED unit's team ordinal in
+  ## its string slot; `match.nim` turns that into `victim_alias`.
+  result = "none"
+  for e in w.events:
+    if e.kind == "drone_water_drop": result = e.s
+
 block:
   ## Pickup radius squared is 3, and only UNITS may be lifted.
   var w = newWorld(flat(11, 11, 0), 1500)
@@ -85,6 +92,36 @@ block:
   w.dropUnit(drone, dSouth)
   check("the enemy landscaper drowned", riderId notin w.robotsById)
   checkEq("and it is recorded as a water drop", w.stats.droneWaterDrops[0], 1)
+  checkEq("and the event names the victim's own team", w.lastWaterDropVictim(),
+    $ord(teamB))
+
+block:
+  ## A drone may drop its OWN unit, or a neutral cow, into the water. The
+  ## event names whoever was dropped — never "the other clan" by assumption —
+  ## and neither drop moves the enemy-drop counter.
+  var w = newWorld(flat(11, 11, 0, @[5 + 11 * 4]), 1500)
+  let droneId = w.spawnRobot(rtDeliveryDrone, loc(5, 5), teamA)
+  let friendId = w.spawnRobot(rtLandscaper, loc(6, 5), teamA)
+  let drone = w.robotsById[droneId]
+  w.ready(drone)
+  w.pickUpUnit(drone, friendId)
+  w.ready(drone)
+  w.dropUnit(drone, dSouth)
+  check("the friendly landscaper drowned too", friendId notin w.robotsById)
+  checkEq("the event names the friendly team as the victim",
+    w.lastWaterDropVictim(), $ord(teamA))
+  checkEq("and no enemy water drop was counted", w.stats.droneWaterDrops[0], 0)
+
+  let cowId = w.spawnRobot(rtCow, loc(6, 5), teamNeutral)
+  w.ready(drone)
+  w.pickUpUnit(drone, cowId)
+  w.ready(drone)
+  w.dropUnit(drone, dSouth)
+  check("the cow drowned", cowId notin w.robotsById)
+  checkEq("the event names the neutral team as the victim",
+    w.lastWaterDropVictim(), $ord(teamNeutral))
+  checkEq("and the counter, which counts every unit that is not the drone's " &
+    "own, moved", w.stats.droneWaterDrops[0], 1)
 
 block:
   ## A dying drone drops its cargo on its OWN tile — and the cargo drowns if

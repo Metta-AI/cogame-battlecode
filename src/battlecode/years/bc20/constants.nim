@@ -2,10 +2,11 @@
 ##
 ## Source: github.com/battlecode/battlecode20 at commit `7618f6be7d12da39f2e6e25801e578f1fecfbd86`,
 ## files `common/GameConstants.java` and `common/RobotType.java`, read by
-## `tools/gen_year_constants.py --year bc20`. `tests/test_bc20_constants.nim`
-## regenerates this file and byte-diffs it, so an edit here fails the build
-## instead of quietly changing the rules under a `GameVersion` that no
-## longer describes them.
+## `tools/gen_year_constants.py --year bc20`. The `test` job of
+## `.github/workflows/ci.yml` re-runs that generator with `--check`,
+## which byte-diffs this file, so an edit here fails the build instead
+## of quietly changing the rules under a `GameVersion` that no longer
+## describes them.
 ##
 ## The two derived functions `getWaterLevel`, `getSensorRadiusPollutionCoefficient`
 ## and `getCooldownPollutionCoefficient` are NOT constants and live in

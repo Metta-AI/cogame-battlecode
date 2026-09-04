@@ -156,9 +156,25 @@ payload differs in three places:
 * **the map cards** carry the seat's own HQ starting elevation and the HQ
   separation, which is what a doctrine has to plan the wall against;
 * **`flood_table`** says which round each integer elevation floods at — the
-  single most important fact in the year. Elevation 7 reports `1501` because
-  the water never reaches it inside the 1500-round cap;
+  single most important fact in the year. Levels 1–6 are the real curve
+  (256 / 464 / 677 / 931 / 1210 / 1413). Elevation 7 reports **1501**, which is
+  not a round the water arrives at but the sentinel `WaterTableMaxRound + 1`
+  that `flood.roundWaterReaches` returns when the committed table — rounds
+  0…1500, the whole of the capped game — never rises above that level. On the
+  uncapped curve elevation 7 floods at round **1546** (§Divergences item 4 in
+  `docs/RULES-BC20.md`, and the design note's own payload); the sim cannot
+  reach it, so the table does not carry it. Either number tells a doctrine the
+  same thing: elevation 7 is dry for the whole match;
 * **`scoring`** carries bc20's three weights instead of bc26's two weight sets.
+
+**No `rules_digest` and no `sheet_schema` key.** The design note's sample
+payload shows both inside the per-seat observation. They ship instead in the
+**system preamble** (`decide.nim`'s `Bc20Preamble`), which every seat receives
+as the system message and which the replay records once, at document level, as
+`prompt_preamble` — the condensed rule set and the full knob surface with every
+range and default are there in full, verbatim, for both years. The content a
+doctrine sees is the same; only the layout differs. A consumer that wants the
+knob surface off a replay reads `prompt_preamble`, not `seats[].prompt`.
 
 **Hidden**, as ever: the opponent's doctrine, sheet, notes, motto, real name
 and fallback status; every in-match state (a cog receives **no** per-round

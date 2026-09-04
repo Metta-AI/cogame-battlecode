@@ -24,9 +24,9 @@ type
     prompt*: string
     scripted*: string
       ## The raw `PLAYER_SCRIPTED` value. Resolved to a `Baseline` PER YEAR at
-      ## episode time, because `bowl-of-chowder` means nothing to bc26 and
-      ## `awu` means nothing to bc20.
-    baseline*: Baseline
+      ## episode time by `baselineForSeat`, because `bowl-of-chowder` means
+      ## nothing to bc26 and `awu` means nothing to bc20. Storing a parsed
+      ## `Baseline` on the seat would be resolving it before the year is known.
     label*: string
     registered*: bool
 
@@ -308,12 +308,15 @@ proc decide*(
         result.fallback[slot] = ""
         ## `chassis` is not a knob (sheet.KnownKeys). A reply that still sends
         ## one is already recorded in `unknownFields` and ignored — the clan
-        ## runs `awu` — but a silent ignore is how round 1's champion came to
-        ## idle three games, so the seat that tried is named in the log.
+        ## runs the chassis the OPERATOR fixed — but a silent ignore is how
+        ## round 1's champion came to idle three games, so the seat that tried
+        ## is named in the log, along with the chassis it actually drives.
         if "chassis" in result.sheets[slot].unknownFields:
           echo "battlecode llm: seat ", slot,
             " sent `chassis`, which is not a doctrine knob: ignored, the clan",
-            " runs the awu chassis"
+            " runs the ",
+            chassisNameFor(config.year, seats[slot], result.sheets[slot]),
+            " chassis"
         result.events.add(ev("doctrine_received", ms = latency, fields = %*{
           "slot": slot, "attempt": attempt + 1, "latency_ms": latency,
           "defaults_applied": result.sheets[slot].defaultsApplied.len,

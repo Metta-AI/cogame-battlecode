@@ -126,9 +126,17 @@ proc collectGameEvents(
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                     "units": e.b}))
     of "drone_water_drop":
+      ## A drone drops whatever it is holding, which may be its own unit or a
+      ## neutral cow, so the victim's TEAM rides on the event (`e.s`) rather
+      ## than being assumed to be the other clan.
+      let victimAlias =
+        case e.s
+        of "0": plan.aliasOfTeam(gameIndex, 0)
+        of "1": plan.aliasOfTeam(gameIndex, 1)
+        else: "neutral"
       events.add(ev("drone_water_drop", game = gameIndex, round = e.round,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.b),
-                    "victim_alias": plan.aliasOfTeam(gameIndex, 1 - e.b),
+                    "victim_alias": victimAlias,
                     "victim_unit": Bc20UnitNames[e.c]}))
     else: discard
 

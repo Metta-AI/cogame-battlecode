@@ -271,7 +271,7 @@ block:
   var seats: array[2, SeatPolicy]
   for slot in 0 .. 1:
     seats[slot] = SeatPolicy(isLlm: true, prompt: "doctrine, please",
-      baseline: blAwu, registered: true)
+      registered: true)
   let decision = decide(config, plan, seats)
   delEnv("AWS_ENDPOINT_URL_BEDROCK_RUNTIME")
   delEnv("AWS_BEARER_TOKEN_BEDROCK")

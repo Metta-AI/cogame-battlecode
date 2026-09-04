@@ -8,7 +8,7 @@
 ## in each, because both of those are written against bc26's own world type and
 ## a year-neutral rewrite of them would touch bc26 for no reason.
 
-import std/[json, strutils, unicode]
+import std/[json, os, strutils, unicode]
 import harness
 import battlecode/[baselines, broadcast, match, replay, results, sheet,
                    sim_types]
@@ -92,7 +92,27 @@ proc bc20Config(rounds = 400, games = 1, pool = "small"): GameConfig =
   result.gamesPerMatch = games
   result.maxRounds = rounds
 
-var seenReasons: seq[string]
+proc bare(): World =
+  ## An empty 15x15 world for the ladder rungs a played game cannot reach: the
+  ## committed maps arrive with their own HQs and cows, and the last three
+  ## rungs need an exact roster.
+  var spec = MapSpec(name: "flat", width: 15, height: 15,
+    symmetry: symRotational, randomSeed: 4242)
+  for i in 0 ..< 15 * 15:
+    spec.elevation.add(0)
+    spec.water.add(false)
+    spec.pollution.add(0)
+    spec.soup.add(0)
+  newWorld(spec, 1500)
+
+## Which end reasons this shard proves, and how. A rung that only a contrived
+## world can reach cannot be produced by a scripted game, so it is proved by a
+## LADDER VECTOR through the same `checkEndOfMatch` a played game calls; the
+## rungs a played game does reach are proved by a full record → re-derive of
+## the written bytes. The coverage check below names which list each reason is
+## in, so it can never pass on a string nobody produced.
+var reDerived: seq[string]      ## recorded, written, re-derived, no mismatch
+var ladderVector: seq[string]   ## produced by `checkEndOfMatch` in this shard
 
 block:
   ## `quantity`: the round cap with both HQs standing.
@@ -101,7 +121,7 @@ block:
   check("and re-derives with no hash mismatch", r.ok)
   checkEq("one game was recorded", r.games.len, 1)
   checkEq("and it ended on the round limit", r.games[0].endReason, "quantity")
-  seenReasons.add(r.games[0].endReason)
+  reDerived.add(r.games[0].endReason)
 
 block:
   ## `hq_destroyed`: the scaffold drowns on `maptestsmall`, whose HQ ring sits
@@ -112,7 +132,7 @@ block:
   checkEq("and it ended on an HQ", r.games[0].endReason, "hq_destroyed")
   checkEq("with the cause recorded as drowning",
     r.games[0].stats["hq_lost_cause"][1].getStr(), "drowned")
-  seenReasons.add(r.games[0].endReason)
+  reDerived.add(r.games[0].endReason)
 
 block:
   ## `quality`: equal robot counts, unequal net worth. Driven at the world
@@ -124,59 +144,107 @@ block:
   w.currentRound = w.maxRounds - 1
   w.checkEndOfMatch()
   checkEq("the quality rung is reachable", $w.domination, "quality")
-  seenReasons.add($w.domination)
+  checkEq("and the richer side wins", w.winner, teamA)
+  ladderVector.add($w.domination)
 
 block:
-  ## `broadcasts`, `highest_id` and `coin_flip` are the last three rungs.
-  ## `tests/test_bc20_scoring.nim` carries a vector for each; this shard only
-  ## records that they are producible so the coverage check below is honest.
-  seenReasons.add("broadcasts")
-  seenReasons.add("highest_id")
-  seenReasons.add("coin_flip")
+  ## `broadcasts`: equal worth, more MINTED transactions.
+  var w = bare()
+  discard w.spawnRobot(rtHq, loc(1, 1), teamA)
+  discard w.spawnRobot(rtHq, loc(13, 13), teamB)
+  w.stats.blockchainsSent = [3, 1]
+  w.currentRound = w.maxRounds - 1
+  w.checkEndOfMatch()
+  checkEq("the broadcasts rung is reachable", $w.domination, "broadcasts")
+  checkEq("and the chattier side wins", w.winner, teamA)
+  ladderVector.add($w.domination)
 
 block:
-  ## `deadline`: the wall-clock stop is RECORDED as ONE load-bearing value and
-  ## applied by the SAME proc on record and on playback (the particle-worlds
-  ## scar). A zero-second budget abandons the first game immediately.
-  var config = bc20Config(1500)
-  config.perGameBudgetSeconds = 1
-  config.matchBudgetSeconds = 1
-  var plan = buildPlan(config, sheets(), 9)
+  ## `highest_id`: the highest living NON-NEUTRAL robot id. The cow is ignored.
+  var w = bare()
+  discard w.spawnRobot(50_000, rtHq, loc(1, 1), teamA)
+  discard w.spawnRobot(50_001, rtHq, loc(13, 13), teamB)
+  discard w.spawnRobot(60_000, rtCow, loc(7, 7), teamNeutral)
+  w.currentRound = w.maxRounds - 1
+  w.checkEndOfMatch()
+  checkEq("the highest_id rung is reachable", $w.domination, "highest_id")
+  checkEq("and the higher id wins", w.winner, teamB)
+  ladderVector.add($w.domination)
+
+block:
+  ## `coin_flip`: reachable only when NEITHER team has a living robot, and
+  ## drawn from the world RNG rather than `Math.random()`.
+  var w = bare()
+  discard w.spawnRobot(60_000, rtCow, loc(7, 7), teamNeutral)
+  w.currentRound = w.maxRounds - 1
+  w.checkEndOfMatch()
+  checkEq("the coin_flip rung is reachable", $w.domination, "coin_flip")
+  ladderVector.add($w.domination)
+
+block:
+  ## `abandoned`, end to end and DETERMINISTICALLY. The wall-clock guard is
+  ## the recorder's; `plan.abandon_after[g]` is the ONE load-bearing record of
+  ## it; and playback applies that record with the same proc. A 1500-round
+  ## game of this sim runs in a quarter of a second, so no honest budget makes
+  ## the guard fire on its own — the round callback holds the clock instead,
+  ## which is the recorder's real code path and not a mocked one.
+  let s = sheets()
+  let slow = proc (w: World, round: int) {.closure.} = sleep(40)
+  let (_, aborted) = playGame(loadMap("Hourglass"), s, Chassis, 0, 0, 400, 1,
+    slow)
+  check("the wall-clock guard fired", aborted.aborted)
+  checkEq("and the game is recorded as abandoned", aborted.endReason,
+    "abandoned")
+  check("at the first sampling point past the budget",
+    aborted.roundsPlayed > 0 and (aborted.roundsPlayed and 0x1F) == 0)
+  let stopAt = aborted.roundsPlayed
+
+  var config = bc20Config(400)
+  var plan = buildPlan(config, s, 9)
   plan.chassis = Chassis
-  plan.maps = @["CentralSoup"]
+  plan.maps = @["Hourglass"]
   plan.sideAslots = @[0]
-  plan.abandonAfter = @[-1]
+  plan.abandonAfter = @[stopAt]
   var events: seq[MatchEvent]
-  let (games, reason) = playMatch(config, plan, events)
-  if reason == epDeadline:
-    checkEq("an abandoned game is DISCARDED, never scored half-played",
-      games.len, 0)
-    check("and the stop round is recorded", plan.abandonAfter[0] > 0)
-    var seats: array[2, SeatReport]
-    for slot in 0 .. 1:
-      seats[slot] = SeatReport(name: "s" & $slot, alias: aliasFor(slot),
-        policyKind: "scripted", sheet: sheets()[slot],
-        chassis: "bowl-of-chowder")
-    var doc = ReplayDoc(gameVersion: GameVersion, year: "bc20",
-      config: %*{"year": "bc20"}, seed: 9, seats: seats, events: events,
-      result: resultsJson(seats, games, plan, reason, 0.0, 0.0), plan: plan)
-    for slot in 0 .. 1: doc.names[slot] = "s" & $slot
-    let deriver = newDeriver(parseReplay($doc.toJson()))
-    while deriver.advance(): discard
-    checkEq("and playback stops exactly where the recorder stopped",
-      deriver.session.currentRound, plan.abandonAfter[0])
-  else:
-    ## A one-second budget is generous for a 48x48 game on a fast runner; the
-    ## guard is still checked by the branch above when it fires. Record the
-    ## reason either way so the coverage check cannot pass vacuously.
-    checkEq("a game that beat the guard still completes", reason, epComplete)
-  seenReasons.add("abandoned")
+  events.add(ev("game_abandoned", game = 0, round = stopAt,
+    fields = %*{"map": plan.maps[0]}))
+  var seats: array[2, SeatReport]
+  for slot in 0 .. 1:
+    seats[slot] = SeatReport(name: "s" & $slot, alias: aliasFor(slot),
+      policyKind: "scripted", sheet: s[slot],
+      chassis: (if slot == 0: "bowl-of-chowder" else: "examplefuncsplayer"))
+  var doc = ReplayDoc(gameVersion: GameVersion, year: "bc20",
+    config: %*{"year": "bc20"}, seed: 9, seats: seats, events: events,
+    result: resultsJson(seats, @[], plan, epDeadline, 0.0, 0.0), plan: plan)
+  for slot in 0 .. 1: doc.names[slot] = "s" & $slot
+  let written = $doc.toJson()
+  checkEq("the abandoned episode is recorded as a deadline",
+    parseJson(written)["result"]["reason"].getStr(), "deadline")
+  checkEq("an abandoned game is DISCARDED, never scored half-played",
+    parseJson(written)["result"]["games"].len, 0)
+  checkEq("and the stop round is the one load-bearing record",
+    parseJson(written)["plan"]["abandon_after"][0].getInt(), stopAt)
+
+  ## Re-derive it from the WRITTEN BYTES and compare frame by frame against
+  ## the chain the recorder was on — the abandoned game carries no
+  ## `GameHeader`, so this is the only thing that proves the two agree.
+  let deriver = newDeriver(parseReplay(written))
+  var frames = 0
+  while deriver.advance(): frames += 1
+  checkEq("playback re-derives every recorded round", frames, stopAt)
+  checkEq("and stops exactly where the recorder stopped",
+    deriver.session.currentRound, stopAt)
+  checkEq("with the recorder's own hash chain at the stop round",
+    deriver.session.hashChainHex(),
+    aborted.roundChains[(stopAt - 1) * ChainHexLen ..< stopAt * ChainHexLen])
+  reDerived.add("abandoned")
 
 block:
-  ## Every bc20 end reason is covered above.
-  for reason in ["hq_destroyed", "quantity", "quality", "broadcasts",
-                 "highest_id", "coin_flip", "abandoned"]:
-    check("record -> re-derive covered " & reason, reason in seenReasons)
+  ## Every bc20 end reason is covered, and by the means named above.
+  for reason in ["hq_destroyed", "quantity", "abandoned"]:
+    check("record -> re-derive covered " & reason, reason in reDerived)
+  for reason in ["quality", "broadcasts", "highest_id", "coin_flip"]:
+    check("a ladder vector produced " & reason, reason in ladderVector)
 
 # --- the written bytes ------------------------------------------------------
 block:
@@ -244,5 +312,39 @@ block:
   check("and the flood readout", chrome.hasKey("bc20_flood"))
   check("and the soup readout", chrome.hasKey("bc20_soup"))
   check("and the unit readout", chrome.hasKey("bc20_units"))
+
+# --- the committed fixture --------------------------------------------------
+block:
+  ## `tests/fixtures/replay-bc20.json` is a REAL recording, committed
+  ## (§Tests item 17): the bytes `tools/wasm_replay_smoke.cjs` drives the
+  ## emitted wasm module against, independently of whatever `docker-smoke`
+  ## produced in the same run. Here it is proved natively: the committed bytes
+  ## still parse, still carry the year and a compatible `GameVersion`, and
+  ## still re-derive round for round under the CURRENT sim.
+  ##
+  ## When a rule changes this check goes red. That is the point — re-record
+  ## with `nim r --path:src tools/gen_bc20_fixture_replay.nim`, in the commit
+  ## that bumps the version.
+  const FixturePath = "tests/fixtures/replay-bc20.json"
+  check("the committed bc20 fixture replay exists", fileExists(FixturePath))
+  let bytes = readFile(FixturePath)
+  check("and is valid UTF-8", validateUtf8(bytes) == -1)
+  let node = parseJson(bytes)
+  checkEq("and is a battlecode replay", node["format"].getStr(),
+    "cogame-battlecode-replay")
+  checkEq("of the bc20 year", node["year"].getStr(), "bc20")
+  check("at a GameVersion this build still loads",
+    node["game_version"].getStr() in ReplayCompatibleGameVersions)
+  let fixture = parseReplay(bytes)
+  let fixtureDeriver = newDeriver(fixture)
+  var fixtureFrames = 0
+  while fixtureDeriver.advance(): fixtureFrames += 1
+  check("the fixture is long enough for the wasm smoke's 50-frame floor",
+    fixtureFrames >= 50)
+  checkEq("it re-derives every recorded round", fixtureFrames,
+    fixture.games[0].rounds)
+  checkEq("with no divergence from the recorded chain — re-record with " &
+    "tools/gen_bc20_fixture_replay.nim if a rule changed",
+    fixtureDeriver.mismatchRound, -1)
 
 finish("test_bc20_replay")

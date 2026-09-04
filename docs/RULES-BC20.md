@@ -182,6 +182,46 @@ Every one of these is deliberate and is the reason the parity oracle compares
     spawn. `TeamControlProvider` delegates `robotSpawned` **by team**, and only
     the cow provider recomputes; cows exist only at map load, so the value is
     fixed for the match. The port reproduces the delegation, not the prose.
+15. **The Fulfillment Center has no `NEED_DRONES` branch.** The design note has
+    it build "whenever the roster is under `4 + round/300` (capped 14) and the
+    pool can pay, and always when `NEED_DRONES` is on the chain". Only the
+    first half is implemented: no role in this chassis ever broadcasts
+    `NEED_DRONES`, so the second branch would guard a signal that never
+    arrives. `SigNeedDrones = 5` keeps its code point — renumbering the signal
+    table would change the meaning of every message in every recorded match —
+    and is marked reserved in `chassis/signals.nim`.
+16. **The builder-miner's order carries a Refinery, and its net guns stand off
+    the HQ ring.** The design note's order is: Design School → `net_gun_ring`
+    Net Guns *on the HQ ring* → Fulfillment Center → Vaporators → a second
+    Design School after round 600. What `chassis/miner.nim` builds is Design
+    School → **Refinery** → Net Guns → Fulfillment Center → Vaporators → second
+    Design School, with every building at Chebyshev 2 from the own HQ and the
+    Refinery at Chebyshev 4. Both moves are forced by rules the note's order
+    fights:
+    * a **walled** HQ sits eight elevation steps above the ground outside its
+      ring and `MAX_DIRT_DIFFERENCE` is 3, so once the wall closes a miner can
+      no longer climb to the HQ to deposit. Without a second drop-off the
+      economy stops at exactly the moment the wall succeeds. The Refinery also
+      refines its own 20 a round;
+    * **dirt dropped on a building buries it** (rule 6.6), and the HQ ring is
+      precisely what the landscapers raise. A net gun on the ring is buried by
+      its own team's wall, so the ring is the one place it may not stand.
+17. **A non-flying unit that moves into water is DESTROYED, not refused.** The
+    rule as usually stated — "a drone may enter a flooded tile; nothing else
+    may" — reads like a legality check, and it is not one. In
+    `engine/src/main/battlecode/world/RobotControllerImpl.java:382-401` at the
+    pinned commit `7618f6b`, `move` calls `assertCanMove`, which tests type,
+    adjacency, the map bounds, occupancy, `MAX_DIRT_DIFFERENCE` and readiness
+    and **never mentions flooding**; the flood test comes afterwards and calls
+    `disintegrate()`, which throws `RobotDeathException` (`:937-939`) and ends
+    the turn. `GameWorld.updateRobot:190-191` then destroys the robot. So the
+    move is legal, the mover dies, and the tile stays empty. `world.canMove`
+    reproduces the assert exactly (no flood test) and `world.move` reproduces
+    the disintegration; the port destroys the mover at that point rather than
+    at the end of its own turn, which no other body can observe because
+    nothing acts in between. Neither chassis ever plans such a move —
+    `pathing.nim` excludes flooded and about-to-flood tiles — so this is the
+    rule for a doctrine that would.
 
 ## Where the archetypes come from
 
