@@ -41,6 +41,16 @@ proc famine*(w: World, clan: Clan): bool =
   w.teamInfo.globalCheese[ord(clan.team)] <
     StarvationReserve * max(1, w.teamInfo.numRatKings[ord(clan.team)])
 
+proc catWithinSqueakRange*(w: World, r: Robot): bool =
+  ## Any cat close enough to hear this robot squeak. `SqueakRadiusSquared` is
+  ## the engine's own delivery radius, so this is exactly "a cat would receive
+  ## it".
+  for other in w.liveRobots:
+    if other.unit != utCat: continue
+    if r.loc.distanceSquaredTo(other.loc) <= SqueakRadiusSquared:
+      return true
+  false
+
 proc digOut(w: World, clan: Clan, r: Robot): bool =
   ## A king whose build ring is buried in dirt can never spawn a rat, never
   ## earn a cheese, and starves where it stands: 2500 cheese at 2 a round runs
@@ -109,8 +119,14 @@ proc runKing*(w: World, clan: Clan, r: Robot) =
         discard digOut(w, clan, r)
 
   ## One squeak a turn: the tile index of the best cheese in sight, so
-  ## miners have somewhere to go. Cats hear squeaks too — that is the trade.
-  if r.spend(6):
+  ## miners have somewhere to go. Cats hear squeaks too — that is the trade,
+  ## and it is a trade the king was making every single round of the match.
+  ## A cat in ATTACK turns to face the FIRST squeak it hears
+  ## (`cats.nim`, `InternalRobot` at engine.1.2.5) and `SqueakRadiusSquared`
+  ## is 16, so a 3x3 crown broadcasting from a fixed tile every round is a
+  ## beacon that walks cats onto itself. It stops broadcasting while a cat is
+  ## close enough to hear it (r2-D2).
+  if r.spend(6) and not catWithinSqueakRange(w, r):
     let cheese = nearestCheese(w, clan, r)
     if cheese.kind == tkCheese:
       discard w.squeak(r, w.idx(cheese.loc) mod (CommArrayMaxValue + 1))
