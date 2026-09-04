@@ -4,7 +4,9 @@
 ## its four causes.
 
 import harness
+import battlecode/sheet
 import battlecode/years/bc26/[cats, constants, maps, world]
+import battlecode/years/bc26/chassis/kit
 
 let spec = loadMap("DefaultSmall")
 proc freshWorld(): World = newWorld(spec, GameMaxNumberOfRounds)
@@ -222,5 +224,29 @@ block:
     if cat.loc != start: moved = true
   check("a cat patrols", moved)
   checkEq("and stays on the map", w.onTheMap(cat.loc), true)
+
+# --- the five backstab_policy values are five behaviours --------------------
+block:
+  ## `never` and `retaliate_only` read alike while the alliance holds. They
+  ## must NOT read alike after it breaks: `never` never takes an enemy rat as
+  ## a target, `retaliate_only` finishes what the other clan started. Both
+  ## returning true once the world flipped made two of the five sheet values
+  ## behaviourally identical.
+  proc clanWith(policy: string): Clan =
+    newClan(teamA, parseReply(
+      """{"sheet":{"backstab_policy":"""" & policy & """"}}""").doctrine)
+  let never = clanWith("never")
+  let retaliate = clanWith("retaliate_only")
+  let first = clanWith("on_first_contact")
+  let w = freshWorld()
+  check("while the alliance holds, `never` holds fire",
+    not never.hostilitiesOpen(w))
+  check("and so does `retaliate_only`", not retaliate.hostilitiesOpen(w))
+  check("while `on_first_contact` is already hostile",
+    first.hostilitiesOpen(w))
+  w.backstab(teamB, "bite")
+  check("the world has flipped", not w.isCooperation)
+  check("`retaliate_only` fights back", retaliate.hostilitiesOpen(w))
+  check("`never` still does not", not never.hostilitiesOpen(w))
 
 finish("test_rules_combat")

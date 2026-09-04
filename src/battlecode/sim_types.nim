@@ -13,12 +13,19 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV02"
+  GameVersion* = "GV03"
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV03 — `backstab_policy: never` no longer opens hostilities after the
+    ##        alliance breaks. `never` and `retaliate_only` both fought back
+    ##        once the world flipped, which made two of the five sheet values
+    ##        behaviourally identical; `never` now never takes an enemy rat
+    ##        as a target and `retaliate_only` is the one that finishes what
+    ##        the other clan started.
     ##
     ## GV02 — the per-round hash chain folds all SEVEN per-team round stats
     ##        the round loop records (dirt and both trap counts were missing,

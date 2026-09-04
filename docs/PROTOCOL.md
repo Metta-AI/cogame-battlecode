@@ -35,7 +35,7 @@ deadline. Seats are never queried one after another.
 The "observation" is the brief the server composes per seat:
 
 ```json
-{"protocol":"cogame.battlecode.v1","game_version":"GV02","year":"bc26",
+{"protocol":"cogame.battlecode.v1","game_version":"GV03","year":"bc26",
  "slot":0,"alias":"Clan Ash","opponent_alias":"Clan Basil","team":"A",
  "seed":871345,
  "games":[{"map":"DefaultSmall","width":30,"height":30,"symmetry":"rotational",

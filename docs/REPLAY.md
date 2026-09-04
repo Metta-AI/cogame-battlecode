@@ -5,7 +5,7 @@ re-derivation, not by bulk**.
 
 ```jsonc
 {"format":"cogame-battlecode-replay","version":1,
- "protocol":"cogame.battlecode.v1","game_version":"GV02","year":"bc26",
+ "protocol":"cogame.battlecode.v1","game_version":"GV03","year":"bc26",
  "config":{ /* the resolved game config, tokens EXCLUDED */ },
  "seed":871345,
  "aliases":["Clan Ash","Clan Basil"],

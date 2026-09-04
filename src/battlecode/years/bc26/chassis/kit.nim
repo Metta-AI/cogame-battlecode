@@ -63,10 +63,16 @@ proc hostilitiesOpen*(clan: Clan, w: World): bool =
   ## simply not a candidate for bite / ratnap / throw / rat-trap, which is
   ## the whole of the cooperate-or-betray decision.
   if not w.isCooperation:
-    ## Once the world has flipped there is nothing left to protect: every
-    ## doctrine, `never` included, fights back. `never` only ever promised
-    ## not to be the one who starts it.
-    return true
+    ## Once the world has flipped, every doctrine EXCEPT `never` fights back.
+    ##
+    ## `never` means never: this clan does not take enemy rats as targets at
+    ## any point in the match, flipped or not — it keeps hunting cats and
+    ## ferrying cheese and takes the beating. That is what separates it from
+    ## `retaliate_only`, which is exactly "don't start it, but finish it".
+    ## While both arms returned true here the two sheet values were
+    ## behaviourally identical: a knob the doctrine offers and the sim does
+    ## not read.
+    return clan.doctrine.backstabPolicy != bpNever
   case clan.doctrine.backstabPolicy
   of bpNever, bpRetaliateOnly:
     false

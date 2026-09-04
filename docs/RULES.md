@@ -86,6 +86,15 @@ sheet can never be rejected, so a cog can never forfeit.
 | `dirt_wall_policy` | `none` \| `king_shell` \| `choke` | `king_shell` | `dirt.tryDirt` |
 | `throw_rats_to_feed_cats` | bool | `false` | `combat.feedArmed` |
 
+What each `backstab_policy` value means at `kit.hostilitiesOpen`, since two
+of them read alike: **`never`** never takes an enemy rat as a target, not even
+after the alliance breaks — it keeps hunting cats and takes the beating;
+**`retaliate_only`** opens hostilities the moment the world flips, whoever
+flipped it; **`on_first_contact`** opens them immediately; **`at_round_N`**
+at `backstab_round`; **`when_ahead`** from round 200, while this clan leads on
+cat damage and is not behind on kings. With hostilities closed the enemy is
+not a candidate for bite, ratnap, throw **or rat trap**.
+
 **Every knob has teeth.** `tests/test_knob_sensitivity.nim` is a CI gate that
 plays a paired set of seeded games for each of the ten non-`backstab_policy`
 knobs and asserts a named, signed statistic moves. The thresholds live in one
