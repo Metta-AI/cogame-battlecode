@@ -9,6 +9,7 @@ year**, chosen by `game_config.year`:
 | --- | --- | --- |
 | `bc26` | 2026 "Uneasy Alliances" | rat clans allied against NPC cats until one of them betrays |
 | `bc20` | 2020 "Soup" | the water rises every round, and a team either terraforms above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt |
+| `bc21` | 2021 "Campaign" | every round auctions one citizen's vote; influence buys units, buys votes, and is what an enemy politician takes when it converts your Enlightenment Center |
 
 ---
 
@@ -100,12 +101,60 @@ chassis (behaviour ported from Stone Tao's finals bot);
 `PLAYER_SCRIPTED=examplefuncsplayer` is the ported 2020 example bot,
 deliberately weak.
 
+---
+
+## `bc21` — Battlecode 2021 "Campaign"
+
+**The clock is the election.** Every round one citizen's vote is auctioned:
+each Enlightenment Center may bid influence, the single highest bidder in the
+game wins the vote for its team and pays its bid, and the other team's top
+bidder pays **half its bid, rounded up, for nothing**. At round 1500 the team
+with more votes wins. Before then, a team that loses every robot loses
+immediately.
+
+Influence is the only resource, it is **not** a global pool — it sits inside
+each Enlightenment Center — and it does three incompatible jobs: it buys units,
+it buys votes, and it is what an enemy politician steals when it converts a
+Center. Each Center earns `ceil(0.2·√t)` a round, about 8 500 over a game.
+
+**Slanderers** are the multiplier: one built for `x` influence pays its parent
+`floor(x·(1/50 + 0.03·e^(−0.001x)))` a round for 51 rounds — a ~2.35× return
+for `x ≈ 21…130` — and at 300 rounds old silently becomes a politician.
+**Muckrakers** cost one influence, see furthest, and **expose** enemy
+slanderers: the slanderer dies and the muckraker's team gets `+0.001 ×` that
+slanderer's influence on every speech for 50 rounds. **Politicians** are
+walking bombs: empowering splits `conviction − 10` among every other robot in
+the chosen radius — healing friends, feeding friendly Centers, converting or
+killing everything else — and then the politician dies.
+
+```
+points = int(40 * survival + 35 * vote share + 15 * centre share + 10 * influence share)
+score  = 100 * games won + mean(points over games played)
+```
+
+Ten knobs — `opening`, `slanderer_ratio`, `muck_ratio`,
+`politician_size_curve`, `bid_policy`, `expansion`, `flank_policy`,
+`empower_threshold`, `convert_over_kill`, `eco_exponential_round` — which is
+the season's own metagame (muck spam / slanderer turtle / buff mucks /
+muck flanks) as a doctrine surface. Champions:
+
+| policy | doctrine |
+| --- | --- |
+| `battlecode-bc21-turtle` | print money and buy the election: slanderer turtle, escalate the bid when ahead, compound late |
+| `battlecode-bc21-muckrush` | their economy never starts: muck spam, flank wide, cheap politicians behind the buff |
+
+`PLAYER_SCRIPTED=california-roll` is the strong baseline and the champion
+chassis (behaviour ported from Stone Tao's 2021 bot);
+`PLAYER_SCRIPTED=examplefuncsplayer21` is the ported 2021 example bot,
+deliberately weak, and the bot the bc21 parity oracle runs.
+
 ## What is in here
 
 | path | what |
 | --- | --- |
 | `src/battlecode/years/bc26/` | the 2026 rule set: `world.nim` (state, geometry, legality), `cats.nim` (the NPC state machine), `rules.nim` (the round loop), `knobs.nim` (the doctrine table), `chassis/` (the two bots and every knob's site) |
 | `src/battlecode/years/bc20/` | the 2020 rule set: `world.nim`, `flood.nim`, `pollution.nim`, `blockchain.nim`, `cows.nim`, `rules.nim`, `knobs.nim`, `chassis/` |
+| `src/battlecode/years/bc21/` | the 2021 rule set: `world.nim`, `empower.nim`, `votes.nim`, `economy.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/{registry,dispatch}.nim` | the year boundary: the ONE place the year-neutral machinery meets a year module |
 | `src/battlecode/rng.nim` | `java.util.Random` and `IDGenerator`, bit-exact |
 | `src/battlecode/{sheet,decide,llm,baselines}.nim` | the doctrine schema, the one sealed parallel batch, the provider ladder, the scripted table |
