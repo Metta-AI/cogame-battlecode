@@ -19,3 +19,8 @@ nim.cfg
 # Python bytecode from the CI-time tools
 __pycache__/
 *.pyc
+
+# Local node_modules from `npm install --no-save playwright` when running
+# tools/ci/viewer_smoke.mjs by hand. CI installs it fresh every run.
+/node_modules/
+/package-lock.json

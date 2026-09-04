@@ -21,12 +21,15 @@ type
     blScaffold = "scaffold"
     blBowlOfChowder = "bowl-of-chowder"
     blExamplefuncsplayer = "examplefuncsplayer"
+    blCaliforniaRoll = "california-roll"
+    blExamplefuncsplayer21 = "examplefuncsplayer21"
 
 proc defaultBaselineFor*(year: string): Baseline =
   ## A seat that says nothing useful plays the year's STRONG published
   ## doctrine, not the deliberately weak floor.
   case yearIdOf(year)
   of yBc20: blBowlOfChowder
+  of yBc21: blCaliforniaRoll
   of yBc26: blAwu
 
 proc baselineFor*(year, name: string): Baseline =
@@ -38,6 +41,11 @@ proc baselineFor*(year, name: string): Baseline =
     case key
     of "examplefuncsplayer", "scaffold", "example": blExamplefuncsplayer
     else: blBowlOfChowder
+  of yBc21:
+    case key
+    of "scaffold", "examplefuncsplayer", "examplefuncsplayer21", "example":
+      blExamplefuncsplayer21
+    else: blCaliforniaRoll
   of yBc26:
     case key
     of "scaffold", "examplefuncsplayer", "example": blScaffold
@@ -57,12 +65,18 @@ proc chassisFor*(kind: Baseline): Chassis =
   of blScaffold: chScaffold
   else: chAwu
 
-proc baselineChassis*(kind: Baseline): ChassisKind =
-  ## The same selection for bc20, whose chassis is a `ChassisKind` on the seat
-  ## record rather than a field on the doctrine.
+proc baselineChassis*(kind: Baseline): ScriptedChassis =
+  ## The same selection for bc20 and bc21, whose chassis is a year-neutral
+  ## `ScriptedChassis` on the seat record rather than a field on the doctrine.
+  ## `years/dispatch.nim`'s `newSession` maps it into the year's own kind, so a
+  ## name belonging to another year plays THAT year's strong chassis.
   case kind
-  of blExamplefuncsplayer: parseChassisKind("examplefuncsplayer")
-  else: parseChassisKind("bowl-of-chowder")
+  of blScaffold: scScaffold
+  of blExamplefuncsplayer: scExamplefuncsplayer
+  of blCaliforniaRoll: scCaliforniaRoll
+  of blExamplefuncsplayer21: scExamplefuncsplayer21
+  of blBowlOfChowder: scBowlOfChowder
+  of blAwu: scAwu
 
 proc baselineReply*(kind: Baseline): string =
   ## The exact JSON a scripted seat "answers" with. Emitted as text and then
@@ -93,6 +107,18 @@ proc baselineReply*(kind: Baseline): string =
                  "drone_role":"harass","net_gun_ring":2,"rush_trigger":0,
                  "wall_hq_round":250},
         "notes":"scaffold baseline (2020)","motto":"Forward."}"""
+  of blCaliforniaRoll, blExamplefuncsplayer21:
+    ## The all-defaults bc21 sheet, which is ALSO the fallback sheet
+    ## §Decisions prints verbatim. `examplefuncsplayer21` reads no knob, so it
+    ## answers with the same sheet: the chassis, not the sheet, is what makes
+    ## it the weak floor (D1).
+    """{"sheet":{"opening":"balanced","slanderer_ratio":45,"muck_ratio":25,
+                 "politician_size_curve":"ramp","bid_policy":"proportional",
+                 "expansion":"neutral_centers_first",
+                 "flank_policy":"hunt_slanderers","empower_threshold":60,
+                 "convert_over_kill":true,"eco_exponential_round":700},
+        "notes":"default california-roll doctrine",
+        "motto":"Vote early, vote often."}"""
 
 proc baselineSheet*(year: string, kind: Baseline): Sheet =
   result = parseReply(baselineReply(kind), year)

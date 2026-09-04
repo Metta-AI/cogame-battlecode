@@ -229,6 +229,56 @@ block:
   checkEq("re-reading the same bytes gives the same chain",
     toHex(again.session.w26.hashChain), outcome.hashChain)
 
+# --- the year-neutral layer really does dispatch three years ----------------
+block:
+  ## `test_determinism` is bc26's shard, and its bc20 and bc21 twins are
+  ## `tests/test_bc20_replay.nim` and `tests/test_bc21_replay.nim`. What
+  ## belongs HERE is the one determinism property that spans them: the SAME
+  ## year-neutral entry point, given the same seed and the same sheets, must
+  ## produce the same chain in every registered year — and a different one in
+  ## each, because they are different games.
+  var chains: seq[string]
+  for (year, mapName, chassis) in [
+      ("bc26", "DefaultSmall", [scAwu, scAwu]),
+      ("bc20", "maptestsmall", [scBowlOfChowder, scExamplefuncsplayer]),
+      ("bc21", "maptestsmall", [scCaliforniaRoll, scExamplefuncsplayer21])]:
+    let s = [baselineSheet(year, defaultBaselineFor(year)),
+             baselineSheet(year, defaultBaselineFor(year))]
+    let (a, _) = playGameFor(year, mapName, s, chassis, 0, 0, 150, 0)
+    let (b, _) = playGameFor(year, mapName, s, chassis, 0, 0, 150, 0)
+    checkEq(year & ": the same inputs give the same chain", a.hashChain,
+      b.hashChain)
+    checkEq(year & ": and the same rounds", a.roundsPlayed, b.roundsPlayed)
+    checkEq(year & ": and the same points", a.points, b.points)
+    check(year & ": the chain is not empty", a.hashChain.len > 0)
+    chains.add(a.hashChain)
+  checkEq("three registered years were played", chains.len, 3)
+  check("and no two of them are the same game",
+    chains[0] != chains[1] and chains[1] != chains[2] and
+    chains[0] != chains[2])
+
+block:
+  ## `ScriptedChassis` is the YEAR-NEUTRAL chassis vocabulary, and a name
+  ## belonging to another year falls back to THAT year's strong chassis rather
+  ## than to nothing.
+  let s = [baselineSheet("bc21", blCaliforniaRoll),
+           baselineSheet("bc21", blCaliforniaRoll)]
+  let strong = playGameFor("bc21", "Bog", s,
+    [scCaliforniaRoll, scCaliforniaRoll], 0, 0, 120, 0)[0]
+  let foreign = playGameFor("bc21", "Bog", s,
+    [scBowlOfChowder, scAwu], 0, 0, 120, 0)[0]
+  checkEq("a bc20/bc26 chassis name on a bc21 game plays california-roll",
+    foreign.hashChain, strong.hashChain)
+  checkEq("and the strong chassis for bc21 is california-roll",
+    $strongChassisFor("bc21"), "california-roll")
+  checkEq("for bc20 it is bowl-of-chowder", $strongChassisFor("bc20"),
+    "bowl-of-chowder")
+  checkEq("and for bc26 it is awu", $strongChassisFor("bc26"), "awu")
+  checkEq("a recorded chassis string round-trips",
+    $parseScriptedChassis("examplefuncsplayer21"), "examplefuncsplayer21")
+  checkEq("and an unknown one is not a crash", $parseScriptedChassis("nope"),
+    "awu")
+
 # --- EVERY end reason was covered above -------------------------------------
 block:
   ## `seenReasons` was declared and never used, so "record -> re-derive for

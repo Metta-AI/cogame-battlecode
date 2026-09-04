@@ -21,6 +21,8 @@ import years/bc26/[constants, maps, world]
 from years/bc20/world as w20 import nil
 from years/bc20/flood as f20 import nil
 from years/bc20/constants as c20 import nil
+from years/bc21/world as w21 import nil
+from years/bc21/constants as c21 import nil
 
 const
   TileSize* = 16
@@ -56,6 +58,14 @@ const
   ]
   Bc20WaterColor = rgba(28, 62, 104, 255)
   Bc20DeepWaterColor = rgba(16, 38, 70, 255)
+
+  ## bc21's board is a PASSABILITY field: 0.1 is deep swamp and 1.0 is clean
+  ## dirt, and the only thing it changes is how long an action costs. The
+  ## terrain is drawn as a ramp between the 2021 client's own swamp and dirt
+  ## tones so a spectator can see why a flank is slow. It never changes during
+  ## a game, so the terrain sprite is cut ONCE per game.
+  Bc21SwampColor = rgba(46, 58, 52, 255)
+  Bc21DirtColor = rgba(150, 122, 84, 255)
 
 type
   Atlas = ref object
@@ -387,9 +397,89 @@ proc buildBc20Packet(r: Renderer, w: w20.World, gameIndex, sideAslot: int,
   packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
   packet
 
+# ---------------------------------------------------------------------------
+#  bc21 — a passability field with four robot types
+# ---------------------------------------------------------------------------
+
+proc bc21SpriteName(r: w21.Robot): string =
+  ## Palette follows the ENGINE SIDE, not the seat: red = side A, blue = side
+  ## B, exactly as the 2021 client draws it. A NEUTRAL Enlightenment Center
+  ## uses the untinted `center` cut.
+  let tint =
+    if r.team == w21.teamA: "_red"
+    elif r.team == w21.teamB: "_blue"
+    else: ""
+  case r.kind
+  of c21.rtEnlightenmentCenter: "center" & tint
+  of c21.rtPolitician: "polit" & tint
+  of c21.rtSlanderer: "slanderer" & tint
+  of c21.rtMuckraker: "muck" & tint
+
+proc renderBc21Terrain(r: Renderer, w: w21.World): Image =
+  ## Each tile is interpolated between the swamp and dirt tones by its
+  ## passability. Fixed for the whole game, so this is cut once.
+  result = newImage(w.width * TileSize, w.height * TileSize)
+  result.fill(FloorColor)
+  let ctx = newContext(result)
+  for y in 0 ..< w.height:
+    for x in 0 ..< w.width:
+      let px = x * TileSize
+      ## The board's y axis grows NORTH; the canvas grows down.
+      let py = (w.height - 1 - y) * TileSize
+      let p = clamp(w.passability[x + y * w.width], 0.0, 1.0)
+      let mix = (p - 0.1) / 0.9
+      let colour = rgba(
+        uint8(clamp(float(Bc21SwampColor.r) +
+          mix * (float(Bc21DirtColor.r) - float(Bc21SwampColor.r)), 0.0, 255.0)),
+        uint8(clamp(float(Bc21SwampColor.g) +
+          mix * (float(Bc21DirtColor.g) - float(Bc21SwampColor.g)), 0.0, 255.0)),
+        uint8(clamp(float(Bc21SwampColor.b) +
+          mix * (float(Bc21DirtColor.b) - float(Bc21SwampColor.b)), 0.0, 255.0)),
+        255)
+      ctx.fillStyle = colour
+      ctx.fillRect(rect(float32(px), float32(py),
+                        float32(TileSize), float32(TileSize)))
+
+proc buildBc21Packet(r: Renderer, w: w21.World, gameIndex, sideAslot: int,
+                     chrome: string): seq[uint8] =
+  var packet: seq[uint8]
+  let newGame = r.terrainGame != gameIndex
+
+  if newGame:
+    r.terrainGame = gameIndex
+    r.terrainStage = -1
+    r.liveObjects.clear()
+    r.prevRobotSprite.clear()
+    packet.addClearObjects()
+    packet.addLayer(MapLayerId, MapLayerKind, ZoomableFlag)
+    packet.addViewport(MapLayerId, w.width * TileSize, w.height * TileSize)
+    let terrain = r.renderBc21Terrain(w)
+    packet.addSprite(TerrainSpriteId, terrain.width, terrain.height,
+      straightPixels(terrain), "terrain")
+    packet.addObject(1, 0, 0, -32768, MapLayerId, TerrainSpriteId)
+
+  ## Robots. Object ids are stable for a robot's whole life, so the client's
+  ## motion interpolation can glide it between rounds instead of teleporting.
+  var seen = initHashSet[int]()
+  for id, robot in w.robotsById:
+    let objectId = RobotObjectBase + (id mod 20000)
+    seen.incl(objectId)
+    let sprite = r.spriteId(packet, bc21SpriteName(robot))
+    r.addObj(packet, objectId, robot.loc.x * TileSize,
+      (w.height - 1 - robot.loc.y) * TileSize,
+      (if robot.kind == c21.rtEnlightenmentCenter: 4 else: 5), sprite)
+
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= RobotObjectBase and objectId notin seen:
+      r.dropObj(packet, objectId)
+
+  packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
+  packet
+
 proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   ## The ONE place the renderer branches on the year. `Session` is an object
   ## variant, so the compiler checks that a new year gets an arm here.
   case s.year
   of yBc26: r.buildPacket(s.w26, s.gameIndex, s.sideAslot, chrome)
   of yBc20: r.buildBc20Packet(s.w20, s.gameIndex, s.sideAslot, chrome)
+  of yBc21: r.buildBc21Packet(s.w21, s.gameIndex, s.sideAslot, chrome)

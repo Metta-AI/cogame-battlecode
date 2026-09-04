@@ -48,17 +48,17 @@ proc baselineForSeat*(year: string, seat: SeatPolicy): Baseline =
   if seat.scripted.len > 0: baselineFor(year, seat.scripted)
   else: defaultBaselineFor(year)
 
-proc chassisForSeat*(year: string, seat: SeatPolicy): ChassisKind =
+proc chassisForSeat*(year: string, seat: SeatPolicy): ScriptedChassis =
   ## D1: the chassis is fixed by the OPERATOR. A scripted seat drives the
-  ## chassis its `PLAYER_SCRIPTED` names; an LLM seat drives the fixed champion
-  ## chassis, which for bc20 is `bowl-of-chowder`.
-  if seat.isLlm: parseChassisKind("bowl-of-chowder")
+  ## chassis its `PLAYER_SCRIPTED` names; an LLM seat drives the year's fixed
+  ## champion chassis — `bowl-of-chowder` on bc20, `california-roll` on bc21.
+  if seat.isLlm: strongChassisFor(year)
   else: baselineChassis(baselineForSeat(year, seat))
 
 proc chassisNameFor*(year: string, seat: SeatPolicy, sheet: Sheet): string =
   case yearIdOf(year)
-  of yBc20:
-    (if seat.isLlm: "bowl-of-chowder"
+  of yBc20, yBc21:
+    (if seat.isLlm: $strongChassisFor(year)
      else: baselineName(baselineForSeat(year, seat)))
   of yBc26: $sheet.doctrine.chassis
 
@@ -179,9 +179,77 @@ default; you cannot forfeit by answering badly, only by answering weakly):
   wall_hq_round           0..1500 (0 = never)              default 250
 """
 
+const Bc21Preamble* = """
+You command a party in Battlecode 2021 "Campaign": a two-clan grid war on a
+symmetric map where EVERY ROUND AUCTIONS ONE CITIZEN'S VOTE, 1500 rounds a
+game, best of three.
+
+You do not move a single robot. Before the war you write ONE DOCTRINE - a JSON
+sheet of ten named knobs - and a deterministic simulation then plays the whole
+match from it while you watch.
+
+THE CLOCK IS THE ELECTION
+- Every round each Enlightenment Center may bid influence. The single highest
+  bidder IN THE GAME wins the vote for its team and pays its bid; the other
+  team's top bidder pays ceil(bid/2) FOR NOTHING. Equal top bids: nobody wins,
+  both pay half. At round 1500 the team with more votes wins.
+- A team that loses EVERY robot loses immediately, at any round.
+
+INFLUENCE IS THE ONLY RESOURCE, AND IT IS NOT A POOL
+It sits inside each Enlightenment Center and does three incompatible jobs: it
+buys units, it buys votes, and it is what an enemy politician steals when it
+converts your Center. Each Center earns ceil(0.2*sqrt(round)) per round (about
+8500 over a whole game) on top of its starting 150.
+
+THE TRIANGLE
+- SLANDERERS are the multiplier: one built for x influence pays its parent
+  Center floor(x*(1/50 + 0.03*e^(-0.001x))) per round for its first 51 rounds
+  - a ~2.35x return for x in 21..130 - and at 300 rounds old silently becomes
+  a politician. It cannot act and dies to a single muckraker.
+- MUCKRAKERS cost 1 influence, see furthest, and EXPOSE enemy slanderers: the
+  slanderer dies and your team gets +0.001 x (that slanderer's influence) on
+  every speech for 50 rounds.
+- POLITICIANS are walking bombs. Empowering splits (conviction - 10) equally
+  among EVERY other robot in the chosen radius (r^2 <= 9) - healing friends,
+  feeding friendly Centers, converting or killing everything else - and then
+  the politician dies. A Center with conviction c is captured by a politician
+  of c + 11.
+
+  points = int(40*survival + 35*vote share + 15*centre share + 10*influence share)
+Winning a game is worth 100 and points are worth at most 100, so the game bonus
+dominates: lose the election, lose the match.
+
+YOUR REPLY
+Reply with ONE JSON object and NOTHING else. Your reply must begin with '{'.
+{"sheet": {...knobs...}, "notes": "<=280 chars", "motto": "<=48 chars"}
+
+THE KNOBS (unknown key, wrong type or out-of-range value = that field's
+default; you cannot forfeit by answering badly, only by answering weakly):
+  opening                "muck_spam" | "slanderer_turtle" | "balanced"
+                                                          default "balanced"
+  slanderer_ratio        0..100 (% of post-opening spend) default 45
+  muck_ratio             0..100 (% of post-opening spend) default 25
+  politician_size_curve  "cheap" | "ramp" | "fat"         default "ramp"
+  bid_policy             "never" | "fixed" | "proportional"
+                         | "escalate_when_ahead"          default "proportional"
+  expansion              "neutral_centers_first" | "defend_home"
+                                                default "neutral_centers_first"
+  flank_policy           "screen_home" | "hunt_slanderers" | "flank_wide"
+                                                   default "hunt_slanderers"
+  empower_threshold      0..300 (percent)                 default 60
+  convert_over_kill      true | false                     default true
+  eco_exponential_round  1..1500                          default 700
+
+Politicians take 100 - slanderer_ratio - muck_ratio. If the two sum above 100
+they are renormalised. Your party is driven by the `california-roll` chassis.
+That is not yours to choose: there is no `chassis` knob, and a reply that sends
+one has it ignored.
+"""
+
 proc preambleFor*(year: string): string =
   case yearIdOf(year)
   of yBc20: Bc20Preamble
+  of yBc21: Bc21Preamble
   of yBc26: SystemPreamble
 
 proc briefFor*(
@@ -216,6 +284,31 @@ proc briefFor*(
     payload["flood_table"] = floodTableJson()
     payload["scoring"] = %*{
       "weights": {"hq_survival": 60, "unit_share": 25, "net_worth_share": 15},
+      "win_bonus_per_game": 100,
+      "games": plan.maps.len,
+      "note": "shares are float32; points truncate to an integer"
+    }
+  of yBc21:
+    var breakpoints = newJArray()
+    for value in bc21Breakpoints():
+      if breakpoints.len >= 30: break
+      breakpoints.add(%value)
+    payload["economy"] = %*{
+      "center_passive":
+        "ceil(0.2*sqrt(round)) per center per round; 8507 total over 1500 rounds",
+      "center_start_influence": 150,
+      "slanderer_breakpoints": breakpoints,
+      "slanderer_payments": 51,
+      "camouflage_round": 300,
+      "expose_buff": "+0.001 x slanderer influence, for 50 rounds",
+      "empower_tax": 10,
+      "votes_on_offer": plan.maxRounds,
+      "losing_bid_cost": "ceil(bid/2)"
+    }
+    payload["sheet_schema"] = bc21SheetSchema()
+    payload["scoring"] = %*{
+      "weights": {"survival": 40, "vote_share": 35, "center_share": 15,
+                  "influence_share": 10},
       "win_bonus_per_game": 100,
       "games": plan.maps.len,
       "note": "shares are float32; points truncate to an integer"

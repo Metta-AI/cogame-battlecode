@@ -16,6 +16,10 @@ import years/bc26/[constants, rules, world]
 from years/bc20/world as w20 import nil
 from years/bc20/constants as c20 import nil
 from years/bc20/chassis/signals as sig20 import nil
+from years/bc21/world as w21 import nil
+from years/bc21/constants as c21 import nil
+from years/bc21/economy as e21 import nil
+from years/bc21/rules as r21 import nil
 
 const
   PlaybackSpeeds* = [1, 2, 3, 4, 8, 16]
@@ -344,6 +348,134 @@ proc chromeJson*(
   }
   $node
 
+proc bc21Votes(w: w21.World, sideAslot: int): JsonNode =
+  ## `#bc21-votes`: the election readout. `to_clinch` is the number of votes
+  ## that guarantees the round-1500 win, i.e. a majority of the 1500 on offer.
+  var votes = newJArray()
+  for slot in 0 .. 1:
+    let t = if slot == sideAslot: 0 else: 1
+    votes.add(%w.stats.votes[t])
+  %*{
+    "votes": votes,
+    "on_offer": w.maxRounds,
+    "to_clinch": w.maxRounds div 2 + 1,
+    "tied_rounds": w.stats.votesTied
+  }
+
+proc bc21Influence(w: w21.World, sideAslot: int): JsonNode =
+  ## `#bc21-influence`: per clan, total Centre influence, income per round, and
+  ## Centres owned as `own / on the map`.
+  var onMap = 0
+  for _, r in w.robotsById:
+    if r.kind == c21.rtEnlightenmentCenter: inc onMap
+  result = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: w21.teamA else: w21.teamB)
+    var centreInfluence = 0
+    for _, r in w.robotsById:
+      if r.team == team and r.kind == c21.rtEnlightenmentCenter:
+        centreInfluence += r.influence
+    let owned = w21.livingCenters(w, team)
+    result.add(%*{
+      "influence": centreInfluence,
+      "total_influence": w21.totalInfluence(w, team),
+      "income": owned * e21.ecPassive(max(1, w.currentRound)),
+      "centers": owned,
+      "centers_on_map": onMap,
+      "spent": w.stats.influenceSpent[ord(team)],
+      "bid_spent": w.stats.bidInfluenceSpent[ord(team)]
+    })
+
+proc bc21Units(w: w21.World, sideAslot: int): JsonNode =
+  ## `#bc21-units`: per clan, the three unit types alive and the live speech
+  ## buff.
+  result = newJArray()
+  for slot in 0 .. 1:
+    let t = if slot == sideAslot: 0 else: 1
+    let team = w21.Team(t)
+    result.add(%*{
+      "politician": w.typeCount[t][c21.rtPolitician],
+      "slanderer": w.typeCount[t][c21.rtSlanderer],
+      "muckraker": w.typeCount[t][c21.rtMuckraker],
+      "buff": w.stats.numBuffs[t],
+      "buff_factor": 1.0 + 0.001 * float(w.stats.numBuffs[t]),
+      "built": w.stats.unitsBuilt[t],
+      "exposes": w.stats.exposes[t],
+      "empowers": w.stats.empowers[t],
+      "conversions": w.stats.conversions[t],
+      "camouflaged": w.stats.camouflaged[t],
+      "lost": w.stats.robotsLost[t]
+    })
+
+proc bc21Bids(w: w21.World, sideAslot: int): JsonNode =
+  ## `#bc21-bids`, the endcard's auction panel. NOTHING about the auction is
+  ## stored in the replay: the wasm sim re-derives every round and this reads
+  ## the re-derived tally.
+  var clans = newJArray()
+  for slot in 0 .. 1:
+    let t = if slot == sideAslot: 0 else: 1
+    clans.add(%*{
+      "alias": aliasFor(slot),
+      "votes": w.stats.votes[t],
+      "bids": w.stats.bidsPlaced[t],
+      "burned": w.stats.bidInfluenceSpent[t],
+      "top_bid": w.stats.topBid[t]
+    })
+  %*{
+    "clans": clans,
+    "tied_rounds": w.stats.votesTied,
+    "no_bid_rounds": w.stats.roundsNoBid
+  }
+
+proc bc21ChromeJson*(
+  doc: ReplayDoc, w: w21.World, view: ViewerState,
+  frame, totalFrames, gameIndex, sideAslot: int,
+  beats: JsonNode, gameChips: JsonNode, ended: bool
+): string =
+  ## One frame of bc21 chrome. `t` / `st` / `mx` / `mt` are the GENERIC
+  ## timeline keys `chrome_common.js` reads, unchanged, so the clock, the
+  ## transport and the scrubber are driven by the starter's own code; the
+  ## `bc21_*` keys are what the APPENDED bc21 game block draws.
+  let phase = if ended: "gameover" else: "playing"
+  let points = r21.gamePoints(w)
+  var node = %*{
+    "t": frame,
+    "st": 0,
+    "mx": max(1, totalFrames - 1),
+    "mt": 0,
+    "sp": view.speed,
+    "pl": view.playing,
+    "lp": view.loop,
+    "sk": view.skipLulls,
+    "ff": false,
+    "en": true,
+    "ph": phase,
+    "lob": 0,
+    "pov": -1,
+    "nim": GameVersion,
+    "year": "bc21",
+    "beats": beats,
+    "game": gameIndex + 1,
+    "games": doc.games.len,
+    "map": doc.plan.maps[min(gameIndex, doc.plan.maps.high)],
+    "round": w.currentRound,
+    "rounds": doc.plan.maxRounds,
+    "aliases": [AliasA, AliasB],
+    "names": [doc.names[0], doc.names[1]],
+    "sides": [(if sideAslot == 0: "A" else: "B"),
+              (if sideAslot == 0: "B" else: "A")],
+    "points": [points[(if sideAslot == 0: 0 else: 1)],
+               points[(if sideAslot == 0: 1 else: 0)]],
+    "bc21_votes": bc21Votes(w, sideAslot),
+    "bc21_influence": bc21Influence(w, sideAslot),
+    "bc21_units": bc21Units(w, sideAslot),
+    "bc21_bids": bc21Bids(w, sideAslot),
+    "gamechips": gameChips,
+    "doctrines": doctrineWords(doc),
+    "result": doc.result
+  }
+  $node
+
 proc bc20ChromeJson*(
   doc: ReplayDoc, w: w20.World, view: ViewerState,
   frame, totalFrames, gameIndex, sideAslot: int,
@@ -404,4 +536,7 @@ proc sessionChromeJson*(
       beats, gameChips, ended)
   of yBc20:
     bc20ChromeJson(doc, s.w20, view, frame, totalFrames, gameIndex, sideAslot,
+      beats, gameChips, ended)
+  of yBc21:
+    bc21ChromeJson(doc, s.w21, view, frame, totalFrames, gameIndex, sideAslot,
       beats, gameChips, ended)

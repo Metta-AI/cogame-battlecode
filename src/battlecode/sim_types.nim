@@ -13,12 +13,29 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV05"
+  GameVersion* = "GV06"
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV06 — the `bc21` year module: Battlecode 2021 "Campaign" ported from
+    ##        battlecode21 at commit ed39c1a4 (release 2021.3.0.5): the
+    ##        seven-step round loop, the empower/convert/heal arithmetic with
+    ##        the 2021.3.0.0 LINEAR buff, expose and the buff ledger, the
+    ##        slanderer embezzle curve and camouflage, the every-round vote
+    ##        auction with its half-bid, flags, the four-rung end ladder and a
+    ##        1500-round cap, behind `game_config.year`. bc26 AND bc20
+    ##        SEMANTICS ARE UNCHANGED: nothing a GV04 or GV05 recording carries
+    ##        changed meaning — the sheet envelope, the results document and
+    ##        the replay all gained year-neutral shape without moving a byte an
+    ##        older recording holds — which is why
+    ##        `ReplayCompatibleGameVersions` is EXTENDED rather than reset and
+    ##        every hosted bc26 and bc20 replay keeps rendering. The one
+    ##        year-neutral type change, `ScriptedChassis`, replaces a bc20 enum
+    ##        that was leaking through `years/dispatch.nim`; the STRINGS a
+    ##        replay records for it are unchanged.
     ##
     ## GV05 — the `bc20` year module: Battlecode 2020 "Soup" ported from
     ##        battlecode20 at commit 7618f6b (round loop, flood, soup and
@@ -68,7 +85,7 @@ const
     ##        round loop, cheese, kings, combat, ratnap/throw, traps, dirt,
     ##        formation, squeaks, cats, backstab, float32-narrowed scoring.
 
-  ReplayCompatibleGameVersions* = ["GV04", GameVersion]
+  ReplayCompatibleGameVersions* = ["GV04", "GV05", GameVersion]
     ## Versions whose recordings this build can still re-derive. A replay
     ## carrying anything else is refused with a readable message rather than
     ## silently re-simulated under different rules.
@@ -91,6 +108,24 @@ const
   AliasB* = "Clan Basil"
 
 type
+  ScriptedChassis* = enum
+    ## The YEAR-NEUTRAL chassis vocabulary. `years/dispatch.nim` used to hand
+    ## `array[2, rules20.ChassisKind]` around, which leaked a bc20 type through
+    ## the year-neutral layer and made a third year impossible to add without
+    ## renaming bc20's enum. Each year's `newSides` maps a value here into its
+    ## own kind and falls back to THAT YEAR'S STRONG CHASSIS for a name
+    ## belonging to another year, so a bc20 name on a bc21 game plays
+    ## california-roll rather than nothing.
+    ##
+    ## The strings are exactly the ones a replay's `seats[].chassis` already
+    ## records, so no recording changes meaning.
+    scAwu = "awu"
+    scScaffold = "scaffold"
+    scBowlOfChowder = "bowl-of-chowder"
+    scExamplefuncsplayer = "examplefuncsplayer"
+    scCaliforniaRoll = "california-roll"
+    scExamplefuncsplayer21 = "examplefuncsplayer21"
+
   ConfigError* = object of CatchableError
     ## An unusable `game_config`. The container exits 2 on this, per ctf.
 

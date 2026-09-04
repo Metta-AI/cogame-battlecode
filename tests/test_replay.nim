@@ -13,7 +13,7 @@ proc buildDoc(mapName: string, notes, motto: string): (ReplayDoc, GameOutcome) =
   ## Through the YEAR BOUNDARY, exactly as the server does, so the document
   ## this test round-trips is the document the server writes.
   let (outcome, _) = playGameFor("bc26", mapName, sheets,
-    [ckBowlOfChowder, ckBowlOfChowder], 0, 0, 500, 0)
+    [scBowlOfChowder, scBowlOfChowder], 0, 0, 500, 0)
   var plan = MatchPlan(seed: 4242, year: "bc26", maxRounds: 500,
     maps: @[mapName], sideAslots: @[0], abandonAfter: @[-1], sheets: sheets)
   var seats: array[2, SeatReport]

@@ -34,7 +34,7 @@ type
     maps*: seq[string]
     sideAslots*: seq[int]
     sheets*: array[2, Sheet]
-    chassis*: array[2, ChassisKind]
+    chassis*: array[2, ScriptedChassis]
       ## Which chassis each SEAT drives. Never a sheet field (D1): it comes
       ## from `PLAYER_SCRIPTED`, or is the fixed champion chassis.
     maxRounds*: int
@@ -69,7 +69,8 @@ proc buildPlan*(config: GameConfig, sheets: array[2, Sheet],
   result.year = config.year
   result.maxRounds = config.maxRounds
   result.sheets = sheets
-  result.chassis = [ckBowlOfChowder, ckBowlOfChowder]
+  result.chassis = [strongChassisFor(config.year),
+                    strongChassisFor(config.year)]
   let count = max(1, config.gamesPerMatch)
   result.maps = drawMapsFor(config.year, config.pool, seed, count)
   for g in 0 ..< result.maps.len:
@@ -114,9 +115,40 @@ proc collectGameEvents(
       let key = $e.a & ":" & $e.b
       if key in firstBuildSeen: continue
       firstBuildSeen.add(key)
+      ## `first_build.unit` has a DOCUMENTED VOCABULARY in every year (the
+      ## r1-F14 lesson): the year's own `RobotKind` ordinals, spelled out.
+      let unit =
+        if plan.year == "bc21": Bc21UnitNames[e.b] else: Bc20UnitNames[e.b]
       events.add(ev("first_build", game = gameIndex, round = e.c,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
-                    "unit": Bc20UnitNames[e.b]}))
+                    "unit": unit}))
+    of "center_taken":
+      events.add(ev("center_taken", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "from": e.s,
+                    "x": e.c div 100, "y": e.c mod 100,
+                    "influence": e.b}))
+    of "vote_lead":
+      events.add(ev("vote_lead", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "votes": e.b, "opponent_votes": e.c}))
+    of "bid_spike":
+      events.add(ev("bid_spike", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "bid": e.b, "influence_before": e.c}))
+    of "expose_wave":
+      events.add(ev("expose_wave", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "exposed_total": e.b,
+                    "buff_pct": float(e.c) / 10.0}))
+    of "empower_big":
+      events.add(ev("empower_big", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "conviction": e.b, "victims": e.c,
+                    "converted": e.s}))
+    of "annihilated":
+      events.add(ev("annihilated", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a)}))
     of "wall_closed":
       events.add(ev("wall_closed", game = gameIndex, round = e.c,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),

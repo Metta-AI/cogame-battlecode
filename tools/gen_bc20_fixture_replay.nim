@@ -22,7 +22,7 @@ import battlecode/[baselines, match, replay, results, sheet, sim_types]
 import battlecode/years/dispatch
 
 const
-  Chassis = [ckBowlOfChowder, ckExamplefuncsplayer]
+  Chassis = [scBowlOfChowder, scExamplefuncsplayer]
   DefaultOut = "tests/fixtures/replay-bc20.json"
   Map = "maptestsmall"
   Seed = 3

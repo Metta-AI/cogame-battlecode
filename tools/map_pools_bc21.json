@@ -1,0 +1,8 @@
+{
+  "small": ["maptestsmall", "Arena", "Bog", "FrogOrBath", "Smile", "Star"],
+  "mixed": ["maptestsmall", "Arena", "Bog", "FrogOrBath", "Smile", "Star",
+            "Corridor", "SeaFloor", "quadrants", "Maze", "Hourglass",
+            "PaperWindmill"],
+  "large": ["Blotches", "Circles", "BadSnowflake", "AmidstWe", "Yoda",
+            "Gridlock"]
+}
