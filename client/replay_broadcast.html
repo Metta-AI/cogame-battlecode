@@ -2597,6 +2597,13 @@ body[data-noviewpanel] #viewpanel { display: none !important; }
 #gamechips .gchip.ash { border-color: var(--ash); color: var(--ash); }
 #gamechips .gchip.basil { border-color: var(--basil); color: var(--basil); }
 
+/* THE BOARD IS THE PICTURE (r2-D3). Both doctrines are worth reading before
+   the war starts, and worth nothing at all if they are still lying over the
+   rats a minute later: two live screenshots of the featured match, a minute
+   apart, were both of this panel. It opens with the replay, it CLOSES ITSELF
+   the moment playback advances, and its own header re-opens it. Its body is
+   capped and scrolls, so even opened by hand over a 360 px frame it can never
+   take more than a third of the board. */
 #doctrines {
   position: absolute; left: 8px; bottom: calc(var(--band, 0px) + 8px);
   max-width: 44%; font-size: 10px; color: #cbbfae;
@@ -2605,6 +2612,17 @@ body[data-noviewpanel] #viewpanel { display: none !important; }
 #doctrines .dline { margin-bottom: 3px; }
 #doctrines .dname { color: #f2e8d8; font-weight: 600; }
 #doctrines .dfall { color: #e0523a; }
+#doctrines .dbody {
+  max-height: calc(33vh - var(--band, 0px));
+  overflow-y: auto;
+  margin-top: 4px;
+}
+#doctrines.closed .dbody { display: none; }
+#doctrines-toggle {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  font: inherit; color: #f2e8d8; letter-spacing: .1em; text-transform: uppercase;
+  background: none; border: 0; padding: 0;
+}
 
 .beat-marker.doctrine { background: #7fb2e8; }
 .beat-marker.king { background: #ddc531; }
@@ -2932,22 +2950,62 @@ button.beat-marker { border: 0; padding: 0; cursor: pointer; }
     if (el.innerHTML !== html) el.innerHTML = html;
   }
 
+  // The doctrines open with the replay and get out of the way as soon as the
+  // rats start moving (r2-D3). Three things close the panel: the first frame
+  // that advances the playhead, a 6 s timer for a viewer that never presses
+  // play, and its own header. Nothing but the header opens it, and a panel
+  // opened by hand stays open — that is the viewer's choice, not a lid the
+  // page left on the board.
   var doctrinesRendered = false;
+  var doctrinesPinned = false;      // the viewer opened it themselves
+  var doctrinesLastFrame = -1;
+  function setDoctrinesOpen(open) {
+    var el = $('doctrines');
+    if (!el) return;
+    el.classList.toggle('closed', !open);
+    var toggle = $('doctrines-toggle');
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.textContent = (open ? '▾ ' : '▸ ') + 'Doctrines';
+    }
+  }
   function renderDoctrines(s) {
-    if (doctrinesRendered || !s.doctrines) return;
-    doctrinesRendered = true;
-    var html = '';
-    s.doctrines.forEach(function (d) {
-      html += '<div class="dline"><span class="dname">' + esc(d.alias) +
-        '</span> — ' + esc((d.words || []).join(', '));
-      if (d.fallback) {
-        html += ' <span class="dfall">[scripted fallback: ' +
-          esc(d.fallback) + ']</span>';
-      }
-      if (d.notes) html += '<br><i>' + esc(d.notes) + '</i>';
+    if (!s.doctrines) return;
+    if (!doctrinesRendered) {
+      doctrinesRendered = true;
+      var html = '<button id="doctrines-toggle" type="button" ' +
+        'aria-expanded="true" aria-controls="doctrines-body">▾ Doctrines</button>' +
+        '<div class="dbody" id="doctrines-body">';
+      s.doctrines.forEach(function (d) {
+        html += '<div class="dline"><span class="dname">' + esc(d.alias) +
+          '</span> — ' + esc((d.words || []).join(', '));
+        if (d.fallback) {
+          html += ' <span class="dfall">[scripted fallback: ' +
+            esc(d.fallback) + ']</span>';
+        }
+        if (d.notes) html += '<br><i>' + esc(d.notes) + '</i>';
+        html += '</div>';
+      });
       html += '</div>';
-    });
-    $('doctrines').innerHTML = html;
+      $('doctrines').innerHTML = html;
+      setDoctrinesOpen(true);
+      $('doctrines-toggle').addEventListener('click', function () {
+        var open = !$('doctrines').classList.contains('closed');
+        doctrinesPinned = !open;
+        setDoctrinesOpen(!open);
+      });
+      // The viewer who never presses play still gets the board back.
+      setTimeout(function () {
+        if (!doctrinesPinned) setDoctrinesOpen(false);
+      }, 6000);
+    }
+    // PLAYBACK IS ADVANCING: the picture is the rats, not the sheet.
+    if (s.t !== doctrinesLastFrame) {
+      if (doctrinesLastFrame >= 0 && s.t > 0 && !doctrinesPinned) {
+        setDoctrinesOpen(false);
+      }
+      doctrinesLastFrame = s.t;
+    }
   }
 
   // ---- feed -------------------------------------------------------------

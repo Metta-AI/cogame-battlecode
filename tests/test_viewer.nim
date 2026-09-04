@@ -228,6 +228,31 @@ check("and not with a class that has no rule",
 check("the page uses the renamed static-replay adapter",
   "BcStaticReplay" in page)
 
+## THE BOARD IS THE PICTURE (r2-D3). The featured match showed the doctrine
+## panel lying over the rats in two live screenshots a minute apart: the panel
+## was rendered once, on the first frame, and had no dismissal of any kind —
+## not a click, not a timer, not playback. It now opens with the replay and
+## closes itself the moment the playhead advances, its own header re-opens it,
+## and its body is capped so even an opened panel cannot own the board.
+block:
+  let start = page.find("#doctrines {")
+  check("the page has a #doctrines rule", start >= 0)
+  check("the panel body is height-capped", "#doctrines .dbody {" in page and
+    "max-height: calc(33vh" in page)
+  check("and scrolls rather than growing over the board",
+    "overflow-y: auto;" in page)
+  check("a closed panel hides its body", "#doctrines.closed .dbody { display: none; }" in page)
+  check("the panel has a re-opening header", "id=\"doctrines-toggle\"" in page)
+  check("which is a real button", "<button id=\"doctrines-toggle\"" in page)
+  check("announcing its state to a screen reader", "aria-expanded" in page)
+  ## The three dismissals, by name.
+  check("playback advancing closes it",
+    "if (doctrinesLastFrame >= 0 && s.t > 0 && !doctrinesPinned)" in page)
+  check("a timer closes it for a viewer who never presses play",
+    "}, 6000);" in page)
+  check("and a viewer who opens it by hand keeps it open",
+    "doctrinesPinned = !open;" in page)
+
 ## THE RENDERER FIXTURE TESTS THE PAGE, NOT ITSELF.
 ## The full-cap doctrine-text fixture used to carry its own copy of the game
 ## block's CSS — and three declarations (`max-width`/`overflow` on the plate,
