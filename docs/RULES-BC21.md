@@ -297,10 +297,19 @@ Every difference between this port and the pinned engine, with its reason.
    evaluated, flag read and empower radius scored, and **enforced by the sim,
    not by the bot**. When the budget reaches zero the robot's turn ends where it
    stands; it is **not** resumed mid-computation next turn, which is the one
-   place this differs from the JVM. The `parity-oracle-bc21` job asserts that no
-   Java robot on any traced game exceeds **80 %** of its bytecode limit, so the
-   bot the oracle runs provably never hits the boundary where the two models
-   would part.
+   place this differs from the JVM. The `parity-oracle-bc21` job **measures**
+   that boundary rather than asserting it away: `tools/oracle/bc21/Bc21Trace.java`
+   carries each Java robot's `getBytecodesUsed()`, prints the peak use per map
+   and prints the first round the JVM cut a robot off mid-turn
+   (`BC21_FIRST_CUTOFF`), and `tools/ci/parity_tiers_bc21.py` makes
+   `cutoff - 1` the Tier A bit-exact window — the engine's own answer to how
+   long the comparison is defined for. On the pinned `examplefuncsplayer21`
+   the boundary **is** reached: peak use is **102 %** of the limit on all five
+   traced maps (the Center's out-of-influence `rc.bid(1)` throws and the
+   uncaught exception's stack trace costs more than a whole turn's budget),
+   with the first cut-off at rounds 27, 23, 33, 23 and 246. Everything after
+   the window is governed by the Tier C ledger, not by this item;
+   `docs/PARITY.md` accounts for it map by map.
 2. **`setWinnerArbitrary`'s `Math.random()`** is wall-clock seeded and therefore
    not reproducible. It is replaced by a draw from the **world RNG**, which is
    seeded from the map's own `randomSeed`. Reachable only when votes, Center

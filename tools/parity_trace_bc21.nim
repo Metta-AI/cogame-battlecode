@@ -13,9 +13,9 @@
 ##
 ##   * the `bc=` field (bytecodes used) is NOT emitted. There is no JVM here
 ##     and no bytecode counter to emit; the job strips it from the Java side
-##     before diffing, and checks it separately for the 80 %-of-limit
-##     assertion that keeps a cut-off Java robot from silently making the two
-##     traces incomparable.
+##     before diffing, and reads it separately to report the peak use and to
+##     find the first round the JVM cut a robot off mid-turn, which is what
+##     sizes the Tier A window (docs/RULES-BC21.md §Divergences item 1).
 ##   * coordinates are printed in the ENGINE's absolute frame, i.e. offset by
 ##     the map's own `minCorner`, because that is what the engine prints. The
 ##     sim itself is 0-based (docs/RULES-BC21.md §Divergences item 6).
