@@ -204,22 +204,39 @@ proc startGame(d: Deriver, index: int) =
     d.world = newWorld(spec, d.doc.plan.maxRounds)
     d.clans = newClans(d.doc.plan.sheets, d.doc.plan.sideAslots[index])
 
+proc gameRecord*(doc: ReplayDoc, index: int): tuple[rounds: int, chain: string] =
+  ## How many rounds game `index` played, and the chain it ended on.
+  ##
+  ## A game that FINISHED carries its own header. The game the wall-clock
+  ## deadline stopped does not: it is discarded from the scoring, so no
+  ## `GameHeader` is written for it — and its stop round survives only as
+  ## `plan.abandon_after[index]`, the one load-bearing record of a
+  ## wall-clock fact. Read it here and playback stops exactly where the
+  ## recorder stopped, instead of dropping the abandoned game from the
+  ## replay altogether.
+  for g in doc.games:
+    if g.index == index:
+      return (g.rounds, g.hashChain)
+  if index < doc.plan.abandonAfter.len and doc.plan.abandonAfter[index] > 0:
+    return (doc.plan.abandonAfter[index], "")
+  (0, "")
+
 proc newDeriver*(doc: ReplayDoc): Deriver =
   result = Deriver(doc: doc, mismatchRound: -1)
-  for g in doc.games:
-    for r in 1 .. g.rounds:
-      result.frameGame.add(g.index)
+  for index in 0 ..< doc.plan.maps.len:
+    for r in 1 .. doc.gameRecord(index).rounds:
+      result.frameGame.add(index)
       result.frameRound.add(r)
   result.totalFrames = result.frameGame.len
   result.frame = -1
-  if doc.games.len > 0:
-    result.startGame(doc.games[0].index)
+  if result.totalFrames > 0:
+    result.startGame(result.frameGame[0])
 
 proc restart*(d: Deriver) =
   d.frame = -1
   d.mismatchRound = -1
-  if d.doc.games.len > 0:
-    d.startGame(d.doc.games[0].index)
+  if d.totalFrames > 0:
+    d.startGame(d.frameGame[0])
 
 proc advance*(d: Deriver): bool {.discardable.} =
   ## One frame == one round. Returns false at the end of the recording.
@@ -233,9 +250,9 @@ proc advance*(d: Deriver): bool {.discardable.} =
   d.roundInGame = d.world.currentRound
   d.frame = nextFrame
   ## The recorded hash chain proves the re-derivation matches the recording.
-  if d.roundInGame == d.doc.games[wantGame].rounds:
-    let recorded = d.doc.games[wantGame].hashChain
-    if recorded.len > 0 and toHex(d.world.hashChain) != recorded and
+  let record = d.doc.gameRecord(wantGame)
+  if d.roundInGame == record.rounds:
+    if record.chain.len > 0 and toHex(d.world.hashChain) != record.chain and
         d.mismatchRound < 0:
       d.mismatchRound = d.roundInGame
   true

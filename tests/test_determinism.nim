@@ -113,23 +113,39 @@ block:
   ## replays to exactly the round the recorder stopped at. This is the
   ## particle-worlds scar: a stop derived from the recorder's clock and
   ## re-derived from the viewer's clock is not the same match.
+  ##
+  ## The document is built in the shape THE RECORDER ACTUALLY WRITES: when
+  ## `playMatch` abandons a game it records `plan.abandonAfter[g]` and breaks
+  ## BEFORE `outcomes.add`, so the abandoned game never reaches
+  ## `server.nim`'s `for g in games: doc.games.add(...)` and the replay
+  ## carries NO `GameHeader` for it. `plan.abandon_after` is then the only
+  ## record of how far that game got, and the deriver has to plan its frames
+  ## from it — before r1-N4 it planned frames from `doc.games` alone and
+  ## dropped the abandoned game (and, in a one-game match, the whole replay)
+  ## on the floor. (The stop is not driven by the real clock here: a game
+  ## plays in milliseconds and the smallest budget `playGame` accepts is a
+  ## whole second.)
   let sheets = [baselineSheet(blAwu), baselineSheet(blAwu)]
   let full = play("DefaultSmall", sheets, 2000)
   check("the full game runs past 200 rounds", full.roundsPlayed > 200)
   let stoppedAt = 200
-  var plan = MatchPlan(seed: 5, year: "bc26", maxRounds: 2000,
-    maps: @["DefaultSmall"], sideAslots: @[0], abandonAfter: @[stoppedAt],
-    sheets: sheets)
+  var config = defaultGameConfig()
+  config.pool = "small"
+  config.gamesPerMatch = 1
+  var plan = buildPlan(config, sheets, 5)
+  plan.maps = @["DefaultSmall"]
+  plan.sideAslots = @[0]
+  plan.maxRounds = 2000
+  plan.abandonAfter[0] = stoppedAt        # what playMatch records on abort
   var seats: array[2, SeatReport]
   for slot in 0 .. 1:
     seats[slot] = SeatReport(name: "s" & $slot, alias: aliasFor(slot),
       policyKind: "scripted", sheet: sheets[slot])
   var doc = ReplayDoc(gameVersion: GameVersion, year: "bc26", config: %*{},
-    seed: 5, seats: seats, plan: plan, result: %*{},
-    games: @[GameHeader(index: 0, map: "DefaultSmall",
-      mapSha: mapSha("DefaultSmall"), sideAslot: 0, rounds: stoppedAt,
-      hashChain: "")])
+    seed: 5, seats: seats, plan: plan, result: %*{})
   for slot in 0 .. 1: doc.names[slot] = "s" & $slot
+  checkEq("the abandoned game has no header, as the recorder writes it",
+    doc.games.len, 0)
   let deriver = newDeriver(parseReplay($doc.toJson()))
   checkEq("the deriver plans exactly the recorded rounds",
     deriver.totalFrames, stoppedAt)
@@ -137,6 +153,7 @@ block:
   while deriver.advance(): inc frames
   checkEq("and stops exactly there", frames, stoppedAt)
   checkEq("at the recorded round", deriver.world.currentRound, stoppedAt)
+  checkEq("with no hash mismatch", deriver.mismatchRound, -1)
 
 block:
   ## The scoring of a deadline episode is honest: only the games that
