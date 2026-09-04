@@ -34,9 +34,8 @@
 ##   toomuchcheese 2000 round_limit | cheesefarm 1902 cats_cleared
 ##   dirtfulcat 702 cats_cleared
 
-import std/strutils
 import harness
-import battlecode/[baselines, sheet, sim_types]
+import battlecode/[baselines, sim_types]
 import battlecode/years/bc26/[maps, rules]
 
 const
