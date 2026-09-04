@@ -28,7 +28,7 @@ for name in MixedPool:
     largest = name
 echo "largest map in the bc26 pool: ", largest, " (", largestTiles, " tiles)"
 
-proc timeGame(sheets: array[2, Sheet]): (float, GameOutcome) =
+proc timeGame(sheets: array[2, Sheet]): (float, GameOutcome26) =
   let started = getMonoTime()
   let (w, outcome) = playGame(loadMap(largest), sheets, 0, 0, 2000, 0)
   ((getMonoTime() - started).inMilliseconds.float / 1000.0, outcome)

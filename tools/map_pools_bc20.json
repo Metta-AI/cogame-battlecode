@@ -1,0 +1,9 @@
+{
+  "small": ["maptestsmall", "WateredDown", "Infinity", "Spiral", "Hourglass",
+            "ALandDivided"],
+  "mixed": ["maptestsmall", "WateredDown", "Infinity", "Spiral", "Hourglass",
+            "ALandDivided", "Climb", "Constriction", "CentralLake",
+            "Toothpaste", "TwoLakeLand", "CentralSoup"],
+  "large": ["Hills", "OmgThisIsProcedural", "Squares", "BeachFrontProperty",
+            "Maze", "TheHighGround"]
+}

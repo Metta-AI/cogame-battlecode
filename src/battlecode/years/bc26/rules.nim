@@ -23,7 +23,7 @@ import chassis/[kit, awu, scaffold]
 export world, constants, kit
 
 type
-  GameOutcome* = object
+  GameOutcome26* = object
     index*: int
     mapName*: string
     sideAslot*: int              ## which SEAT plays team A this game
@@ -52,7 +52,7 @@ type
       ## divergent round rather than the game's last.
     aborted*: bool
 
-proc slotOf*(outcome: GameOutcome, team: Team): int =
+proc slotOf*(outcome: GameOutcome26, team: Team): int =
   ## Seat index for a team in this game. Sides alternate per game, so the
   ## mapping is per game, never global.
   if team == teamA: outcome.sideAslot else: 1 - outcome.sideAslot
@@ -118,7 +118,7 @@ proc endReasonFor(w: World): EndReason =
   elif w.numCats == 0 and w.hasWinner: erCatsCleared
   else: erRoundLimit
 
-proc harvest(w: World, clans: array[2, Clan], outcome: var GameOutcome) =
+proc harvest(w: World, clans: array[2, Clan], outcome: var GameOutcome26) =
   for team in [teamA, teamB]:
     let t = ord(team)
     let slot = outcome.slotOf(team)
@@ -145,13 +145,13 @@ proc harvest(w: World, clans: array[2, Clan], outcome: var GameOutcome) =
 proc playGame*(
   spec: MapSpec, sheets: array[2, Sheet], index, sideAslot, maxRounds: int,
   budgetSeconds: int, onRound: proc (w: World, round: int) {.closure.} = nil
-): (World, GameOutcome) =
+): (World, GameOutcome26) =
   ## Plays one game to its end, or abandons it when `budgetSeconds` of
   ## monotonic wall clock elapse. An abandoned game is DISCARDED by the match
   ## (its `aborted` flag says so); it is never scored half-played.
   var w = newWorld(spec, maxRounds)
   let clans = newClans(sheets, sideAslot)
-  var outcome = GameOutcome(
+  var outcome = GameOutcome26(
     index: index, mapName: spec.name, sideAslot: sideAslot,
     winnerSlot: -1, backstabRound: -1, backstabBySlot: -1
   )

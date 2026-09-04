@@ -26,16 +26,21 @@ type
 const Years* = [
   YearSpec(id: "bc26", title: "Battlecode 2026 — Uneasy Alliances",
            maxRounds: 2000, pools: @["small", "mixed", "large"],
-           atlas: "atlas")
+           atlas: "atlas"),
+  YearSpec(id: "bc20", title: "Battlecode 2020 — Soup",
+           maxRounds: 1500, pools: @["small", "mixed", "large"],
+           atlas: "atlas_bc20")
 ]
 
 proc yearSpec*(id: string): YearSpec =
   for spec in Years:
     if spec.id == id.strip().toLowerAscii():
       return spec
+  var known: seq[string]
+  for spec in Years: known.add(spec.id)
   raise newException(ConfigError,
     "unknown game_config.year " & id & "; registered years: " &
-      Years[0].id)
+      known.join(", "))
 
 proc isRegisteredYear*(id: string): bool =
   for spec in Years:

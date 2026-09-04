@@ -12,11 +12,15 @@
 ## round. Re-sending the board every round would be a megabyte a frame; the
 ## diff is a few dozen bytes.
 
-import std/[json, os, sequtils, sets, tables]
+import std/[json, math, os, sequtils, sets, tables]
 import pixie
 import bitworld/spriteprotocol
 import sheet
+import years/dispatch
 import years/bc26/[constants, maps, world]
+from years/bc20/world as w20 import nil
+from years/bc20/flood as f20 import nil
+from years/bc20/constants as c20 import nil
 
 const
   TileSize* = 16
@@ -35,10 +39,23 @@ const
   TrapAObjectBase = 24000
   TrapBObjectBase = 32000
   RobotObjectBase = 40000
+  SoupObjectBase = 48000
 
   FloorColor = rgba(38, 32, 28, 255)
   WallColor = rgba(88, 74, 60, 255)
   GridColor = rgba(46, 39, 34, 255)
+
+  ## bc20's board is a HEIGHTMAP under a rising sea, so the terrain sprite is
+  ## re-cut whenever the water crosses an integer level and the nine-step
+  ## elevation ramp is keyed to the CURRENT water line — the lattice then reads
+  ## as terrain rising out of the sea rather than as a static heightmap.
+  Bc20Ramp = [
+    rgba(24, 30, 38, 255), rgba(34, 42, 46, 255), rgba(48, 56, 50, 255),
+    rgba(64, 70, 54, 255), rgba(84, 84, 58, 255), rgba(106, 98, 64, 255),
+    rgba(130, 114, 78, 255), rgba(158, 136, 98, 255), rgba(190, 166, 126, 255)
+  ]
+  Bc20WaterColor = rgba(28, 62, 104, 255)
+  Bc20DeepWaterColor = rgba(16, 38, 70, 255)
 
 type
   Atlas = ref object
@@ -54,31 +71,39 @@ type
     prevDirt: seq[bool]
     prevCheese: seq[bool]
     prevTrap: array[2, seq[int]]
+    prevSoup: seq[int]
+    prevRobotSprite: Table[int, int]
     terrainGame: int
+    terrainStage: int
+    atlasName: string
 
-proc loadAtlas(): Atlas =
+proc loadAtlas(name: string): Atlas =
   ## The atlas rides in the wasm bundle's preloaded `data/`. When that package
   ## has not mounted, say so plainly: the alternative is whatever error the
   ## image decoder happens to raise on a missing file, several frames from
   ## the real cause.
   let root = dataRoot()
-  for asset in ["atlas.png", "atlas.json"]:
+  for asset in [name & ".png", name & ".json"]:
     if not fileExists(root / asset):
       raise newException(IOError,
         "the sprite atlas is missing: no " & (root / asset) &
         " (in the wasm bundle this means the preloaded data package did " &
         "not mount)")
-  result = Atlas(image: readImage(root / "atlas.png"),
+  result = Atlas(image: readImage(root / (name & ".png")),
                  cells: initTable[string, tuple[x, y, w, h: int]]())
-  let doc = parseJson(readFile(root / "atlas.json"))
+  let doc = parseJson(readFile(root / (name & ".json")))
   for name, cell in doc["sprites"]:
     result.cells[name] = (cell["x"].getInt(), cell["y"].getInt(),
                           cell["w"].getInt(), cell["h"].getInt())
 
-proc newRenderer*(): Renderer =
-  Renderer(atlas: loadAtlas(), spriteIds: initTable[string, int](),
+proc newRenderer*(atlasName = "atlas"): Renderer =
+  ## The atlas is per YEAR (`YearSpec.atlas`): `atlas` for bc26, `atlas_bc20`
+  ## for the 2020 sprite set cut from the official client (credited in NOTICE).
+  Renderer(atlas: loadAtlas(atlasName), spriteIds: initTable[string, int](),
            nextSpriteId: AtlasSpriteBase, sentSprites: initHashSet[int](),
-           liveObjects: initHashSet[int](), terrainGame: -1)
+           liveObjects: initHashSet[int](),
+           prevRobotSprite: initTable[int, int](),
+           terrainGame: -1, terrainStage: -1, atlasName: atlasName)
 
 proc straightPixels(image: Image): seq[uint8] =
   ## `broadcast_core.js` blends sprites with straight (non-premultiplied)
@@ -256,3 +281,115 @@ proc buildPacket*(r: Renderer, w: World, gameIndex, sideAslot: int,
   ## never drawn; `broadcast_core.js` routes it straight to `onText`.
   packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
   packet
+
+# ---------------------------------------------------------------------------
+#  bc20 — a heightmap under a rising sea
+# ---------------------------------------------------------------------------
+
+proc bc20SpriteName(r: w20.Robot, sideAslot: int): string =
+  ## Palette follows the ENGINE SIDE, not the seat: red = side A, blue = side
+  ## B, exactly as the 2020 client draws it. Because sides alternate every game
+  ## the scorebug plate keeps the alias constant and recolours its swatch.
+  let tint = if r.team == w20.teamA: "_red" else: "_blue"
+  case r.kind
+  of c20.rtHq: "hq" & tint
+  of c20.rtMiner: "miner" & tint
+  of c20.rtLandscaper: "landscaper" & tint
+  of c20.rtDeliveryDrone:
+    (if r.holdingUnit: "drone" & tint & "_carry" else: "drone" & tint)
+  of c20.rtRefinery: "refinery" & tint
+  of c20.rtVaporator: "vaporator" & tint
+  of c20.rtDesignSchool: "design_school" & tint
+  of c20.rtFulfillmentCenter: "fulfillment_center" & tint
+  of c20.rtNetGun: "net_gun" & tint
+  of c20.rtCow: "cow"
+
+proc renderBc20Terrain(r: Renderer, w: w20.World): Image =
+  ## A nine-step elevation ramp keyed to the CURRENT water level, plus a water
+  ## overlay on flooded tiles. Re-cut only when the water crosses an integer
+  ## level, so a 1499-round game sends seven terrain sprites, not 1499.
+  result = newImage(w.width * TileSize, w.height * TileSize)
+  result.fill(FloorColor)
+  let ctx = newContext(result)
+  let level = w.waterLevel
+  for y in 0 ..< w.height:
+    for x in 0 ..< w.width:
+      let l = w20.loc(x, y)
+      let px = x * TileSize
+      ## The board's y axis grows NORTH; the canvas grows down.
+      let py = (w.height - 1 - y) * TileSize
+      let elevation = w20.getDirt(w, l)
+      var colour: ColorRGBA
+      if w20.isFlooded(w, l):
+        colour = if float32(elevation) < level - 2.0'f32:
+                   Bc20DeepWaterColor else: Bc20WaterColor
+      else:
+        let step = clamp(int(floor(float(elevation) - float(level))) + 2,
+                         0, Bc20Ramp.high)
+        colour = Bc20Ramp[step]
+      ctx.fillStyle = colour
+      ctx.fillRect(rect(float32(px), float32(py),
+                        float32(TileSize), float32(TileSize)))
+
+proc buildBc20Packet(r: Renderer, w: w20.World, gameIndex, sideAslot: int,
+                     chrome: string): seq[uint8] =
+  var packet: seq[uint8]
+  let n = w.width * w.height
+  let stage = f20.floodStageFor(w.waterLevel)
+  let newGame = r.terrainGame != gameIndex
+
+  if newGame:
+    r.terrainGame = gameIndex
+    r.terrainStage = -1
+    r.liveObjects.clear()
+    r.prevRobotSprite.clear()
+    packet.addClearObjects()
+    packet.addLayer(MapLayerId, MapLayerKind, ZoomableFlag)
+    packet.addViewport(MapLayerId, w.width * TileSize, w.height * TileSize)
+    r.prevSoup = newSeq[int](n)
+    for i in 0 ..< n: r.prevSoup[i] = -1
+
+  if stage != r.terrainStage:
+    r.terrainStage = stage
+    let terrain = r.renderBc20Terrain(w)
+    packet.addSprite(TerrainSpriteId, terrain.width, terrain.height,
+      straightPixels(terrain), "terrain")
+    packet.addObject(1, 0, 0, -32768, MapLayerId, TerrainSpriteId)
+
+  let soupSprite = r.spriteId(packet, "soup")
+  for i in 0 ..< n:
+    let here = if w.soup[i] > 0: 1 else: 0
+    if here == r.prevSoup[i]: continue
+    r.prevSoup[i] = here
+    let l = w20.indexToLoc(w, i)
+    if here == 1:
+      r.addObj(packet, SoupObjectBase + i, l.x * TileSize,
+        (w.height - 1 - l.y) * TileSize, 2, soupSprite)
+    else:
+      r.dropObj(packet, SoupObjectBase + i)
+
+  ## Robots. Object ids are stable for a robot's whole life, so the client's
+  ## motion interpolation can glide it between rounds instead of teleporting.
+  var seen = initHashSet[int]()
+  for id, robot in w.robotsById:
+    if robot.blocked: continue          ## riding inside a drone
+    let objectId = RobotObjectBase + (id mod 20000)
+    seen.incl(objectId)
+    let sprite = r.spriteId(packet, bc20SpriteName(robot, sideAslot))
+    r.addObj(packet, objectId, robot.loc.x * TileSize,
+      (w.height - 1 - robot.loc.y) * TileSize, 5, sprite)
+
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= RobotObjectBase and objectId < SoupObjectBase and
+        objectId notin seen:
+      r.dropObj(packet, objectId)
+
+  packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
+  packet
+
+proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
+  ## The ONE place the renderer branches on the year. `Session` is an object
+  ## variant, so the compiler checks that a new year gets an arm here.
+  case s.year
+  of yBc26: r.buildPacket(s.w26, s.gameIndex, s.sideAslot, chrome)
+  of yBc20: r.buildBc20Packet(s.w20, s.gameIndex, s.sideAslot, chrome)

@@ -11,7 +11,7 @@
 import std/[json, strutils]
 import crunchy/sha256
 import sim_types, sheet, match, results
-import years/bc26/maps
+import years/dispatch
 
 export match
 
@@ -53,9 +53,9 @@ proc sha256Hex*(data: string): string =
   for b in sha256(data):
     result.add(toHex(b, 2).toLowerAscii())
 
-proc mapSha*(name: string): string =
+proc mapSha*(year, name: string): string =
   try:
-    sha256Hex(readFile(mapPath(name)))
+    sha256Hex(readFile(mapPathFor(year, name)))
   except CatchableError:
     ""
 
@@ -69,6 +69,7 @@ proc seatJson(seat: SeatReport, slot: int): JsonNode =
     "alias": seat.alias,
     "name": seat.name,
     "policy": seat.policyKind,
+    "chassis": seat.chassis,
     "sheet": seat.sheet.toJson(),
     "sheet_submitted": seat.sheet.submitted,
     "sheet_defaults_applied": applied,
@@ -152,13 +153,12 @@ type
     roundInGame*: int
     frame*: int
     totalFrames*: int
-    world*: World
-    clans*: array[2, Clan]
+    session*: Session
     mismatchRound*: int
     frameGame*: seq[int]
     frameRound*: seq[int]
 
-proc parseSeat(node: JsonNode): SeatReport =
+proc parseSeat(node: JsonNode, year: string): SeatReport =
   result.name = node{"name"}.getStr()
   result.alias = node{"alias"}.getStr()
   result.policyKind = node{"policy"}.getStr("scripted")
@@ -173,12 +173,15 @@ proc parseSeat(node: JsonNode): SeatReport =
   wrapper["sheet"] = node{"sheet"}
   wrapper["notes"] = %node{"notes"}.getStr()
   wrapper["motto"] = %node{"motto"}.getStr()
-  result.sheet = validate(wrapper)
-  ## `chassis` is not a knob, so `validate` does not read it — but the
-  ## deriver has to run the bot the recording ran or every round mismatches.
-  ## It rides in the applied sheet and is restored here.
-  result.sheet.doctrine.chassis =
-    parseChassis(node{"sheet"}{"chassis"}.getStr("awu"))
+  result.sheet = validate(wrapper, year)
+  ## `chassis` is not a knob, so `validate` does not read it — but the deriver
+  ## has to run the bot the recording ran or every round mismatches. bc26 rides
+  ## it in the applied sheet; bc20 records it on the SEAT, beside the policy
+  ## kind. Both are restored here.
+  result.chassis = node{"chassis"}.getStr("")
+  if year != "bc20":
+    result.sheet.doctrine.chassis =
+      parseChassis(node{"sheet"}{"chassis"}.getStr("awu"))
   result.sheet.notes = node{"notes"}.getStr()
   result.sheet.motto = node{"motto"}.getStr()
   result.sheet.submitted = node{"sheet_submitted"}.getStr("{}")
@@ -200,7 +203,7 @@ proc parseReplay*(text: string): ReplayDoc =
   result.promptPreamble = doc{"prompt_preamble"}.getStr()
   for slot in 0 .. 1:
     result.names[slot] = doc["names"][slot].getStr()
-    result.seats[slot] = parseSeat(doc["seats"][slot])
+    result.seats[slot] = parseSeat(doc["seats"][slot], result.year)
   for g in doc["games"]:
     result.games.add(GameHeader(
       index: g{"index"}.getInt(),
@@ -231,14 +234,17 @@ proc parseReplay*(text: string): ReplayDoc =
   for v in plan["abandon_after"]: result.plan.abandonAfter.add(v.getInt())
   result.plan.sheets[0] = result.seats[0].sheet
   result.plan.sheets[1] = result.seats[1].sheet
+  for slot in 0 .. 1:
+    result.plan.chassis[slot] =
+      parseChassisKind(doc["seats"][slot]{"chassis"}.getStr("bowl-of-chowder"))
 
 proc startGame(d: Deriver, index: int) =
   d.gameIndex = index
   d.roundInGame = 0
   if index < d.doc.plan.maps.len:
-    let spec = loadMap(d.doc.plan.maps[index])
-    d.world = newWorld(spec, d.doc.plan.maxRounds)
-    d.clans = newClans(d.doc.plan.sheets, d.doc.plan.sideAslots[index])
+    d.session = newSession(d.doc.year, d.doc.plan.maps[index],
+      d.doc.plan.sheets, d.doc.plan.sideAslots[index], d.doc.plan.maxRounds,
+      d.doc.plan.chassis, index)
 
 proc gameRecord*(doc: ReplayDoc, index: int):
     tuple[rounds: int, chain: string, rounds_chains: string] =
@@ -281,10 +287,10 @@ proc advance*(d: Deriver): bool {.discardable.} =
     return false
   let nextFrame = d.frame + 1
   let wantGame = d.frameGame[nextFrame]
-  if wantGame != d.gameIndex or d.world == nil:
+  if wantGame != d.gameIndex or d.session == nil:
     d.startGame(wantGame)
-  runRound(d.world, d.clans)
-  d.roundInGame = d.world.currentRound
+  d.session.stepRound()
+  d.roundInGame = d.session.currentRound
   d.frame = nextFrame
   ## The recorded hash chain proves the re-derivation matches the recording.
   ## EVERY round is compared, against the chain the recorder was on at the end
@@ -294,7 +300,7 @@ proc advance*(d: Deriver): bool {.discardable.} =
   if d.mismatchRound < 0:
     let record = d.doc.gameRecord(wantGame)
     let at = (d.roundInGame - 1) * ChainHexLen
-    let here = toHex(d.world.hashChain)
+    let here = d.session.hashChainHex()
     if record.rounds_chains.len >= at + ChainHexLen and
         here != record.rounds_chains[at ..< at + ChainHexLen]:
       d.mismatchRound = d.roundInGame

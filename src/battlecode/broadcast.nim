@@ -11,7 +11,11 @@
 
 import std/[json, strutils]
 import sim_types, sheet, match, replay
+import years/dispatch
 import years/bc26/[constants, rules, world]
+from years/bc20/world as w20 import nil
+from years/bc20/constants as c20 import nil
+from years/bc20/chassis/signals as sig20 import nil
 
 const
   PlaybackSpeeds* = [1, 2, 3, 4, 8, 16]
@@ -124,6 +128,14 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       of "game_start": "game"
       of "game_end": "end"
       of "game_abandoned": "end"
+      of "flood_stage": "flood"
+      of "first_build": "build"
+      of "wall_closed": "wall"
+      of "rush_launched": "rush"
+      of "drone_water_drop": "drop"
+      of "hq_buried": "bury"
+      of "hq_drowned": "drown"
+      of "doctrine_received", "doctrine_fallback": "doctrine"
       else: ""
     if kind.len == 0: continue
     var label = ""
@@ -145,6 +157,30 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
         e.fields{"end_reason"}.getStr().replace("_", " ") & ")"
     of "game_abandoned":
       label = "Game " & $(e.game + 1) & " abandoned at the wall clock"
+    of "flood_stage":
+      label = "Water reaches elevation " & $e.fields{"level"}.getInt() &
+        " — game " & $(e.game + 1) & ", round " & $e.round
+    of "first_build":
+      label = e.fields{"alias"}.getStr() & " builds its first " &
+        e.fields{"unit"}.getStr().replace("_", " ") & " — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "wall_closed":
+      label = e.fields{"alias"}.getStr() & " closes its HQ wall at elevation " &
+        $e.fields{"min_ring_elevation"}.getInt() & " — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "rush_launched":
+      label = e.fields{"alias"}.getStr() & " launches the rush — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "drone_water_drop":
+      label = e.fields{"alias"}.getStr() & " drops a " &
+        e.fields{"victim_unit"}.getStr().replace("_", " ") & " in the water — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "hq_buried":
+      label = "HQ BURIED — " & e.fields{"alias"}.getStr() & ", game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "hq_drowned":
+      label = "HQ DROWNED — " & e.fields{"alias"}.getStr() & ", game " &
+        $(e.game + 1) & ", round " & $e.round
     else: discard
     result.add(%*{
       "t": frameOfGameRound(e.game, max(1, e.round)),
@@ -169,6 +205,98 @@ proc doctrinesJson*(doc: ReplayDoc): JsonNode =
       "notes": doc.seats[slot].sheet.notes,
       "motto": doc.seats[slot].sheet.motto
     })
+
+proc bc20Flood(w: w20.World): JsonNode =
+  ## `#bc20-flood`: the water level to 2 dp, the flood ring gauge, and the
+  ## HQ-elevation-versus-water reading the panel flashes red on.
+  var hqElev = [-1, -1]
+  for t in 0 .. 1:
+    let id = w.hqId[t]
+    if id >= 0 and id in w.robotsById:
+      hqElev[t] = w20.getDirt(w, w.robotsById[id].loc)
+  %*{
+    "water": float(w.waterLevel),
+    "flooded": w.floodedCount,
+    "tiles": w.width * w.height,
+    "hq_elevation": hqElev,
+    "global_pollution": w.globalPollution
+  }
+
+proc bc20Soup(w: w20.World, sideAslot: int): JsonNode =
+  result = newJArray()
+  for slot in 0 .. 1:
+    let t = if slot == sideAslot: 0 else: 1
+    result.add(%*{
+      "pool": w.stats.soup[t],
+      "mined": w.stats.soupMined[t],
+      "refined": w.stats.soupRefined[t]
+    })
+
+proc bc20Units(w: w20.World, sideAslot: int): JsonNode =
+  ## Per clan, counts by type plus the HQ's dirt load as `dirt/50`.
+  result = newJArray()
+  for slot in 0 .. 1:
+    let t = if slot == sideAslot: 0 else: 1
+    var hqDirt = 0
+    let id = w.hqId[t]
+    if id >= 0 and id in w.robotsById:
+      hqDirt = w.robotsById[id].dirtCarrying
+    result.add(%*{
+      "miner": w.typeCount[t][c20.rtMiner],
+      "landscaper": w.typeCount[t][c20.rtLandscaper],
+      "drone": w.typeCount[t][c20.rtDeliveryDrone],
+      "vaporator": w.typeCount[t][c20.rtVaporator],
+      "net_gun": w.typeCount[t][c20.rtNetGun],
+      "design_school": w.typeCount[t][c20.rtDesignSchool],
+      "fulfillment_center": w.typeCount[t][c20.rtFulfillmentCenter],
+      "refinery": w.typeCount[t][c20.rtRefinery],
+      "hq_dirt": hqDirt,
+      "hq_dirt_limit": c20.RobotSpecs[c20.rtHq].dirtLimit,
+      "dirt_moved": w.stats.dirtMoved[t],
+      "drone_drops": w.stats.droneWaterDrops[t],
+      "net_gun_kills": w.stats.netGunKills[t]
+    })
+
+proc bc20Chain(w: w20.World, sideAslot: int): JsonNode =
+  ## `#bc20-chain`, the endcard's blockchain panel. NOTHING about the chain is
+  ## stored in the replay: the wasm sim re-derives every block, and this reads
+  ## the re-derived blocks. Messages whose first int is not `SIGNAL_KEY` are
+  ## shown as raw ints, which is what makes an opponent's private traffic look
+  ## private without hiding that it happened.
+  var minted = [0, 0]
+  var spent = [0, 0]
+  var topFee = [0, 0]
+  var topRound = [-1, -1]
+  var recent = newJArray()
+  for roundIndex, blk in w.blockchain:
+    for tx in blk:
+      let slot = if tx.team == 0: sideAslot else: 1 - sideAslot
+      minted[slot] += 1
+      spent[slot] += tx.cost
+      if tx.cost > topFee[slot]:
+        topFee[slot] = tx.cost
+        topRound[slot] = roundIndex + 1
+      var words = ""
+      if tx.message[0] == sig20.SignalKey:
+        words = sig20.signalName(tx.message[2])
+      else:
+        for i, v in tx.message:
+          if i > 0: words.add("_")
+          words.add($v)
+      recent.add(%*{"alias": aliasFor(slot), "round": roundIndex + 1,
+                    "fee": tx.cost, "words": words})
+  ## The LAST FIVE minted messages, decoded to plain words.
+  var tail = newJArray()
+  let start = max(0, recent.len - 5)
+  for i in start ..< recent.len:
+    tail.add(recent[i])
+  %*{
+    "minted": minted, "soup_spent": spent,
+    "top_fee": topFee, "top_fee_round": topRound,
+    "recent": tail
+  }
+
+proc doctrineWords(doc: ReplayDoc): JsonNode = doctrinesJson(doc)
 
 proc chromeJson*(
   doc: ReplayDoc, w: World, view: ViewerState,
@@ -215,3 +343,65 @@ proc chromeJson*(
     "result": doc.result
   }
   $node
+
+proc bc20ChromeJson*(
+  doc: ReplayDoc, w: w20.World, view: ViewerState,
+  frame, totalFrames, gameIndex, sideAslot: int,
+  beats: JsonNode, gameChips: JsonNode, ended: bool
+): string =
+  ## One frame of bc20 chrome. `t` / `st` / `mx` / `mt` are the GENERIC
+  ## timeline keys `chrome_common.js` reads, unchanged, so the clock, the
+  ## transport and the scrubber are driven by the starter's own code; the
+  ## `bc20_*` keys are what the APPENDED bc20 game block draws.
+  let phase = if ended: "gameover" else: "playing"
+  let points = w20.gamePoints(w)
+  var node = %*{
+    "t": frame,
+    "st": 0,
+    "mx": max(1, totalFrames - 1),
+    "mt": 0,
+    "sp": view.speed,
+    "pl": view.playing,
+    "lp": view.loop,
+    "sk": view.skipLulls,
+    "ff": false,
+    "en": true,
+    "ph": phase,
+    "lob": 0,
+    "pov": -1,
+    "nim": GameVersion,
+    "year": "bc20",
+    "beats": beats,
+    "game": gameIndex + 1,
+    "games": doc.games.len,
+    "map": doc.plan.maps[min(gameIndex, doc.plan.maps.high)],
+    "round": w.currentRound,
+    "rounds": doc.plan.maxRounds,
+    "aliases": [AliasA, AliasB],
+    "names": [doc.names[0], doc.names[1]],
+    "sides": [(if sideAslot == 0: "A" else: "B"),
+              (if sideAslot == 0: "B" else: "A")],
+    "points": [points[(if sideAslot == 0: 0 else: 1)],
+               points[(if sideAslot == 0: 1 else: 0)]],
+    "bc20_flood": bc20Flood(w),
+    "bc20_soup": bc20Soup(w, sideAslot),
+    "bc20_units": bc20Units(w, sideAslot),
+    "bc20_chain": bc20Chain(w, sideAslot),
+    "gamechips": gameChips,
+    "doctrines": doctrineWords(doc),
+    "result": doc.result
+  }
+  $node
+
+proc sessionChromeJson*(
+  doc: ReplayDoc, s: Session, view: ViewerState,
+  frame, totalFrames, gameIndex, sideAslot: int,
+  beats: JsonNode, gameChips: JsonNode, ended: bool
+): string =
+  case s.year
+  of yBc26:
+    chromeJson(doc, s.w26, view, frame, totalFrames, gameIndex, sideAslot,
+      beats, gameChips, ended)
+  of yBc20:
+    bc20ChromeJson(doc, s.w20, view, frame, totalFrames, gameIndex, sideAslot,
+      beats, gameChips, ended)

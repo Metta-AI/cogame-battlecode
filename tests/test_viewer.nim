@@ -311,7 +311,7 @@ block:
   var doc = ReplayDoc(gameVersion: GameVersion, year: "bc26", config: %*{},
     seed: 9, seats: seats, plan: plan, result: %*{},
     games: @[GameHeader(index: 0, map: "DefaultSmall",
-      mapSha: mapSha("DefaultSmall"), sideAslot: 0,
+      mapSha: mapSha("bc26", "DefaultSmall"), sideAslot: 0,
       rounds: outcome.roundsPlayed, hashChain: outcome.hashChain)])
   for slot in 0 .. 1: doc.names[slot] = "s" & $slot
 
@@ -321,9 +321,9 @@ block:
   var view = initViewerState()
   discard deriver.advance()
   let beats = beatsFor(back, proc (g, r: int): int = 0)
-  let first = renderer.buildPacket(deriver.world, 0, 0,
-    chromeJson(back, deriver.world, view, 0, deriver.totalFrames, 0, 0,
-      beats, newJArray(), false))
+  let first = renderer.buildSessionPacket(deriver.session,
+    sessionChromeJson(back, deriver.session, view, 0, deriver.totalFrames,
+      0, 0, beats, newJArray(), false))
   check("the first frame is a non-empty sprite packet", first.len > 1000)
   ## The first packet must carry the layer, the viewport, the terrain sprite
   ## and the chrome sprite.
@@ -341,7 +341,7 @@ block:
       elif m.sprite.label == "terrain":
         sawTerrain = true
         checkEq("the terrain sprite is the whole board",
-          m.sprite.width, deriver.world.width * render.TileSize)
+          m.sprite.width, deriver.session.w26.width * render.TileSize)
     of spkLayer:
       sawLayer = true
       checkEq("the board layer is zoomable", m.layer.flags, 1)
@@ -356,8 +356,8 @@ block:
 
   for step in 0 ..< 30:
     discard deriver.advance()
-  let later = renderer.buildPacket(deriver.world, 0, 0,
-    chromeJson(back, deriver.world, view, deriver.frame, deriver.totalFrames,
+  let later = renderer.buildSessionPacket(deriver.session,
+    sessionChromeJson(back, deriver.session, view, deriver.frame, deriver.totalFrames,
       0, 0, beats, newJArray(), false))
   check("a later frame is a DIFF, not the whole board", later.len < first.len)
   check("but still carries something to draw", later.len > 16)

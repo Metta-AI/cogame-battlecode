@@ -14,7 +14,7 @@
 import std/[json, monotimes, strutils, times]
 import curly
 import sim_types, sheet, baselines, llm, match
-import years/bc26/maps
+import years/dispatch
 
 type
   SeatPolicy* = object
@@ -22,6 +22,10 @@ type
     ## — or never registers at all — is `awu`.
     isLlm*: bool
     prompt*: string
+    scripted*: string
+      ## The raw `PLAYER_SCRIPTED` value. Resolved to a `Baseline` PER YEAR at
+      ## episode time, because `bowl-of-chowder` means nothing to bc26 and
+      ## `awu` means nothing to bc20.
     baseline*: Baseline
     label*: string
     registered*: bool
@@ -39,6 +43,24 @@ type
       ## of a game whose decisions are taken server-side. Recorded in the replay.
     policyKind*: array[2, string]
     events*: seq[MatchEvent]
+
+proc baselineForSeat*(year: string, seat: SeatPolicy): Baseline =
+  if seat.scripted.len > 0: baselineFor(year, seat.scripted)
+  else: defaultBaselineFor(year)
+
+proc chassisForSeat*(year: string, seat: SeatPolicy): ChassisKind =
+  ## D1: the chassis is fixed by the OPERATOR. A scripted seat drives the
+  ## chassis its `PLAYER_SCRIPTED` names; an LLM seat drives the fixed champion
+  ## chassis, which for bc20 is `bowl-of-chowder`.
+  if seat.isLlm: parseChassisKind("bowl-of-chowder")
+  else: baselineChassis(baselineForSeat(year, seat))
+
+proc chassisNameFor*(year: string, seat: SeatPolicy, sheet: Sheet): string =
+  case yearIdOf(year)
+  of yBc20:
+    (if seat.isLlm: "bowl-of-chowder"
+     else: baselineName(baselineForSeat(year, seat)))
+  of yBc26: $sheet.doctrine.chassis
 
 const SystemPreamble* = """
 You command a clan of robot rats in Battlecode 2026, "Uneasy Alliances": a
@@ -97,27 +119,83 @@ Your clan is driven by the `awu` chassis. That is not yours to choose: there
 is no `chassis` knob, and a reply that sends one has it ignored.
 """
 
+const Bc20Preamble* = """
+You command a clan in Battlecode 2020 "Soup": a two-clan grid war on a
+symmetric map where THE WATER RISES EVERY ROUND, 1500 rounds a game, best of
+three.
+
+You do not move a single robot. Before the war you write ONE DOCTRINE — a JSON
+sheet of ten named knobs — and a deterministic simulation then plays the whole
+match from it while you watch.
+
+THE CLOCK IS THE WATER
+- The water level rises on a fixed curve and floods outward ONE RING PER ROUND
+  from every already-flooded tile whose neighbour sits below the level.
+  Anything that is not a delivery drone dies on a flooding tile.
+- Your HQ starts at a low elevation and CANNOT BE RAISED: dirt dropped on a
+  building buries it. The only thing that keeps an HQ dry is a ring of eight
+  adjacent tiles the water can never cross. An HQ that is never walled drowns
+  on a schedule.
+
+THE WORLD
+- MINERS (70 soup) mine SOUP (7 per action, carry 100) and deposit it at the HQ
+  or a REFINERY (200), which refines up to 20 per round into the team pool.
+- DESIGN SCHOOLS (150) build LANDSCAPERS (150), which dig and dump dirt: raise
+  the ground into a lattice, wall the HQ in, or bury the enemy HQ under FIFTY
+  dirt. A landscaper carries 25.
+- FULFILLMENT CENTERS (150) build DELIVERY DRONES (150), which pick up any unit
+  within r^2 <= 3 — including enemy landscapers — and drop them in the water.
+- VAPORATORS (500) print 2 soup a round and scrub pollution. NET GUNS (250)
+  shoot drones within r^2 <= 15; so does the HQ.
+- Pollution slows every action and shrinks every sensor. Cows pollute heavily.
+- The only global channel is a blockchain: seven ints a message, seven messages
+  a round, paid for in soup, and BOTH TEAMS READ EVERY BLOCK.
+
+HOW A GAME ENDS
+Round 1499, or when an HQ is buried or drowned. The ladder, first hit wins:
+HQ destroyed; more robots alive (buildings included); greater net worth; more
+transactions minted; highest living robot id; coin flip.
+  points = int(60 * HQ-survival share + 25 * unit share + 15 * net-worth share)
+Winning a game is worth 100 and points are worth at most 100, so the game bonus
+dominates: lose your HQ, lose the game.
+
+YOUR REPLY
+Reply with ONE JSON object and NOTHING else. Your reply must begin with '{'.
+{"sheet": {...knobs...}, "notes": "<=280 chars", "motto": "<=48 chars"}
+
+THE KNOBS (unknown key, wrong type or out-of-range value = that field's
+default; you cannot forfeit by answering badly, only by answering weakly):
+  opening                 "rush" | "lattice" | "passive_lattice" | "turtle"
+                                                          default "passive_lattice"
+  terraform_start_round   1..1500                          default 300
+  lattice_radius          2..12                            default 6
+  landscaper_count_curve  "lean" | "steady" | "swarm"      default "steady"
+  miner_count_curve       "lean" | "steady" | "swarm"      default "steady"
+  vaporator_budget        0..6                             default 2
+  drone_role              "harass" | "wall" | "buster" | "carry_landscapers"
+                                                          default "harass"
+  net_gun_ring            0..6                             default 2
+  rush_trigger            0..1500 (0 = never)              default 0
+  wall_hq_round           0..1500 (0 = never)              default 250
+"""
+
+proc preambleFor*(year: string): string =
+  case yearIdOf(year)
+  of yBc20: Bc20Preamble
+  of yBc26: SystemPreamble
+
 proc briefFor*(
   config: GameConfig, plan: MatchPlan, slot: int
 ): string =
   ## Everything this seat may legitimately know: its own alias and side, all
-  ## the map cards, the seed, both weight sets, the deadlines. NOT in here,
+  ## the map cards, the seed, the scoring weights, the deadlines. NOT in here,
   ## ever: the opponent's doctrine, sheet, notes, motto, real player name or
   ## fallback status. Sealed and simultaneous.
   var games = newJArray()
   for g in 0 ..< plan.maps.len:
-    let spec = loadMap(plan.maps[g])
-    games.add(%*{
-      "map": spec.name,
-      "width": spec.width,
-      "height": spec.height,
-      "symmetry": ($spec.symmetry).replace("sym", "").toLowerAscii(),
-      "cheese_mines": spec.cheeseMines.len,
-      "cats": spec.catWaypointIds.len,
-      "rounds": plan.maxRounds,
-      "you_are": (if plan.sideAslots[g] == slot: "A" else: "B")
-    })
-  $(%*{
+    games.add(mapCardFor(plan.year, plan.maps[g], slot, plan.sideAslots[g],
+      plan.maxRounds))
+  var payload = %*{
     "protocol": ProtocolId,
     "game_version": GameVersion,
     "year": plan.year,
@@ -127,19 +205,30 @@ proc briefFor*(
     "team": (if plan.sideAslots[0] == slot: "A" else: "B"),
     "seed": plan.seed,
     "games": games,
-    "scoring": {
-      "cooperation": {"cat_damage": 0.5, "kings": 0.3, "cheese": 0.2},
-      "backstab": {"cat_damage": 0.3, "kings": 0.5, "cheese": 0.2},
-      "win_bonus_per_game": 100,
-      "games": plan.maps.len,
-      "note": "shares are float32; points truncate to an integer"
-    },
     "budget": {
       "attempt1_ms": config.attempt1Ms,
       "retry_ms": config.retryMs,
       "one_shot": true
     }
-  })
+  }
+  case yearIdOf(plan.year)
+  of yBc20:
+    payload["flood_table"] = floodTableJson()
+    payload["scoring"] = %*{
+      "weights": {"hq_survival": 60, "unit_share": 25, "net_worth_share": 15},
+      "win_bonus_per_game": 100,
+      "games": plan.maps.len,
+      "note": "shares are float32; points truncate to an integer"
+    }
+  of yBc26:
+    payload["scoring"] = %*{
+      "cooperation": {"cat_damage": 0.5, "kings": 0.3, "cheese": 0.2},
+      "backstab": {"cat_damage": 0.3, "kings": 0.5, "cheese": 0.2},
+      "win_bonus_per_game": 100,
+      "games": plan.maps.len,
+      "note": "shares are float32; points truncate to an integer"
+    }
+  $payload
 
 proc decide*(
   config: GameConfig, plan: MatchPlan, seats: array[2, SeatPolicy]
@@ -152,7 +241,8 @@ proc decide*(
 
   var open: seq[int]
   for slot in 0 .. 1:
-    result.sheets[slot] = baselineSheet(seats[slot].baseline)
+    result.sheets[slot] = baselineSheet(config.year,
+      baselineForSeat(config.year, seats[slot]))
     result.policyKind[slot] = if seats[slot].isLlm: "llm" else: "scripted"
     if seats[slot].isLlm and not client.disabled:
       open.add(slot)
@@ -199,7 +289,7 @@ proc decide*(
         user.add("\n\nYour previous reply was not usable. Reply with ONLY " &
           "the JSON object described above, starting with '{'.")
       let request = client.requestFor(
-        SystemPreamble, userMessage(seats[slot].prompt, user))
+        preambleFor(config.year), userMessage(seats[slot].prompt, user))
       batch.post(request.url, request.headers, request.body, $slot)
     let batchStart = getMonoTime()
     ## ONE parallel batch. curly hands the deadline to CURLOPT_TIMEOUT, whose
@@ -213,7 +303,7 @@ proc decide*(
       try:
         let text = client.textOf(responses[position].response,
           responses[position].error, batch[position].url)
-        result.sheets[slot] = parseReply(text)
+        result.sheets[slot] = parseReply(text, config.year)
         result.decisionMs[slot] = latency
         result.fallback[slot] = ""
         ## `chassis` is not a knob (sheet.KnownKeys). A reply that still sends
@@ -251,7 +341,8 @@ proc decide*(
       break
 
   for slot in open:
-    result.sheets[slot] = baselineSheet(seats[slot].baseline)
+    result.sheets[slot] = baselineSheet(config.year,
+      baselineForSeat(config.year, seats[slot]))
     let cause =
       if client.disabled or client.transport == ltNone: "no_credentials"
       elif client.throttled: "throttled"

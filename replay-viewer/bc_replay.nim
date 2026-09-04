@@ -14,7 +14,7 @@
 import std/json
 import bitworld/spriteprotocol
 import battlecode/[broadcast, build_stamp, render, replay, sim_types]
-import battlecode/years/bc26/world
+import battlecode/years/dispatch
 
 var
   runtimeLoaded = false
@@ -67,9 +67,12 @@ proc renderCurrent() =
     else: 0
   let sideAslot = doc.plan.sideAslots[min(gameIndex, doc.plan.sideAslots.high)]
   let ended = deriver.frame >= deriver.totalFrames - 1
-  let chrome = chromeJson(doc, deriver.world, viewer, max(0, deriver.frame),
-    deriver.totalFrames, gameIndex, sideAslot, beats, gameChips, ended)
-  packet = renderer.buildPacket(deriver.world, gameIndex, sideAslot, chrome)
+  ## The replay header's `year` selects the sim, the atlas and the chrome
+  ## record set; nothing else in this file knows which year it is.
+  let chrome = sessionChromeJson(doc, deriver.session, viewer,
+    max(0, deriver.frame), deriver.totalFrames, gameIndex, sideAslot, beats,
+    gameChips, ended)
+  packet = renderer.buildSessionPacket(deriver.session, chrome)
 
 proc bcLoadReplay(data: ptr uint8, length: cint): cint
     {.exportc: "bc_load_replay", cdecl.} =
@@ -84,7 +87,7 @@ proc bcLoadReplay(data: ptr uint8, length: cint): cint
     stampStage("build the deriver")
     deriver = newDeriver(doc)
     stampStage("load the sprite atlas")
-    renderer = newRenderer()
+    renderer = newRenderer(yearSpec(doc.year).atlas)
     stampStage("collect the scrubber beats")
     viewer = initViewerState()
     beats = beatsFor(doc, frameOfGameRound)

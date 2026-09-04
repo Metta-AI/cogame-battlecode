@@ -17,8 +17,7 @@ import std/[json, locks, monotimes, os, strutils, times]
 import mummy, mummy/routers
 import bitworld/[runtime, spriteprotocol]
 import seats, sim_types, sheet, baselines, decide, match, replay, results
-import years/[registry]
-import years/bc26/maps
+import years/[registry, dispatch]
 
 type
   AppState = object
@@ -114,7 +113,7 @@ proc applyRegistration(slot: int, payload: string) =
       app.policy[slot].registered = true
       app.policy[slot].prompt = prompt
       app.policy[slot].isLlm = prompt.len > 0
-      app.policy[slot].baseline = parseBaseline(scripted)
+      app.policy[slot].scripted = scripted
       app.policy[slot].label = block:
         let explicit = node{"policy"}.getStr().strip()
         if explicit.len > 0: explicit
@@ -309,7 +308,7 @@ proc parseConfig*(text: string): GameConfig =
   if result.numAgents != 2:
     raise newException(ConfigError,
       "battlecode is a two-seat game; num_agents was " & $result.numAgents)
-  if poolNames(result.pool).len == 0:
+  if poolNamesFor(result.year, result.pool).len == 0:
     raise newException(ConfigError, "unknown pool " & result.pool)
   result.maxRounds = min(result.maxRounds, yearSpec(result.year).maxRounds)
 
@@ -344,7 +343,13 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
       policy = app.policy
 
   let seed = if config.seed != 0: config.seed else: randomSeed()
-  plan = buildPlan(config, [defaultSheet(), defaultSheet()], seed)
+  plan = buildPlan(config, [defaultSheet(config.year),
+                            defaultSheet(config.year)], seed)
+  ## D1: the chassis is fixed by the OPERATOR, never by the sheet. A scripted
+  ## seat drives the chassis its `PLAYER_SCRIPTED` names; an LLM seat drives
+  ## the fixed champion chassis.
+  for slot in 0 .. 1:
+    plan.chassis[slot] = chassisForSeat(config.year, policy[slot])
   events.add(ev("episode_start", ms = 0, fields = %*{
     "seed": seed, "year": config.year, "maps": plan.maps,
     "aliases": [AliasA, AliasB]}))
@@ -378,7 +383,9 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
       decisionMs: decision.decisionMs[slot],
       fallback: decision.fallback[slot],
       fallbackDetail: decision.fallbackDetail[slot],
-      brief: decision.briefs[slot])
+      brief: decision.briefs[slot],
+      chassis: chassisNameFor(config.year, policy[slot],
+                              decision.sheets[slot]))
 
   events.add(ev("episode_end", ms = 0, fields = %*{"reason": $reason}))
   let wallClock = (getMonoTime() - episodeStart).inMilliseconds.float / 1000.0
@@ -392,12 +399,13 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
       "num_agents": config.numAgents},
     seed: seed, seats: seats, events: events, result: resultsDoc, plan: plan,
     promptPreamble: (if decision.briefs[0].len > 0 or
-                        decision.briefs[1].len > 0: SystemPreamble else: ""))
+                        decision.briefs[1].len > 0: preambleFor(config.year)
+                     else: ""))
   for slot in 0 .. 1:
     doc.names[slot] = seats[slot].name
   for g in games:
     doc.games.add(GameHeader(index: g.index, map: g.mapName,
-      mapSha: mapSha(g.mapName), sideAslot: g.sideAslot,
+      mapSha: mapSha(config.year, g.mapName), sideAslot: g.sideAslot,
       rounds: g.roundsPlayed, hashChain: g.hashChain,
       roundChains: g.roundChains))
 
