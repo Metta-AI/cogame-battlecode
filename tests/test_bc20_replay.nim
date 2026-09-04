@@ -313,4 +313,38 @@ block:
   check("and the soup readout", chrome.hasKey("bc20_soup"))
   check("and the unit readout", chrome.hasKey("bc20_units"))
 
+# --- the committed fixture --------------------------------------------------
+block:
+  ## `tests/fixtures/replay-bc20.json` is a REAL recording, committed
+  ## (§Tests item 17): the bytes `tools/wasm_replay_smoke.cjs` drives the
+  ## emitted wasm module against, independently of whatever `docker-smoke`
+  ## produced in the same run. Here it is proved natively: the committed bytes
+  ## still parse, still carry the year and a compatible `GameVersion`, and
+  ## still re-derive round for round under the CURRENT sim.
+  ##
+  ## When a rule changes this check goes red. That is the point — re-record
+  ## with `nim r --path:src tools/gen_bc20_fixture_replay.nim`, in the commit
+  ## that bumps the version.
+  const FixturePath = "tests/fixtures/replay-bc20.json"
+  check("the committed bc20 fixture replay exists", fileExists(FixturePath))
+  let bytes = readFile(FixturePath)
+  check("and is valid UTF-8", validateUtf8(bytes) == -1)
+  let node = parseJson(bytes)
+  checkEq("and is a battlecode replay", node["format"].getStr(),
+    "cogame-battlecode-replay")
+  checkEq("of the bc20 year", node["year"].getStr(), "bc20")
+  check("at a GameVersion this build still loads",
+    node["game_version"].getStr() in ReplayCompatibleGameVersions)
+  let fixture = parseReplay(bytes)
+  let fixtureDeriver = newDeriver(fixture)
+  var fixtureFrames = 0
+  while fixtureDeriver.advance(): fixtureFrames += 1
+  check("the fixture is long enough for the wasm smoke's 50-frame floor",
+    fixtureFrames >= 50)
+  checkEq("it re-derives every recorded round", fixtureFrames,
+    fixture.games[0].rounds)
+  checkEq("with no divergence from the recorded chain — re-record with " &
+    "tools/gen_bc20_fixture_replay.nim if a rule changed",
+    fixtureDeriver.mismatchRound, -1)
+
 finish("test_bc20_replay")

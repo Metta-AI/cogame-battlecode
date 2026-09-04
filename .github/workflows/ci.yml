@@ -868,6 +868,12 @@ jobs:
             "${{ github.workspace }}/dist/smoke/replay.json"
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
             "${{ github.workspace }}/dist/smoke/replay-bc20.json"
+          # And against the COMMITTED bc20 fixture (design note §Tests item
+          # 17): bytes recorded at a known GameVersion, not bytes this run
+          # produced. tests/test_bc20_replay.nim proves the same file
+          # re-derives natively, so a divergence here is wasm32's alone.
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/tests/fixtures/replay-bc20.json"
 
       # The text the CI replay never carries. Every replay CI produces is
       # SCRIPTED, so its notes and motto are the short strings baselines.nim
