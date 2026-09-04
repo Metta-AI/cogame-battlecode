@@ -23,11 +23,32 @@ re-ordering is a rules change and bumps `GameVersion`.**
    clan's doctrine for a rat, spending at most its decision budget.
 6. *End of turn*: king cheese consumption and starvation damage, then the cat
    state machine.
-7. *End of round*: the per-team stats go into the hash chain.
+7. *End of round*: the seven per-team stats the engine reports
+   (`GameWorld.processEndOfRound` → `matchMaker.addTeamInfo`: cheese
+   transferred, damage to cats, the packed `kings + 10 × cheese`, baby rats,
+   dirt, rat traps, cat traps) go into the hash chain.
 8. **End-of-match check**, in the engine's own order: (a) either team has zero
    rat kings → the other wins outright; (b) all cats dead while still in
    cooperation → decide by points, then total cheese, then living rats, then a
    seeded coin flip; (c) round 2000 → the same ladder.
+
+### Where this order differs from the design note's prose
+
+The design note (`docs/plans/2026-09-03-battlecode-design.md` §Round loop)
+puts king cheese consumption in step 4, the cat state machine in step 5, and
+the whole end-of-match check in step 8. **The engine does none of those**, and
+the port follows the engine, because the parity oracle diffs the two row for
+row and Tiers A and B are blocking:
+
+| the note says | `engine.1.2.5` does | the port does |
+| --- | --- | --- |
+| king cheese consumption at *beginning of turn* | `InternalRobot.processEndOfTurn` (`InternalRobot.java:1176-1189`) | `rules.endOfTurnFor` (`rules.nim:70-75`) |
+| cat state machine as the body's *controller* | `InternalRobot.processEndOfTurn` (`InternalRobot.java:1191`) | `rules.endOfTurnFor` → `runCatTurn` (`rules.nim:77-79`) |
+| zero-kings / all-cats-dead checked at *end of round* | `GameWorld.destroyRobot` → `checkWin` (`GameWorld.java:1178-1180`); only the round-limit ladder is in `processEndOfRound` (`GameWorld.java:1021`) | `world.destroyRobot` → `checkWin` (`world.nim:792-795`); `processEndOfRound` → `checkEndOfMatch` |
+
+There is also no separate commit/apply phase: engine actions mutate the world
+as they are taken and deaths resolve inside `addHealth`/`destroyRobot`, which
+is what the port does too.
 
 ## Scoring
 
