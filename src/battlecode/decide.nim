@@ -215,6 +215,10 @@ THE TRIANGLE
   the politician dies. A Center with conviction c is captured by a politician
   of c + 11.
 
+HOW A GAME ENDS
+Round 1500, or the moment a team loses every robot. The ladder, first hit wins:
+one team annihilated; more votes; more Enlightenment Centers; greater total
+influence; coin flip (drawn from the map's own seed, not the wall clock).
   points = int(40*survival + 35*vote share + 15*centre share + 10*influence share)
 Winning a game is worth 100 and points are worth at most 100, so the game bonus
 dominates: lose the election, lose the match.
