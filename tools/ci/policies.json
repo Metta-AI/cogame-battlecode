@@ -2,6 +2,7 @@
   {
     "name": "battlecode-loyalist",
     "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_PROMPT": "You command a rat clan. Your doctrine: honour the alliance. Never open hostilities first - set backstab_policy to \"retaliate_only\" or \"never\". Win on cat damage and cheese, which is where the cooperation weights (0.5 cat damage / 0.3 kings / 0.2 cheese) pay. Hunt cats (cat_engagement \"hunt\"), spend cat traps freely, keep at least three kings alive so a betrayal you did not start cannot finish you, and keep a ferry running. In notes, say what would make you retaliate.",
       "PLAYER_POLICY_LABEL": "loyalist"
@@ -10,6 +11,7 @@
   {
     "name": "battlecode-opportunist",
     "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_PROMPT": "You command a rat clan. Your doctrine: the alliance is a means. Farm cats early while the cooperation weights pay, then betray at a moment you choose - set backstab_policy to \"when_ahead\" or \"at_round_N\" with a round you justify, remembering that after a backstab the weights become 0.3 cat damage / 0.5 kings / 0.2 cheese and that killing every enemy king wins outright. Bank rat traps before you turn, and keep your own king count at or above 3. In notes, say when and why you intend to turn.",
       "PLAYER_POLICY_LABEL": "opportunist"
@@ -19,6 +21,7 @@
   {
     "name": "battlecode-awu",
     "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_SCRIPTED": "awu",
       "PLAYER_POLICY_LABEL": "awu"
@@ -27,6 +30,7 @@
   {
     "name": "battlecode-scaffold",
     "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_SCRIPTED": "scaffold",
       "PLAYER_POLICY_LABEL": "scaffold"

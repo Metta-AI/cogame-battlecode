@@ -16,6 +16,7 @@ import harness
 import battlecode/[results, sim_types]
 import battlecode/years/registry
 
+let compose = readFile("compose.yaml")
 let manifest = parseJson(readFile("coworld_manifest_template.json"))
 let game = manifest["game"]
 ## `variants` and `certification` are TOP LEVEL, not under `game`:
@@ -212,9 +213,17 @@ block:
   var prompts = 0
   var scripted = 0
   var owned = 0
+  ## A policy is CUT FROM a docker image, and `upload-policy` can only cut
+  ## from a tag `coworld build` actually produced — i.e. one compose.yaml
+  ## declares. `cogame-battlecode:latest` is built by nothing and failed all
+  ## four uploads (0.1.4, 2026-09-04).
   for p in policies:
     check("every policy runs the player entrypoint",
       p["run"].getStr() == "/bin/battlecode-player")
+    check("and is cut from an image compose builds: " & p["image"].getStr(),
+      p["image"].getStr() in compose)
+    checkEq("which is the PLAYER image, since policies are players",
+      p["image"].getStr(), "cogame-battlecode-player:latest")
     check("and is named for this game",
       p["name"].getStr().startsWith("battlecode-"))
     if p["env"].hasKey("PLAYER_PROMPT"):
@@ -235,11 +244,15 @@ block:
 
 # --- compose.yaml service names are load-bearing ----------------------------
 block:
-  let compose = readFile("compose.yaml")
   check("compose declares a `game` service", "\n  game:" in compose)
   check("compose declares a `player` service", "\n  player:" in compose)
   check("the game image matches the release image name",
     "cogame-battlecode-game:latest" in compose)
+  ## The release workflow's default policy image must also be a tag compose
+  ## builds, for a dispatch that overrides `policies` without naming one.
+  let release = readFile(".github/workflows/coworld-release.yml")
+  check("the release workflow defaults policies to the player image",
+    "IMAGE: cogame-battlecode-player" in release)
   check("both are linux/amd64", compose.count("platform: linux/amd64") == 2)
 
 # --- the CLI that publishes this manifest validates it in CI ----------------

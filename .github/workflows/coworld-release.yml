@@ -60,7 +60,16 @@ concurrency:
 
 env:
   SLUG: battlecode
-  IMAGE: cogame-battlecode
+  # The image `upload-policy` cuts a policy from. It must be a tag
+  # `coworld build` actually produces, and `coworld build` builds whatever
+  # compose.yaml declares -- here `cogame-battlecode-game:latest` (the game
+  # service) and `cogame-battlecode-player:latest` (the player service).
+  # Policies RUN /bin/battlecode-player, so this is the player image.
+  # `cogame-battlecode:latest` is not built by anything and made every
+  # upload-policy fail with "Docker image is not available locally"
+  # (0.1.4, 2026-09-04). ci.yml's own IMAGE is a different thing: a tag that
+  # workflow builds itself for the smoke.
+  IMAGE: cogame-battlecode-player
   # 0.1.43 is a FLOOR, not a preference. Three independent reasons:
   # - LIVENESS_MARKER below is only emitted from 0.1.38 on
   #   (cli.py `_uses_static_replay_viewer_bundle`).
