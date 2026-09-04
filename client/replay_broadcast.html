@@ -2900,6 +2900,144 @@ html[data-year="bc21"] .beat-marker.wipe { background: #e0523a; width: 3px; }
   #bc21-votes .lbl, #bc21-votes .clinch { display: none; }
   #bc21-doctrines { max-width: 62%; }
 }
+/* ========================================================================
+   BC24 additions to the inherited cogame-battlecode chrome
+   ------------------------------------------------------------------------
+   The game block for the `bc24` year. Everything above this banner is the
+   page as it shipped for `bc26`, `bc20` and `bc21`. NOTHING is removed and
+   no existing id is reused for a different purpose: every id below is new
+   and `#bc24-` prefixed, and the four blocks are switched by ONE attribute —
+   `document.documentElement.dataset.year`, set from the replay header — plus
+   the rules right here. `#viewpanel` is KEPT: the `bc24` pool tops out at
+   59x31 and the reserved large pool at 59x59, so the native 16 px-per-tile
+   render is 496–944 px wide against a 360 px featured-match frame.
+   ======================================================================== */
+html[data-year="bc24"] #coopchip,
+html[data-year="bc24"] #bars,
+html[data-year="bc24"] #econ,
+html[data-year="bc24"] #doctrines,
+html[data-year="bc24"] #bc20-flood,
+html[data-year="bc24"] #bc20-soup,
+html[data-year="bc24"] #bc20-units,
+html[data-year="bc24"] #bc20-doctrines,
+html[data-year="bc24"] #bc20-doctrines-toggle,
+html[data-year="bc24"] #bc20-chain,
+html[data-year="bc24"] #bc21-votes,
+html[data-year="bc24"] #bc21-influence,
+html[data-year="bc24"] #bc21-units,
+html[data-year="bc24"] #bc21-doctrines,
+html[data-year="bc24"] #bc21-doctrines-toggle,
+html[data-year="bc24"] #bc21-bids { display: none !important; }
+
+html:not([data-year="bc24"]) #bc24-flags,
+html:not([data-year="bc24"]) #bc24-crumbs,
+html:not([data-year="bc24"]) #bc24-levels,
+html:not([data-year="bc24"]) #bc24-doctrines,
+html:not([data-year="bc24"]) #bc24-doctrines-toggle,
+html:not([data-year="bc24"]) #bc24-traps { display: none !important; }
+
+/* The headline readout, in the same top-centre pill slot bc20 uses for its
+   flood gauge and bc21 for its election: `ASH ●●○ — ○○○ BASIL`, three pips a
+   clan (captured / carried / still home), and `2 to win`. It flashes when a
+   flag changes hands. */
+#bc24-flags {
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 10px; align-items: center;
+  max-width: calc(100% - 16px); box-sizing: border-box; overflow: hidden;
+  padding: 2px 10px; border-radius: 999px; font-size: 11px;
+  letter-spacing: .06em; background: rgba(11,7,4,.72); color: #e8c06a;
+  border: 1px solid #e8c06a; z-index: 6; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+#bc24-flags > span { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+#bc24-flags.flip { color: #f2e8d8; border-color: #f2e8d8; }
+#bc24-flags .pips { letter-spacing: .12em; }
+#bc24-flags .pips .carried { color: #e0523a; }
+#bc24-flags .setup { color: #7fb2e8; }
+
+/* Both readouts sit ABOVE the reserved transport band -- nothing this block
+   adds is ever overlaid inside it, and both are in relayout()'s --statrail
+   measurement set so #killfeed is lifted clear of them. */
+#bc24-crumbs {
+  position: absolute; right: 8px; bottom: calc(var(--band, 0px) + 8px);
+  display: grid; grid-template-columns: auto auto auto; gap: 1px 8px;
+  font-size: 10px; color: #cbbfae; background: rgba(11,7,4,.6);
+  padding: 5px 8px; border-radius: 6px; z-index: 5; pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+#bc24-crumbs b { color: #f2e8d8; font-weight: 600; }
+
+#bc24-levels {
+  position: absolute; right: 8px; bottom: calc(var(--band, 0px) + 74px);
+  font-size: 10px; color: #cbbfae; background: rgba(11,7,4,.6);
+  padding: 5px 8px; border-radius: 6px; z-index: 5; pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+#bc24-levels b { color: #f2e8d8; font-weight: 600; }
+#bc24-levels .up { color: #6f6558; }
+#bc24-levels .up.lit { color: #e8c06a; }
+#bc24-levels .jail { color: #9aa7b8; }
+
+/* D3, and THE BOARD IS THE PICTURE. Same discipline as the bc26, bc20 and
+   bc21 panels: it opens with the replay, CLOSES ITSELF the moment playback
+   advances (or after six seconds for a viewer who never presses play), a
+   close control, Escape and a re-open chip drive it by hand, and its body is
+   capped and scrolls so even opened over a 360 px frame it can never own the
+   board. It sits above the board area -- never inside var(--band). */
+#bc24-doctrines {
+  position: absolute; left: 8px; bottom: calc(var(--band, 0px) + 8px);
+  max-width: 46%; font-size: 10px; color: #cbbfae;
+  background: rgba(11,7,4,.72); padding: 5px 22px 5px 8px;
+  border-radius: 6px; z-index: 7;
+}
+#bc24-doctrines.dismissed { display: none !important; }
+#bc24-doctrines-body {
+  max-height: calc(30vh - var(--band, 0px)); overflow-y: auto;
+}
+#bc24-doctrines .dline { margin-bottom: 3px; }
+#bc24-doctrines .dname { color: #f2e8d8; font-weight: 600; }
+#bc24-doctrines .dfall { color: #e0523a; }
+#bc24-doctrines-close {
+  position: absolute; top: 2px; right: 4px; width: 16px; height: 16px;
+  line-height: 14px; padding: 0; border: 0; border-radius: 4px; cursor: pointer;
+  background: rgba(242,232,216,.14); color: #f2e8d8; font-size: 12px;
+}
+#bc24-doctrines-close:hover { background: rgba(242,232,216,.3); }
+#bc24-doctrines-toggle {
+  font-size: 10px; padding: 1px 8px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(242,232,216,.3); color: #cbbfae;
+  background: rgba(11,7,4,.6); margin-top: 3px;
+}
+#bc24-doctrines-toggle[hidden] { display: none !important; }
+
+#bc24-traps { margin-top: 6px; font-size: 11px; color: #cbbfae; }
+#bc24-traps b { color: #f2e8d8; }
+#bc24-traps .msg { opacity: .8; }
+
+/* CSS for EVERY beat kind this year emits. A kind with no rule is an
+   invisible marker. Year-scoped like every other rule in this block:
+   `steal`, `return` and `capture` already exist in the shared chrome and are
+   reused unchanged, and `doctrine`, `game` and `end` are the inherited ones;
+   the five NEW kinds are scoped here so an unscoped rule this late in the
+   sheet cannot win for the other three years. */
+html[data-year="bc24"] .beat-marker.doctrine { background: #e8c06a; }
+html[data-year="bc24"] .beat-marker.setup { background: #7fb2e8; width: 3px; }
+html[data-year="bc24"] .beat-marker.build { background: #a08a5e; }
+html[data-year="bc24"] .beat-marker.steal { background: #d8c48a; }
+html[data-year="bc24"] .beat-marker.return { background: #6f6558; }
+html[data-year="bc24"] .beat-marker.capture { background: #8fbf6a; width: 3px; }
+html[data-year="bc24"] .beat-marker.trap { background: #e0523a; }
+html[data-year="bc24"] .beat-marker.upgrade { background: #b08a3a; }
+html[data-year="bc24"] .beat-marker.level { background: #9fd07a; }
+html[data-year="bc24"] .beat-marker.rout { background: #e0523a; width: 3px; }
+
+@media (max-width: 760px) {
+  #bc24-crumbs, #bc24-levels, #bc24-doctrines { font-size: 9px; }
+  #bc24-levels { bottom: calc(var(--band, 0px) + 66px); }
+  #bc24-flags { gap: 5px; font-size: 10px; }
+  #bc24-flags .lbl, #bc24-flags .towin { display: none; }
+  #bc24-doctrines { max-width: 62%; }
+}
 </style>
 </head>
 <body>
@@ -2940,6 +3078,9 @@ html[data-year="bc21"] .beat-marker.wipe { background: #e0523a; width: 3px; }
           <!-- BC21: re-opens #bc21-doctrines after it has been dismissed. -->
           <button type="button" id="bc21-doctrines-toggle" hidden
                   aria-label="Show doctrines">doctrines</button>
+          <!-- BC24: re-opens #bc24-doctrines after it has been dismissed. -->
+          <button type="button" id="bc24-doctrines-toggle" hidden
+                  title="Show doctrines">doctrines</button>
         </div>
       </div>
 
@@ -3013,6 +3154,17 @@ html[data-year="bc21"] .beat-marker.wipe { background: #e0523a; width: 3px; }
       <div id="bc21-doctrines-body"></div>
     </div>
 
+    <!-- BC24 additions to the inherited cogame-battlecode chrome -->
+    <div id="bc24-flags"></div>
+    <div id="bc24-levels"></div>
+    <div id="bc24-crumbs"></div>
+    <div id="bc24-doctrines" role="region" aria-label="Doctrines">
+      <button type="button" id="bc24-doctrines-close"
+              aria-label="Dismiss doctrines"
+              title="Dismiss doctrines (Esc)">&times;</button>
+      <div id="bc24-doctrines-body"></div>
+    </div>
+
     <div id="transport">
       <!-- Buttons on top, scrubber/timeline below (the transport sits in its own
            reserved band under the board, so nothing here overlaps play). -->
@@ -3057,6 +3209,9 @@ html[data-year="bc21"] .beat-marker.wipe { background: #e0523a; width: 3px; }
       <!-- BC21: the auction panel. Nothing about the auction is stored in
            the replay -- the wasm sim re-derives every round. -->
       <div id="bc21-bids"></div>
+      <!-- BC24: the war panel. Nothing about traps, water or levels is
+           stored in the replay -- the wasm sim re-derives every round. -->
+      <div id="bc24-traps"></div>
       <div class="ec-replay" id="ec-replay"></div>
     </div>
   </div>
@@ -3673,6 +3828,348 @@ html[data-year="bc21"] .beat-marker.wipe { background: #e0523a; width: 3px; }
 })();
 </script>
 
+<!-- ======================================================================
+     BC24 additions to the inherited cogame-battlecode chrome
+     ----------------------------------------------------------------------
+     The game block for the `bc24` year. It registers itself on
+     `window.Bc24Block` BEFORE the inherited block runs, and the inherited
+     block calls into it: two lines there, everything else here. No function
+     name in this file collides with `chrome_common.js`, with the bc26 block
+     or with the bc20 and bc21 ones -- the beat builder is
+     `buildBc24BeatButtons`, never `markBeat` (the tandem 2026-08-23 hoisting
+     collision), never `buildBeatButtons` (bc26), never
+     `buildBc20BeatButtons` and never `buildBc21BeatButtons`.
+     ====================================================================== -->
+<script>
+(function () {
+  'use strict';
+
+  var api = null;                    // {C, send, seek, dismissEndcard}
+  var beatsBuilt = false;
+  var beatEls = [];
+  var dismissed = false;
+  var pinned = false;                // the viewer opened it themselves
+  var lastFrame = -1;
+  var lastCaps = -2;
+  var feedShown = {};
+
+  function $(id) { return document.getElementById(id); }
+  function esc(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ---- the dismissible doctrine overlay (D3) ---------------------------
+  function setDoctrinesOpen(open) {
+    dismissed = !open;
+    var panel = $('bc24-doctrines');
+    var chip = $('bc24-doctrines-toggle');
+    if (panel) panel.classList.toggle('dismissed', dismissed);
+    if (chip) chip.hidden = !dismissed;
+  }
+
+  function wireDoctrines() {
+    var close = $('bc24-doctrines-close');
+    if (close) {
+      close.addEventListener('click', function (event) {
+        event.stopPropagation();
+        pinned = false;
+        setDoctrinesOpen(false);
+      });
+    }
+    var chip = $('bc24-doctrines-toggle');
+    if (chip) {
+      chip.addEventListener('click', function (event) {
+        event.stopPropagation();
+        // A panel the viewer opened by hand STAYS open -- that is their
+        // choice, not a lid the page left on the board.
+        pinned = true;
+        setDoctrinesOpen(true);
+      });
+    }
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape' && event.key !== 'Esc') return;
+      if (document.documentElement.getAttribute('data-year') !== 'bc24') return;
+      pinned = false;
+      setDoctrinesOpen(false);
+    });
+    // The viewer who never presses play still gets the board back.
+    setTimeout(function () {
+      if (!pinned) setDoctrinesOpen(false);
+    }, 6000);
+  }
+
+  // ---- beats ------------------------------------------------------------
+  function buildBc24BeatButtons(s) {
+    if (beatsBuilt || !s.beats || !s.beats.length) return;
+    beatsBuilt = true;
+    var scrub = $('scrub');
+    var span = Math.max(1, (s.mx || 1) - (s.st || 0));
+    s.beats.forEach(function (b) {
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'beat-marker ' + (b.k || 'game');
+      el.style.left =
+        (Math.min(1, Math.max(0, (b.t - (s.st || 0)) / span)) * 100) + '%';
+      el.setAttribute('aria-label', b.label || b.k);
+      el.title = b.label || b.k;
+      el.__tick = b.t;
+      el.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (api) api.seek(b.t / span);
+      });
+      scrub.appendChild(el);
+      beatEls.push(el);
+    });
+  }
+
+  function applyBc24BeatSpoilers(s) {
+    if (!api || !beatEls.length) return;
+    var spoilers = api.C.getSpoilers();
+    beatEls.forEach(function (el) {
+      var hide = !spoilers && el.__tick > s.t;
+      if (el.__hidden !== hide) {
+        el.__hidden = hide;
+        el.style.display = hide ? 'none' : '';
+      }
+    });
+  }
+
+  // ---- readouts ---------------------------------------------------------
+  function pips(row) {
+    // Three pips a clan: filled for a captured enemy flag, a pulsing filled
+    // one for a flag this clan is CARRYING right now, hollow for a flag still
+    // at home or lying dropped on the board.
+    var captured = row.captured || 0;
+    var carried = row.carried || 0;
+    var out = '';
+    for (var i = 0; i < 3; i++) {
+      if (i < captured) out += '\u25cf';
+      else if (i < captured + carried) out += '<i class="carried">\u25cf</i>';
+      else out += '\u25cb';
+    }
+    return out;
+  }
+
+  function renderFlags(s) {
+    var rows = s.bc24_flags || [{}, {}];
+    var host = $('bc24-flags');
+    if (!host) return;
+    var caps = (rows[0].captured || 0) * 10 + (rows[1].captured || 0);
+    if (lastCaps !== -2 && caps !== lastCaps) {
+      host.classList.add('flip');
+      setTimeout(function () { host.classList.remove('flip'); }, 900);
+    }
+    lastCaps = caps;
+    var tail = s.setup
+      ? '<span class="setup">SETUP \u2014 ' +
+          Math.max(0, (s.setup_rounds || 200) - (s.round || 0)) +
+          ' rounds to the dam</span>'
+      : '<span class="towin">' + (rows[0].to_win || 0) + ' to win</span>';
+    host.innerHTML =
+      '<span class="lbl">' + esc(s.aliases[0]) + '</span>' +
+      '<span class="pips">' + pips(rows[0]) + '</span>' +
+      '<span>\u2014</span>' +
+      '<span class="pips">' + pips(rows[1]) + '</span>' +
+      '<span class="lbl">' + esc(s.aliases[1]) + '</span>' + tail;
+  }
+
+  function renderCrumbs(s) {
+    var rows = s.bc24_crumbs || [{}, {}];
+    var host = $('bc24-crumbs');
+    if (!host) return;
+    var html = '<span></span><span>' + esc(s.aliases[0]) + '</span><span>' +
+      esc(s.aliases[1]) + '</span>';
+    html += '<span>crumbs</span><b>' + (rows[0].crumbs || 0) + '</b><b>' +
+      (rows[1].crumbs || 0) + '</b>';
+    html += '<span>income</span><b>' + (rows[0].income || 0) + '/r</b><b>' +
+      (rows[1].income || 0) + '/r</b>';
+    html += '<span>traps</span><b>' + (rows[0].traps || 0) + '</b><b>' +
+      (rows[1].traps || 0) + '</b>';
+    html += '<span>water</span><b>' + (rows[0].water_tiles || 0) +
+      '</b><b>' + (rows[1].water_tiles || 0) + '</b>';
+    host.innerHTML = html;
+  }
+
+  var UPGRADE_GLYPHS = ['\u2694', '\u2691', '\u271a'];   // attack, capture, heal
+
+  function renderLevels(s) {
+    var rows = s.bc24_levels || [{}, {}];
+    var jail = s.bc24_jail || [[], []];
+    var host = $('bc24-levels');
+    if (!host) return;
+    var html = '';
+    for (var slot = 0; slot < 2; slot++) {
+      var u = rows[slot] || {};
+      var ups = '';
+      for (var i = 0; i < 3; i++) {
+        var lit = (u.upgrades || [])[i] ? ' lit' : '';
+        ups += '<span class="up' + lit + '">' + UPGRADE_GLYPHS[i] + '</span>';
+      }
+      html += '<div>' + esc(s.aliases[slot]) +
+        ' \u2694 <b>' + (u.attack || 0) + '</b>' +
+        ' \u271a <b>' + (u.heal || 0) + '</b>' +
+        ' \u26cf <b>' + (u.build || 0) + '</b>' +
+        ' <b>' + (u.alive || 0) + '</b>/' + (u.roster || 50) +
+        ' <span class="jail">jail ' + (u.jailed || 0) + '</span> ' +
+        ups + '</div>';
+    }
+    // The jail rail: twenty-five rounds of absence is a story.
+    var rail = [];
+    for (var t = 0; t < 2; t++) {
+      (jail[t] || []).slice(0, 6).forEach(function (d) {
+        rail.push(esc(s.aliases[t]).slice(0, 1) + d.rounds);
+      });
+    }
+    if (rail.length) {
+      html += '<div class="jail">jail rail ' + rail.join(' ') + '</div>';
+    }
+    host.innerHTML = html;
+  }
+
+  function renderDoctrines(s) {
+    var host = $('bc24-doctrines-body');
+    if (!host) return;
+    var html = '';
+    (s.doctrines || []).forEach(function (d, slot) {
+      html += '<div class="dline"><span class="dname">' +
+        esc(s.aliases[slot]) + '</span> ' + esc(d.name || '') + ' \u2014 ' +
+        esc((d.words || []).join(', ')) +
+        (d.fallback ? ' <span class="dfall">[fallback: ' +
+          esc(d.fallback) + ']</span>' : '') +
+        (d.notes ? '<br><i>' + esc(d.notes) + '</i>' : '') + '</div>';
+    });
+    host.innerHTML = html;
+  }
+
+  function renderFeed(s) {
+    var feed = $('killfeed');
+    if (!feed || !s.beats) return;
+    s.beats.forEach(function (b) {
+      var key = b.t + '|' + b.k + '|' + b.label;
+      if (feedShown[key] || b.t > s.t) return;
+      feedShown[key] = true;
+      var row = document.createElement('div');
+      row.className = 'kf-row ' + b.k;
+      row.textContent = b.label;
+      feed.appendChild(row);
+      while (feed.childNodes.length > 8) feed.removeChild(feed.firstChild);
+    });
+  }
+
+  function renderTraps(s) {
+    var host = $('bc24-traps');
+    var c = s.bc24_traps;
+    if (!host || !c) return;
+    var clans = c.clans || [];
+    var html = '<b>the war</b>';
+    clans.forEach(function (clan) {
+      html += '<br><span class="msg">' + esc(clan.alias) + ' \u2014 ' +
+        (clan.picked_up || 0) + ' flags lifted, ' + (clan.dropped || 0) +
+        ' dropped, ' + (clan.returned || 0) + ' flown home, ' +
+        (clan.captured || 0) + ' captured \u00b7 ' + (clan.traps_built || 0) +
+        ' traps built and ' + (clan.traps_triggered || 0) + ' sprung for ' +
+        (clan.trap_damage || 0) + ' damage \u00b7 ' + (clan.dug || 0) +
+        ' tiles dug and ' + (clan.filled || 0) + ' filled \u00b7 ' +
+        (clan.crumbs_collected || 0) + ' crumbs earned (' +
+        (clan.crumbs_on_dig || 0) + ' dug, ' + (clan.crumbs_on_fill || 0) +
+        ' filled, ' + (clan.crumbs_on_traps || 0) + ' trapped) \u00b7 ' +
+        (clan.levels || 0) + ' skill levels and ' + (clan.masteries || 0) +
+        ' masteries \u00b7 upgrades at rounds ' +
+        (clan.upgrade_rounds || []).join('/') + ' \u00b7 ' +
+        (clan.jailed || 0) + ' jailings</span>';
+    });
+    html += '<br><span class="msg">' + (c.setup_teleports || 0) +
+      ' clans failed the six-tile rule at round 200, ' +
+      (c.rounds_with_carry || 0) + ' rounds with a flag off its stand</span>';
+    host.innerHTML = html;
+  }
+
+  function renderEndcardExtras(s) {
+    if (s.ph !== 'gameover') return;
+    var r = s.result || {};
+    var last = (r.games || [])[(r.games || []).length - 1];
+    if (!last) return;
+    var wincond = $('ec-wincond');
+    if (wincond) {
+      var who = last.winner >= 0 ? s.aliases[last.winner] : 'nobody';
+      var caps = last.flags_captured || [0, 0];
+      var levels = last.levels_end || [0, 0];
+      var crumbs = last.crumbs_end || [0, 0];
+      var text;
+      if (last.end_reason === 'capture') {
+        text = who + ' took all three flags at round ' + last.rounds_played;
+      } else if (last.end_reason === 'more_flag_captures') {
+        text = '2000 rounds \u2014 ' + who + ' captured ' +
+          caps[last.winner] + ' flags to ' + caps[1 - last.winner];
+      } else if (last.end_reason === 'level_sum') {
+        text = 'flags level at ' + caps[0] + '\u2013' + caps[1] + ' \u2014 ' +
+          who + ' finished ' +
+          Math.abs(levels[0] - levels[1]) + ' skill levels ahead';
+      } else if (last.end_reason === 'more_bread') {
+        text = 'flags and levels tied \u2014 ' + who + ' ended on ' +
+          crumbs[last.winner] + ' crumbs to ' + crumbs[1 - last.winner];
+      } else if (last.end_reason === 'coin_flip') {
+        text = 'everything tied \u2014 the map\u2019s own seed gave it to ' + who;
+      } else {
+        text = 'the ' + String(last.end_reason).replace(/_/g, ' ') +
+          ' rung of the ladder decided it';
+      }
+      wincond.textContent = text;
+    }
+    var how = $('ec-how');
+    if (how) {
+      var scores = r.scores || [0, 0];
+      how.innerHTML =
+        'score ' + scores[0] + ' \u2014 ' + scores[1] +
+        ' \u00b7 flags lifted ' + ((last.flags_picked_up || [])[0] || 0) +
+        '/' + ((last.flags_picked_up || [])[1] || 0) +
+        ' \u00b7 traps built ' + ((last.traps_built || [])[0] || 0) + '/' +
+        ((last.traps_built || [])[1] || 0) +
+        ' \u00b7 sprung ' + ((last.traps_triggered || [])[0] || 0) + '/' +
+        ((last.traps_triggered || [])[1] || 0) +
+        ' \u00b7 dug ' + ((last.tiles_dug || [])[0] || 0) + '/' +
+        ((last.tiles_dug || [])[1] || 0) +
+        ' \u00b7 filled ' + ((last.tiles_filled || [])[0] || 0) + '/' +
+        ((last.tiles_filled || [])[1] || 0) +
+        ' \u00b7 levels ' + ((last.levels_end || [])[0] || 0) + '/' +
+        ((last.levels_end || [])[1] || 0) +
+        ' \u00b7 jailed ' + ((last.ducks_jailed || [])[0] || 0) + '/' +
+        ((last.ducks_jailed || [])[1] || 0);
+    }
+    renderTraps(s);
+  }
+
+  window.Bc24Block = {
+    attach: function (host) {
+      api = host;
+      wireDoctrines();
+    },
+    // True while a bc24 replay is on screen; the inherited block asks before
+    // it draws its own year's readouts.
+    active: function (s) { return s && s.year === 'bc24'; },
+    onFrame: function (s) {
+      if (s.year !== 'bc24') return;
+      buildBc24BeatButtons(s);
+      // THE BOARD IS THE PICTURE: the first frame that advances the playhead
+      // closes the panel, unless the viewer opened it by hand.
+      if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {
+        setDoctrinesOpen(false);
+      }
+      lastFrame = s.t;
+      renderFlags(s);
+      renderCrumbs(s);
+      renderLevels(s);
+      renderDoctrines(s);
+      renderFeed(s);
+      applyBc24BeatSpoilers(s);
+      renderEndcardExtras(s);
+    }
+  };
+})();
+</script>
+
 <script>
 (function () {
   'use strict';
@@ -3725,6 +4222,16 @@ html[data-year="bc21"] .beat-marker.wipe { background: #e0523a; width: 3px; }
   // BC21 HOOK (1 of 2): the same two lines for the third year.
   if (window.Bc21Block) {
     window.Bc21Block.attach({
+      C: C,
+      send: send,
+      seek: function (frac) { seek(frac); },
+      dismissEndcard: function () { dismissEndcard(); }
+    });
+  }
+
+  // BC24 HOOK (1 of 2): the same two lines for the fourth year.
+  if (window.Bc24Block) {
+    window.Bc24Block.attach({
       C: C,
       send: send,
       seek: function (frac) { seek(frac); },
@@ -4025,7 +4532,8 @@ html[data-year="bc21"] .beat-marker.wipe { background: #e0523a; width: 3px; }
       // empty, which is the bc26 case.
       var railTop = Infinity;
       var railBottom = -Infinity;
-      ['econ', 'bc20-soup', 'bc20-units', 'bc21-influence', 'bc21-units']
+      ['econ', 'bc20-soup', 'bc20-units', 'bc21-influence', 'bc21-units',
+       'bc24-crumbs', 'bc24-levels']
         .forEach(function (id) {
           var el = document.getElementById(id);
           if (!el || !el.offsetParent) return;
@@ -4153,10 +4661,13 @@ html[data-year="bc21"] .beat-marker.wipe { background: #e0523a; width: 3px; }
     }
     var isBc20 = !!(window.Bc20Block && window.Bc20Block.active(s));
     var isBc21 = !!(window.Bc21Block && window.Bc21Block.active(s));
+    var isBc24 = !!(window.Bc24Block && window.Bc24Block.active(s));
     if (window.Bc20Block) window.Bc20Block.onFrame(s);
     // BC21 HOOK (2 of 2).
     if (window.Bc21Block) window.Bc21Block.onFrame(s);
-    if (!isBc20 && !isBc21) {
+    // BC24 HOOK (2 of 2).
+    if (window.Bc24Block) window.Bc24Block.onFrame(s);
+    if (!isBc20 && !isBc21 && !isBc24) {
       buildBeatButtons(s);
       renderCoop(s);
       renderEcon(s);
@@ -4167,7 +4678,7 @@ html[data-year="bc21"] .beat-marker.wipe { background: #e0523a; width: 3px; }
     renderGameChips(s);
     C.renderClock(s);
     C.renderTransport(s);
-    if (!isBc20 && !isBc21) applyBeatSpoilers(s);
+    if (!isBc20 && !isBc21 && !isBc24) applyBeatSpoilers(s);
     $('clock-caption').textContent = s.ph === 'gameover'
       ? 'Match over'
       : 'game ' + s.game + ' of ' + s.games + ' — ' + s.map;
