@@ -257,6 +257,11 @@ proc playGameFor*(
 proc floodTableJson*(): JsonNode =
   ## The round each integer elevation floods at — the single most important
   ## fact a bc20 doctrine has to plan around, so it goes in the observation.
+  ##
+  ## Level 7 reports `WaterTableMaxRound + 1` (1501), the "never inside the
+  ## cap" sentinel `roundWaterReaches` returns: the uncapped curve reaches
+  ## elevation 7 at round 1546, which no 1500-round game can play. Said in
+  ## `docs/PROTOCOL.md` §The bc20 observation.
   result = newJObject()
   for level in 1 .. 7:
     result[$level] = %flood20.roundWaterReaches(level)
