@@ -15,6 +15,10 @@ import years/bc26/maps
 
 export match
 
+const ChainHexLen* = 16
+  ## `toHex(uint64)` — one round's hash chain, as recorded in
+  ## `games[].hash_chain_rounds`.
+
 type
   GameHeader* = object
     index*: int
@@ -23,6 +27,9 @@ type
     sideAslot*: int
     rounds*: int
     hashChain*: string
+    roundChains*: string
+      ## 16 hex digits per round, in round order — the chain as it stood at
+      ## the end of each round. The deriver compares EVERY round against it.
 
   ReplayDoc* = object
     gameVersion*: string
@@ -85,7 +92,8 @@ proc toJson*(doc: ReplayDoc): JsonNode =
                 (if g.sideAslot == 0: "B" else: "A")],
       "side_a_slot": g.sideAslot,
       "rounds": g.rounds,
-      "hash_chain_sha256": g.hashChain
+      "hash_chain_sha256": g.hashChain,
+      "hash_chain_rounds": g.roundChains
     })
   var events = newJArray()
   for e in doc.events:
@@ -173,7 +181,8 @@ proc parseReplay*(text: string): ReplayDoc =
       mapSha: g{"map_json_sha256"}.getStr(),
       sideAslot: g{"side_a_slot"}.getInt(),
       rounds: g{"rounds"}.getInt(),
-      hashChain: g{"hash_chain_sha256"}.getStr()))
+      hashChain: g{"hash_chain_sha256"}.getStr(),
+      roundChains: g{"hash_chain_rounds"}.getStr()))
   for e in doc["events"]:
     var fields = newJObject()
     for key, value in e:
@@ -204,7 +213,8 @@ proc startGame(d: Deriver, index: int) =
     d.world = newWorld(spec, d.doc.plan.maxRounds)
     d.clans = newClans(d.doc.plan.sheets, d.doc.plan.sideAslots[index])
 
-proc gameRecord*(doc: ReplayDoc, index: int): tuple[rounds: int, chain: string] =
+proc gameRecord*(doc: ReplayDoc, index: int):
+    tuple[rounds: int, chain: string, rounds_chains: string] =
   ## How many rounds game `index` played, and the chain it ended on.
   ##
   ## A game that FINISHED carries its own header. The game the wall-clock
@@ -216,10 +226,10 @@ proc gameRecord*(doc: ReplayDoc, index: int): tuple[rounds: int, chain: string] 
   ## replay altogether.
   for g in doc.games:
     if g.index == index:
-      return (g.rounds, g.hashChain)
+      return (g.rounds, g.hashChain, g.roundChains)
   if index < doc.plan.abandonAfter.len and doc.plan.abandonAfter[index] > 0:
-    return (doc.plan.abandonAfter[index], "")
-  (0, "")
+    return (doc.plan.abandonAfter[index], "", "")
+  (0, "", "")
 
 proc newDeriver*(doc: ReplayDoc): Deriver =
   result = Deriver(doc: doc, mismatchRound: -1)
@@ -250,10 +260,19 @@ proc advance*(d: Deriver): bool {.discardable.} =
   d.roundInGame = d.world.currentRound
   d.frame = nextFrame
   ## The recorded hash chain proves the re-derivation matches the recording.
-  let record = d.doc.gameRecord(wantGame)
-  if d.roundInGame == record.rounds:
-    if record.chain.len > 0 and toHex(d.world.hashChain) != record.chain and
-        d.mismatchRound < 0:
+  ## EVERY round is compared, against the chain the recorder was on at the end
+  ## of that round, so the round reported is the FIRST divergent one. The
+  ## game's final chain is still checked on its own (it is all an older
+  ## recording, or the abandoned game, carries).
+  if d.mismatchRound < 0:
+    let record = d.doc.gameRecord(wantGame)
+    let at = (d.roundInGame - 1) * ChainHexLen
+    let here = toHex(d.world.hashChain)
+    if record.rounds_chains.len >= at + ChainHexLen and
+        here != record.rounds_chains[at ..< at + ChainHexLen]:
+      d.mismatchRound = d.roundInGame
+    elif d.roundInGame == record.rounds and record.chain.len > 0 and
+        here != record.chain:
       d.mismatchRound = d.roundInGame
   true
 

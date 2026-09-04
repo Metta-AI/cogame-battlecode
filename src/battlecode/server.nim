@@ -306,7 +306,8 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
   for g in games:
     doc.games.add(GameHeader(index: g.index, map: g.mapName,
       mapSha: mapSha(g.mapName), sideAslot: g.sideAslot,
-      rounds: g.roundsPlayed, hashChain: g.hashChain))
+      rounds: g.roundsPlayed, hashChain: g.hashChain,
+      roundChains: g.roundChains))
 
   {.gcsafe.}:
     withLock app.lock:

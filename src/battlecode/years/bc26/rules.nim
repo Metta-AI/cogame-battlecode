@@ -45,6 +45,11 @@ type
     dirtPlaced*: array[2, int]
     catsFed*: array[2, int]
     hashChain*: string
+    roundChains*: string
+      ## The hash chain AFTER EACH ROUND, 16 hex digits per round, in round
+      ## order. `hashChain` is its last 16 digits. The viewer compares one
+      ## round at a time against this, so `bc_mismatch_round` names the FIRST
+      ## divergent round rather than the game's last.
     aborted*: bool
 
 proc slotOf*(outcome: GameOutcome, team: Team): int =
@@ -154,6 +159,7 @@ proc playGame*(
   let budget = initDuration(seconds = budgetSeconds)
   while w.running and w.currentRound < maxRounds:
     runRound(w, clans)
+    outcome.roundChains.add(toHex(w.hashChain))
     if onRound != nil:
       onRound(w, w.currentRound)
     if budgetSeconds > 0 and (w.currentRound and 0x1F) == 0 and

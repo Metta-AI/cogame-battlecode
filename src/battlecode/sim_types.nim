@@ -13,12 +13,19 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV01"
+  GameVersion* = "GV02"
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV02 — the per-round hash chain folds all SEVEN per-team round stats
+    ##        the round loop records (dirt and both trap counts were missing,
+    ##        so a re-derivation that diverged only in dirt or in traps
+    ##        standing reproduced the chain), and the replay records the chain
+    ##        AFTER EACH ROUND (`games[].hash_chain_rounds`) so the viewer
+    ##        compares every round and names the FIRST divergent one.
     ##
     ## GV01 — Battlecode 2026 ("Uneasy Alliances") ported from engine.1.2.5:
     ##        round loop, cheese, kings, combat, ratnap/throw, traps, dirt,

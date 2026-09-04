@@ -32,7 +32,7 @@ proc buildDoc(mapName: string, notes, motto: string): (ReplayDoc, GameOutcome) =
     result: resultsJson(seats, @[outcome], plan, epComplete, 1.0, 2.0),
     games: @[GameHeader(index: 0, map: mapName, mapSha: mapSha(mapName),
       sideAslot: 0, rounds: outcome.roundsPlayed,
-      hashChain: outcome.hashChain)])
+      hashChain: outcome.hashChain, roundChains: outcome.roundChains)])
   for slot in 0 .. 1: doc.names[slot] = seats[slot].name
   (doc, outcome)
 
@@ -48,6 +48,10 @@ block:
   checkEq("the map identity survives", back.games[0].map, "DefaultSmall")
   check("with a sha256 of the committed map", back.games[0].mapSha.len == 64)
   checkEq("the hash chain survives", back.games[0].hashChain, outcome.hashChain)
+  checkEq("and one chain per round rides with it",
+    back.games[0].roundChains.len, outcome.roundsPlayed * ChainHexLen)
+  checkEq("whose last round is the final chain",
+    back.games[0].roundChains[^ChainHexLen .. ^1], outcome.hashChain)
   checkEq("both sheets survive", back.seats[0].sheet.doctrine.chassis,
     doc.seats[0].sheet.doctrine.chassis)
   checkEq("notes survive", back.seats[0].sheet.notes, "hold the line")
@@ -92,13 +96,26 @@ block:
   checkEq("and the same final cheese", deriver.world.teamInfo.cheeseTransferred,
     [outcome.cheeseTransferred[0], outcome.cheeseTransferred[1]])
 
-# --- a mismatching chain is DETECTED ---------------------------------------
+# --- a mismatching chain is DETECTED, at the round it FIRST diverges --------
 block:
   var (doc, _) = buildDoc("DefaultSmall", "", "")
   doc.games[0].hashChain = "DEADBEEFDEADBEEF"
   let deriver = newDeriver(parseReplay($doc.toJson()))
   while deriver.advance(): discard
-  check("a corrupted hash chain is reported", deriver.mismatchRound > 0)
+  check("a corrupted final hash chain is reported", deriver.mismatchRound > 0)
+
+block:
+  ## The chain is compared EVERY round, so the round reported is the first
+  ## divergent one — not the game's last, which is all a per-game comparison
+  ## can ever say.
+  var (doc, _) = buildDoc("DefaultSmall", "", "")
+  const Corrupt = 40
+  let at = (Corrupt - 1) * ChainHexLen
+  doc.games[0].roundChains[at ..< at + ChainHexLen] = "DEADBEEFDEADBEEF"
+  let deriver = newDeriver(parseReplay($doc.toJson()))
+  while deriver.advance(): discard
+  checkEq("the FIRST divergent round is the one reported",
+    deriver.mismatchRound, Corrupt)
 
 # --- an unknown game_version is refused, not silently re-simulated ----------
 block:

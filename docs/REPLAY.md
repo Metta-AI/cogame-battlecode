@@ -5,7 +5,7 @@ re-derivation, not by bulk**.
 
 ```jsonc
 {"format":"cogame-battlecode-replay","version":1,
- "protocol":"cogame.battlecode.v1","game_version":"GV01","year":"bc26",
+ "protocol":"cogame.battlecode.v1","game_version":"GV02","year":"bc26",
  "config":{ /* the resolved game config, tokens EXCLUDED */ },
  "seed":871345,
  "aliases":["Clan Ash","Clan Basil"],
@@ -17,7 +17,8 @@ re-derivation, not by bulk**.
            "notes":"…","motto":"…","decision_ms":8123,"fallback":null}, …],
  "games":[{"index":0,"map":"DefaultSmall","map_json_sha256":"…",
            "sides":["A","B"],"side_a_slot":0,"rounds":451,
-           "hash_chain_sha256":"…"}],
+           "hash_chain_sha256":"…",        // the chain after the LAST round
+           "hash_chain_rounds":"…"}],      // 16 hex digits per round, in order
  "plan":{"maps":[…],"side_a_slots":[…],"abandon_after":[…],"max_rounds":2000},
  "events":[ … ],
  "result":{ /* identical to COGAME_RESULTS_URI */ }}
@@ -31,11 +32,19 @@ are all in the file, and **the wasm sim replays every round from them**. No
 engine bytes, no per-round state dump, no server contacted except S3 for the
 `.replay` file.
 
-The per-game hash chain lets the viewer prove its re-derivation matches the
-recording: on reaching a game's last round the deriver compares its own chain
-against `hash_chain_sha256` and exposes the first mismatching round through
-`bc_mismatch_round`, which `static_replay.js` writes onto `<html>` as
-`data-replay-mismatch-round` and the page shows in `#mmwarn`.
+The hash chain lets the viewer prove its re-derivation matches the recording.
+`hash_chain_rounds` carries the chain as it stood at the end of **every**
+round (16 hex digits each, in round order), so the deriver compares one round
+at a time and `bc_mismatch_round` names the **first** divergent round — not
+merely the game's last, which is all a single per-game value can say.
+`hash_chain_sha256` is the last round's value and is checked on its own, so a
+recording whose two records disagree is caught as well. `static_replay.js`
+writes the round onto `<html>` as `data-replay-mismatch-round` and the page
+shows it in `#mmwarn`.
+
+Seven per-team stats enter the chain each round: cheese transferred, damage to
+cats, the packed `kings + 10 × team cheese`, baby rats, dirt (carried and
+placed), rat traps standing and cat traps standing.
 
 The wall-clock `deadline` stop is recorded as **one load-bearing record**
 (`plan.abandon_after[g]`) applied by the same code on record and on playback,

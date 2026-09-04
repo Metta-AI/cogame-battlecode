@@ -1530,11 +1530,18 @@ proc checkEndOfMatch*(w: World) =
 
 proc processEndOfRound*(w: World) =
   w.hasRunCheeseMines = false
+  ## The seven per-team round stats the design note lists. Dirt and the two
+  ## trap counts were missing until GV02: a re-derivation that diverged only
+  ## in dirt carried or in traps standing reproduced the chain exactly and
+  ## reported no mismatch.
   for t in 0 .. 1:
     w.mixHash(w.teamInfo.cheeseTransferred[t])
     w.mixHash(w.teamInfo.damageToCats[t])
     w.mixHash(w.teamInfo.numRatKings[t] + 10 * w.teamInfo.globalCheese[t])
     w.mixHash(w.teamInfo.numBabyRats[t])
+    w.mixHash(w.teamInfo.dirtCounts[t] + 1000 * w.teamInfo.dirtPlaced[t])
+    w.mixHash(w.trapCounts[ttRatTrap][t])
+    w.mixHash(w.trapCounts[ttCatTrap][t])
   w.hasTraveled.setLen(0)
   w.checkEndOfMatch()
   if w.hasWinner:
