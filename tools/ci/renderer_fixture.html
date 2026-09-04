@@ -219,10 +219,21 @@
         'nothing (extracted from client/replay_broadcast.html by ci.yml)';
     }
     var frame = document.documentElement.getBoundingClientRect();
+    // Content inside a SCROLLING box is laid out at its full height and
+    // clipped by the box, so its rect legitimately runs past the frame. The
+    // box itself is still measured; its children are its business.
+    function insideScroller(el) {
+      for (var p = el.parentElement; p && p.id !== 'chrome'; p = p.parentElement) {
+        var oy = getComputedStyle(p).overflowY;
+        if (oy === 'auto' || oy === 'scroll') return true;
+      }
+      return false;
+    }
     var nodes = document.querySelectorAll('#chrome, #chrome *');
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
       if (getComputedStyle(el).display === 'none') continue;
+      if (insideScroller(el)) continue;
       var b = el.getBoundingClientRect();
       var id = el.id || el.className || el.tagName;
       if (b.width === 0 && b.height === 0) continue;
