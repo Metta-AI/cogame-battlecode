@@ -440,8 +440,60 @@ const READOUT_SCRIPT = `(() => {
     shown: getComputedStyle(endcardEl).display !== "none",
     text: (endcardEl.innerText || endcardEl.textContent || "").replace(/\s+/g, " ").trim().slice(0, 400),
   } : null;
+  // THE BOARD IS THE PICTURE. A panel that opens over the board and never
+  // closes is a replay that renders nothing as far as a spectator is
+  // concerned: two live screenshots of a featured match, a minute apart, were
+  // both of the same doctrine card lying over the rats (battlecode r2-D3,
+  // 2026-09-04). This reports the single largest visible element covering the
+  // board canvas, as a percentage of the board's own area. The endcard is
+  // named rather than skipped -- an end-of-replay score screen is SUPPOSED to
+  // cover the board, and the caller decides which samples that is legal in.
+  const boardEl = document.querySelector("canvas#board, canvas#game, canvas");
+  let obscured = null;
+  if (boardEl) {
+    const board = boardEl.getBoundingClientRect();
+    const area = Math.max(1, board.width * board.height);
+    // What counts as covering the board: an absolutely placed element that
+    // PAINTS (a background of its own, at least 20 % opaque) and SAYS
+    // something (non-empty text). That is a card, a panel or a curtain. The
+    // ambient layers every one of these shells stacks over the board --
+    // #lightpool's vignette, #grain's CRT drift, the transparent #chrome
+    // container -- paint no background colour and carry no text, and a probe
+    // that counted them would report 100 % on a perfectly clear board.
+    // No regex: this whole probe is a TEMPLATE LITERAL, so a backslash in it
+    // is eaten before the browser ever sees the source.
+    const alphaOf = (colour) => {
+      const text = String(colour || "");
+      if (text.indexOf("rgba") === 0) {
+        const parts = text.slice(text.indexOf("(") + 1, text.indexOf(")")).split(",");
+        return parts.length > 3 ? parseFloat(parts[3]) : 1;
+      }
+      return text.indexOf("rgb") === 0 ? 1 : 0;
+    };
+    let worst = { id: null, pct: 0 };
+    for (const el of document.querySelectorAll("body *")) {
+      if (el === boardEl || el.contains(boardEl)) continue;
+      if (el.tagName === "CANVAS") continue;
+      const style = getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden") continue;
+      if (Number(style.opacity) < 0.2) continue;
+      if (style.position !== "absolute" && style.position !== "fixed") continue;
+      if (alphaOf(style.backgroundColor) < 0.2) continue;
+      if (!(el.innerText || "").trim()) continue;
+      const box = el.getBoundingClientRect();
+      const w = Math.min(box.right, board.right) - Math.max(box.left, board.left);
+      const h = Math.min(box.bottom, board.bottom) - Math.max(box.top, board.top);
+      if (w <= 0 || h <= 0) continue;
+      const pct = Math.round(((w * h) / area) * 100);
+      if (pct > worst.pct) {
+        worst = { id: el.id || el.className || el.tagName.toLowerCase(), pct };
+      }
+    }
+    obscured = worst;
+  }
   return {
     endcard,
+    obscured,
     clock: text('#clock, [id$="-clock"]'),
     tick: text("#tick-clock, #tick, .tick-clock, #tickinfo"),
     scorebug: text('#scorebug, [id$="-scorebug"]'),
@@ -589,6 +641,7 @@ async function main() {
       middle: middle ? { clock: middle.clock, tick: middle.tick } : null,
       after: after ? { clock: after.clock, tick: after.tick } : null,
       status: after ? after.status : null,
+      obscured: after ? after.obscured : null,
       page_errors: pageErrors.slice(),
     };
     readout = after;
@@ -612,7 +665,7 @@ async function main() {
   const scrub = [];
   let scrubSelector = null;
   if (loaded && readout && readout.has_scrub) {
-    scrub.push({ at: "0%", clock: readout.clock });
+    scrub.push({ at: "0%", clock: readout.clock, obscured: readout.obscured });
     for (const fraction of [0.5, 1.0]) {
       try {
         const target = await scrubTarget(page);
@@ -623,7 +676,8 @@ async function main() {
         await page.mouse.click(x, box.y + box.height / 2);
         await sleep(700);
         const now = await page.evaluate(READOUT_SCRIPT);
-        scrub.push({ at: `${Math.round(fraction * 100)}%`, clock: now.clock, endcard: now.endcard });
+        scrub.push({ at: `${Math.round(fraction * 100)}%`, clock: now.clock,
+          endcard: now.endcard, obscured: now.obscured });
       } catch (error) {
         scrub.push({ at: `${Math.round(fraction * 100)}%`, clock: null, error: String(error && error.message) });
       }
@@ -664,6 +718,7 @@ async function main() {
     clock: readout ? readout.clock : null,
     scorebug: readout ? readout.scorebug : null,
     endcard: readout ? readout.endcard : null,
+    obscured: readout ? readout.obscured : null,
     status: readout ? readout.status : null,
     loading_text: readout ? readout.loading : null,
     feed_lines: readout ? readout.feed_lines : 0,

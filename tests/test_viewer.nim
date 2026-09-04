@@ -253,6 +253,20 @@ block:
   check("and a viewer who opens it by hand keeps it open",
     "doctrinesPinned = !open;" in page)
 
+## And CI measures it in a real browser: the harness reports the largest
+## painted, text-carrying panel covering the board, and the wasm-viewer job
+## fails when one holds more than half of it while playback is advancing.
+block:
+  let smoke = readFile("tools/ci/viewer_smoke.mjs")
+  check("the harness measures what covers the board",
+    "const boardEl = document.querySelector(\"canvas#board" in smoke)
+  check("and reports it per sample", "obscured: now.obscured" in smoke)
+  check("including after the soak", "obscured: after ? after.obscured : null" in smoke)
+  let workflow = readFile(".github/workflows/ci.yml")
+  check("ci.yml reads the measurement", "obscured_pct=" in workflow)
+  check("and fails on a panel that owns the board at t > 0",
+    "if [ \"${obscured_pct}\" -gt 50 ]; then" in workflow)
+
 ## THE RENDERER FIXTURE TESTS THE PAGE, NOT ITSELF.
 ## The full-cap doctrine-text fixture used to carry its own copy of the game
 ## block's CSS — and three declarations (`max-width`/`overflow` on the plate,
