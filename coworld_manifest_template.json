@@ -59,7 +59,21 @@
     "config_schema": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "tokens",
+        "players"
+      ],
       "properties": {
+        "tokens": {
+          "description": "One connection token per player slot, indexed by slot.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "year": {
           "type": "string",
           "enum": [
@@ -94,6 +108,7 @@
           "maximum": 2
         },
         "players": {
+          "description": "One player display-name object per seat, indexed by slot.",
           "type": "array",
           "minItems": 2,
           "maxItems": 2,

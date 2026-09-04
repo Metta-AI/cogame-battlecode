@@ -118,8 +118,19 @@ walkArrays(game["results_schema"], "results_schema")
 block:
   check("config_schema forbids unknown keys",
     not game["config_schema"]["additionalProperties"].getBool())
-  check("config_schema has no tokens property",
-    not game["config_schema"]["properties"].hasKey("tokens"))
+  ## The runner INJECTS one connection token per seat into every episode's
+  ## game_config, so the schema must DECLARE and REQUIRE them: `coworld
+  ## certify` refuses a manifest whose config_schema does not
+  ## ("game.config_schema must require tokens", 0.1.0, 2026-09-04).
+  var required: seq[string]
+  for v in game["config_schema"]["required"]:
+    required.add(v.getStr())
+  check("config_schema requires tokens", "tokens" in required)
+  check("config_schema requires players", "players" in required)
+  check("and declares a bounded tokens array",
+    game["config_schema"]["properties"]["tokens"]["maxItems"].getInt() == 2)
+  ## What must NOT carry tokens is the shipped VALUES: those are the runner's
+  ## to supply at episode time, never the manifest's to pin.
   for variant in variants:
     check("no tokens in " & variant["id"].getStr() & "'s game_config",
       not variant["game_config"].hasKey("tokens"))
