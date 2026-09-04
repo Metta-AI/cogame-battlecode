@@ -110,4 +110,28 @@ block:
   check("the miner dropped into water died", minerId notin w.robotsById)
   check("and the drone is still flying", droneId in w.robotsById)
 
+block:
+  ## Moving INTO water is not refused, it is fatal. `assertCanMove` never
+  ## tests flooding (`RobotControllerImpl.java:344-365` at 7618f6b); `move`
+  ## tests it afterwards and disintegrates the mover (`:382-391`). So
+  ## `canMove` says yes, the miner dies where it stands, and the water tile
+  ## stays empty. A drone flies in and lives. §Divergences item 17.
+  var w = newWorld(flat(7, 7, 0, @[3 + 7 * 3]), 1500)
+  let minerId = w.spawnRobot(rtMiner, loc(3, 2), teamA)
+  let miner = w.robotsById[minerId]
+  miner.cooldownTurns = 0
+  check("the move is LEGAL — flooding is not part of the assert",
+    w.canMove(miner, dNorth))
+  w.move(miner, dNorth)
+  check("but the miner is destroyed", minerId notin w.robotsById)
+  check("and never occupies the water tile", w.getRobot(loc(3, 3)) == nil)
+  check("nor stands on its old tile", w.getRobot(loc(3, 2)) == nil)
+
+  let droneId = w.spawnRobot(rtDeliveryDrone, loc(3, 2), teamA)
+  let drone = w.robotsById[droneId]
+  drone.cooldownTurns = 0
+  w.move(drone, dNorth)
+  check("a drone flies onto the same tile and lives", droneId in w.robotsById)
+  checkEq("and is standing on it", drone.loc, loc(3, 3))
+
 finish("test_bc20_flood")

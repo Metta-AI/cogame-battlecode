@@ -206,6 +206,22 @@ Every one of these is deliberate and is the reason the parity oracle compares
     * **dirt dropped on a building buries it** (rule 6.6), and the HQ ring is
       precisely what the landscapers raise. A net gun on the ring is buried by
       its own team's wall, so the ring is the one place it may not stand.
+17. **A non-flying unit that moves into water is DESTROYED, not refused.** The
+    rule as usually stated — "a drone may enter a flooded tile; nothing else
+    may" — reads like a legality check, and it is not one. In
+    `engine/src/main/battlecode/world/RobotControllerImpl.java:382-401` at the
+    pinned commit `7618f6b`, `move` calls `assertCanMove`, which tests type,
+    adjacency, the map bounds, occupancy, `MAX_DIRT_DIFFERENCE` and readiness
+    and **never mentions flooding**; the flood test comes afterwards and calls
+    `disintegrate()`, which throws `RobotDeathException` (`:937-939`) and ends
+    the turn. `GameWorld.updateRobot:190-191` then destroys the robot. So the
+    move is legal, the mover dies, and the tile stays empty. `world.canMove`
+    reproduces the assert exactly (no flood test) and `world.move` reproduces
+    the disintegration; the port destroys the mover at that point rather than
+    at the end of its own turn, which no other body can observe because
+    nothing acts in between. Neither chassis ever plans such a move —
+    `pathing.nim` excludes flooded and about-to-flood tiles — so this is the
+    rule for a doctrine that would.
 
 ## Where the archetypes come from
 
