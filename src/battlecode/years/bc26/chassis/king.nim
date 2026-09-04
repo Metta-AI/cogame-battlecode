@@ -32,6 +32,38 @@ proc spawnThreshold*(w: World, clan: Clan): int =
   of scSteady: floorCheese + base
   of scSwarm: floorCheese div 2 + (base * 7 + 9) div 10
 
+proc digOut(w: World, clan: Clan, r: Robot): bool =
+  ## A king whose build ring is buried in dirt can never spawn a rat, never
+  ## earn a cheese, and starves where it stands: 2500 cheese at 2 a round runs
+  ## out at round 1250 and 600 hp at 10 a round is gone by 1310. `closeup`
+  ## starts BOTH kings in a corner packed with the map's own dirt and that is
+  ## exactly what happened to them — 0 rats, 0 cheese, 0 cat damage, both
+  ## crowns dead at round 1310 (r2-D2). Dirt is passable ground once dug, and
+  ## a king may dig inside `RatKingBuildDistanceSquared`, so it digs itself a
+  ## door.
+  ##
+  ## ONLY when the clan is down to its last rat and the ring holds no free
+  ## tile at all. A crowded ring is not a buried one: a king that digs every
+  ## time a rat of its own is standing in the way spends 5 cheese a turn on
+  ## nothing and starves faster than the burial would have killed it.
+  if w.teamInfo.numBabyRats[ord(clan.team)] >= 2: return false
+  if not r.canActCooldown: return false
+  if not r.spend(6): return false
+  var buried: seq[Loc]
+  for d in NonCenterDirs:
+    if not r.spend(1): break
+    for spot in [r.loc + d + d, r.loc + d]:
+      if not w.onTheMap(spot) or w.getWall(spot): continue
+      if w.getDirt(spot):
+        buried.add(spot)
+      elif w.getRobot(spot) == nil:
+        return false        ## a free tile exists; the ring is not buried
+  for spot in buried:
+    if w.canRemoveDirt(r, spot):
+      w.removeDirt(r, spot)
+      return true
+  false
+
 proc runKing*(w: World, clan: Clan, r: Robot) =
   ## Kings do four things: eat what is underfoot, bite what is adjacent,
   ## build, and tell the clan where the cheese is.
@@ -62,6 +94,10 @@ proc runKing*(w: World, clan: Clan, r: Robot) =
           if w.canBuildRat(r, spot):
             w.buildRat(r, spot)
             break
+      ## Still holding the action after trying every spot: the ring is not
+      ## merely crowded, it is buried. Dig.
+      if r.canActCooldown:
+        discard digOut(w, clan, r)
 
   ## One squeak a turn: the tile index of the best cheese in sight, so
   ## miners have somewhere to go. Cats hear squeaks too — that is the trade.
