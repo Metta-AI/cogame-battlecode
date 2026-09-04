@@ -2798,6 +2798,7 @@ button.beat-marker { border: 0; padding: 0; cursor: pointer; }
   // it (the tandem 2026-08-23 collision). Each beat is a real, labelled,
   // clickable <button> so a spectator can jump to the betrayal.
   var beatsBuilt = false;
+  var beatEls = [];
   function buildBeatButtons(s) {
     if (beatsBuilt || !s.beats || !s.beats.length) return;
     beatsBuilt = true;
@@ -2816,6 +2817,27 @@ button.beat-marker { border: 0; padding: 0; cursor: pointer; }
         seek(b.t / span);
       });
       scrub.appendChild(el);
+      beatEls.push(el);
+    });
+    applyBeatSpoilers(s);
+  }
+
+  // These buttons are OURS, not chrome_common's: they are appended straight
+  // to #scrub instead of going through markBeat/renderBeatMarkers (which
+  // build divs, and whose name this block may not reuse -- the tandem
+  // collision), so chrome_common's applySpoilers, which walks its own
+  // markerEls, never sees them. With spoilers off, the marker for a BACKSTAB
+  // 900 rounds away was on the scrubber from frame 0. Same rule as the
+  // starter's: hide a marker that sits ahead of the playhead.
+  function applyBeatSpoilers(s) {
+    if (!s || !beatEls.length) return;
+    var spoilers = C.getSpoilers();
+    beatEls.forEach(function (el) {
+      var hide = !spoilers && el.__tick > s.t;
+      if (el.__hidden !== hide) {
+        el.__hidden = hide;
+        el.style.display = hide ? 'none' : '';
+      }
     });
   }
 
@@ -2937,8 +2959,11 @@ button.beat-marker { border: 0; padding: 0; cursor: pointer; }
     var feed = $('killfeed');
     s.beats.forEach(function (b) {
       var key = b.t + '|' + b.k;
+      // Future beats are excluded here, so the feed is spoiler-safe by
+      // construction: a line appears when the playhead reaches its beat and
+      // never before. (A second `!getSpoilers() && b.t > s.t` guard used to
+      // follow this line and could not fire.)
       if (feedShown[key] || b.t > s.t) return;
-      if (!C.getSpoilers() && b.t > s.t) return;
       feedShown[key] = true;
       var row = document.createElement('div');
       row.className = 'kf-row ' + b.k;
@@ -3048,6 +3073,7 @@ button.beat-marker { border: 0; padding: 0; cursor: pointer; }
   $('btn-spoilers').addEventListener('click', function () {
     C.setSpoilers(!C.getSpoilers());
     $('btn-spoilers').classList.toggle('on', C.getSpoilers());
+    applyBeatSpoilers(lastState);
   });
   $('scrub').addEventListener('click', function (event) {
     var rect = this.getBoundingClientRect();
@@ -3064,6 +3090,7 @@ button.beat-marker { border: 0; padding: 0; cursor: pointer; }
       send(key);
     } else if (key === 'o') {
       C.setSpoilers(!C.getSpoilers());
+      applyBeatSpoilers(lastState);
     }
   });
 
@@ -3123,6 +3150,7 @@ button.beat-marker { border: 0; padding: 0; cursor: pointer; }
     renderFeed(s);
     C.renderClock(s);
     C.renderTransport(s);
+    applyBeatSpoilers(s);
     $('clock-caption').textContent = s.ph === 'gameover'
       ? 'Match over'
       : 'game ' + s.game + ' of ' + s.games + ' — ' + s.map;

@@ -147,6 +147,22 @@ for aliased in ["renderClock", "renderTransport", "getSpoilers",
   check("the game block does not shadow ChromeCommon's " & aliased,
     "function " & aliased in page == false)
 
+## The game block's beat buttons ride ITS OWN spoiler gate: they never reach
+## chrome_common's markerEls (they are appended straight to #scrub, and this
+## block may not call itself markBeat), so applySpoilers cannot see them and
+## a future BACKSTAB marker was visible from frame 0 with spoilers off.
+check("the block gates its own beat markers",
+  "function applyBeatSpoilers" in page)
+check("on the same rule the starter uses",
+  "!spoilers && el.__tick > s.t" in page)
+check("re-applied on every frame", page.count("applyBeatSpoilers(s)") >= 2)
+check("and on the spoiler toggle",
+  page.count("applyBeatSpoilers(lastState)") >= 2)
+## The killfeed's own gate was dead code: the line above it already returns
+## for a beat ahead of the playhead.
+check("the killfeed has no unreachable spoiler guard",
+  "if (!C.getSpoilers() && b.t > s.t) return;" notin page)
+
 ## Transport rules from the design note.
 check("relayout sets --hudscale", "--hudscale" in page)
 check("relayout sets --topband", "--topband" in page)
