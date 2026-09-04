@@ -73,6 +73,17 @@ block:
   for key in Bc20GameKeys:
     check("and bc20's key does not collide with bc26's",
       key notin Bc26GameKeys)
+  for key in Bc21GameKeys:
+    check("the schema declares bc21's optional game key " & key,
+      key in gameProps)
+  for key in Bc21GameKeys:
+    ## bc21 REUSES `units_built` and `units_alive` deliberately — same meaning,
+    ## same type — and everything else must be its own.
+    if key in ["units_built", "units_alive"]:
+      check("bc21 reuses " & key & " from bc20", key in Bc20GameKeys)
+    else:
+      check("bc21's key " & key & " collides with neither older year",
+        key notin Bc26GameKeys and key notin Bc20GameKeys)
 
   var endReasons: seq[string]
   for v in game["results_schema"]["properties"]["games"]["items"]["properties"]["end_reason"]["enum"]:
@@ -86,8 +97,8 @@ block:
   var yearEnum: seq[string]
   for v in game["config_schema"]["properties"]["year"]["enum"]:
     yearEnum.add(v.getStr())
-  checkEq("config_schema.year.enum names both years", yearEnum,
-    @["bc26", "bc20"])
+  checkEq("config_schema.year.enum names all three years", yearEnum,
+    @["bc26", "bc20", "bc21"])
 
 block:
   ## The third leg: what docker_smoke.sh actually asserts.
@@ -100,10 +111,11 @@ block:
 # --- num_agents -------------------------------------------------------------
 block:
   ## ONE VARIANT PER BATTLECODE YEAR.
-  checkEq("one variant per registered year", variants.len, 2)
+  checkEq("one variant per registered year", variants.len, 3)
   var variantIds: seq[string]
   for variant in variants: variantIds.add(variant["id"].getStr())
-  checkEq("and they are the registered years", variantIds, @["bc26", "bc20"])
+  checkEq("and they are the registered years", variantIds,
+    @["bc26", "bc20", "bc21"])
   for variant in variants:
     check("variant " & variant["id"].getStr() & " is a registered year",
       isRegisteredYear(variant["game_config"]["year"].getStr()))
@@ -211,7 +223,7 @@ block:
   checkEq("docs.readme is an object", docs["readme"].kind, JObject)
   check("docs.readme has type and value",
     docs["readme"].hasKey("type") and docs["readme"].hasKey("value"))
-  checkEq("four doc pages ship", docs["pages"].len, 4)
+  checkEq("five doc pages ship — one rules page per year", docs["pages"].len, 5)
   var ids: seq[string]
   for page in docs["pages"]:
     ids.add(page["id"].getStr())
@@ -225,7 +237,7 @@ block:
       toUpperAscii() & ".md"
     check("the page's file exists: " & target, fileExists(target))
   checkEq("the pages are the ones the design note names", ids,
-    @["rules.md", "rules-bc20.md", "replay.md", "parity.md"])
+    @["rules.md", "rules-bc20.md", "rules-bc21.md", "replay.md", "parity.md"])
 
 # --- the rest of the shape --------------------------------------------------
 block:
@@ -271,7 +283,7 @@ block:
 block:
   let policies = parseJson(readFile("tools/ci/policies.json"))
   ## Four per year: two `PLAYER_PROMPT` champions and two scripted fillers.
-  checkEq("eight policies ship — four per year", policies.len, 8)
+  checkEq("twelve policies ship — four per year", policies.len, 12)
   var prompts = 0
   var scripted = 0
   var owned = 0
@@ -294,9 +306,9 @@ block:
         p["env"]["PLAYER_PROMPT"].getStr().len > 200)
     if p["env"].hasKey("PLAYER_SCRIPTED"): inc scripted
     if p.hasKey("player"): inc owned
-  checkEq("two LLM champions per year", prompts, 4)
-  checkEq("two scripted baselines per year", scripted, 4)
-  checkEq("each year's champion #2 carries its owning player", owned, 2)
+  checkEq("two LLM champions per year", prompts, 6)
+  checkEq("two scripted baselines per year", scripted, 6)
+  checkEq("each year's champion #2 carries its owning player", owned, 3)
   checkEq("bc26 champion #2 is the second prompt policy",
     policies[1]["player"].getStr(),
     "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
@@ -317,6 +329,24 @@ block:
     policies[6]["env"]["PLAYER_SCRIPTED"].getStr() & "," &
     policies[7]["env"]["PLAYER_SCRIPTED"].getStr(),
     "bowl-of-chowder,examplefuncsplayer")
+  checkEq("bc21 champion #1 is the turtle",
+    policies[8]["name"].getStr(), "battlecode-bc21-turtle")
+  checkEq("bc21 champion #2 is the muckraker rush",
+    policies[9]["name"].getStr(), "battlecode-bc21-muckrush")
+  checkEq("and bc21 champion #2 carries its owning player",
+    policies[9]["player"].getStr(),
+    "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
+  check("the two bc21 champion prompts differ",
+    policies[8]["env"]["PLAYER_PROMPT"].getStr() !=
+    policies[9]["env"]["PLAYER_PROMPT"].getStr())
+  check("bc21 champion #1 is the slanderer-turtle/eco pole",
+    "slanderer_turtle" in policies[8]["env"]["PLAYER_PROMPT"].getStr())
+  check("and champion #2 is the muckraker rush",
+    "muck_spam" in policies[9]["env"]["PLAYER_PROMPT"].getStr())
+  checkEq("the bc21 fillers name the two published chassis",
+    policies[10]["env"]["PLAYER_SCRIPTED"].getStr() & "," &
+    policies[11]["env"]["PLAYER_SCRIPTED"].getStr(),
+    "california-roll,examplefuncsplayer21")
 
 # --- compose.yaml service names are load-bearing ----------------------------
 block:
