@@ -15,69 +15,41 @@
   This coworld's board is pannable and zoomable (#viewpanel is kept, because a
   60x60 board renders wider than a 360 px featured-match frame), which is the
   exact case that flag's own documentation excludes. So this fixture stands in
-  its place: it lays out BOTH seats' readouts at their full caps, in the same
-  CSS the page uses, at several canvas widths, and reports whether anything
-  overflowed its box.
+  its place: it lays out BOTH seats' readouts at their full caps and reports
+  whether anything overflowed its box.
 
-  Driven by the `wasm-viewer` job. `window.__fixtureOverflow` is the verdict
-  and `data-fixture-drawn="true"` on <html> is the ready signal.
+  IT DOES NOT COPY THE PAGE'S CSS. `page_styles.css` is the <style> block of
+  client/replay_broadcast.html, extracted verbatim by the wasm-viewer job, and
+  the markup below is the page's own DOM (#viewport > #stage > #chrome >
+  #scorebug > .plates > .plate, plus #coopchip/#econ/#doctrines) with the band
+  variables relayout() computes at runtime. A fixture with its own private
+  rules — an `overflow: hidden` the page does not ship, say — is green about
+  itself and says nothing about the page (r1-N8).
+
+  Three widths in one page load: the top-level document opens itself in three
+  iframes sized 360 / 720 / 1280, so each one's media queries see its own
+  width, and the parent reads each child's verdict directly.
+  `data-replay-loaded="true"` on <html> is the ready signal and
+  `data-replay-error` carries the first failure, so
+  `tools/ci/viewer_smoke.mjs --url … --strict-text-bounds` drives this page
+  unchanged.
+
+  SERVE IT, do not open it from disk: the children are read through
+  `contentWindow`, which a file:// document cannot do (every file:// page is
+  its own opaque origin), and the page says so rather than passing silently.
 -->
+<link rel="stylesheet" href="page_styles.css">
 <style>
-  :root { --ash: #e8a33d; --basil: #b06fd0; --band: 76px; }
-  html, body { margin: 0; background: #16100b; color: #cbbfae;
-               font: 12px/1.35 system-ui, sans-serif; }
-  #frame { position: relative; width: 100%; height: 100vh; overflow: hidden; }
-
-  /* The same rules the appended game block ships. */
-  #scorebug { display: flex; gap: 8px; padding: 6px; align-items: center; }
-  #scorebug .plate { display: flex; align-items: center; gap: 6px;
-                     max-width: 46%; overflow: hidden; }
-  #scorebug .plate-name { flex: 1 1 auto; min-width: 3.2em; }
-  #scorebug .plate-sub { opacity: .72; font-size: 11px;
-                         white-space: nowrap; overflow: hidden;
-                         text-overflow: ellipsis; }
-  #scorebug .plate-pts { font-variant-numeric: tabular-nums; font-weight: 700; }
-
-  #doctrines { position: absolute; left: 8px;
-               bottom: calc(var(--band, 0px) + 8px); max-width: 44%;
-               font-size: 10px; background: rgba(11,7,4,.6);
-               padding: 5px 8px; border-radius: 6px; overflow: hidden; }
-  #doctrines .dname { color: #f2e8d8; font-weight: 600; }
-
-  #econ { position: absolute; right: 8px;
-          bottom: calc(var(--band, 0px) + 8px); display: grid;
-          grid-template-columns: auto auto auto; gap: 1px 8px;
-          font-size: 10px; background: rgba(11,7,4,.6);
-          padding: 5px 8px; border-radius: 6px; }
-
-  #coopchip { position: absolute; top: 6px; left: 50%;
-              transform: translateX(-50%); padding: 2px 10px;
-              border-radius: 999px; font-size: 11px; letter-spacing: .12em;
-              background: rgba(11,7,4,.72); color: #e0523a;
-              border: 1px solid #e0523a; white-space: nowrap; }
-
-  @media (max-width: 640px) {
-    #econ, #doctrines { font-size: 9px; }
-    #scorebug .plate-sub { display: none; }
-  }
+  /* The only rules that are NOT the page's: the harness chrome. */
+  html, body { background: #16100b; }
+  #widths { position: absolute; inset: 0; display: flex; flex-direction: column;
+            overflow: auto; }
+  #widths iframe { border: 0; display: block; background: #16100b; flex: none; }
+  #verdict { position: absolute; right: 0; bottom: 0; z-index: 99;
+             color: #cbbfae; font: 11px/1.3 system-ui, sans-serif;
+             background: rgba(0,0,0,.6); padding: 4px 6px; white-space: pre; }
 </style>
-<div id="frame">
-  <div id="scorebug">
-    <div class="plate ash">
-      <span class="plate-name" id="n0"></span>
-      <span class="plate-sub" id="s0"></span>
-      <span class="plate-pts">73</span>
-    </div>
-    <div class="plate basil">
-      <span class="plate-name" id="n1"></span>
-      <span class="plate-sub" id="s1"></span>
-      <span class="plate-pts">26</span>
-    </div>
-  </div>
-  <div id="coopchip"></div>
-  <div id="doctrines"></div>
-  <div id="econ"></div>
-</div>
+<body>
 <script>
 (function () {
   'use strict';
@@ -88,21 +60,91 @@
   // to everything except one lenient viewer.
   var MAX_NOTE_RUNES = 280;
   var MAX_MOTTO_RUNES = 48;
+  // The featured-match frame, a tablet width and desktop.
+  var SIZES = [[360, 640], [720, 900], [1280, 720]];
 
+  function runes(text) { return Array.from(text); }
   function repeatRunes(text, count) {
     var out = '';
     for (var i = 0; i < count; i++) out += text;
     return out;
   }
-  function runeLen(text) { return Array.from(text).length; }
 
+  function fail(message) {
+    document.documentElement.setAttribute('data-replay-error', message);
+    console.error('renderer fixture: ' + message);
+  }
+
+  var params = new URLSearchParams(location.search);
+  var inner = params.get('w');
+
+  // ------------------------------------------------------------------
+  // Parent: one iframe per width, each posting its own verdict back.
+  // ------------------------------------------------------------------
+  if (!inner) {
+    var box = document.createElement('div');
+    box.id = 'widths';
+    document.body.appendChild(box);
+    var readout = document.createElement('div');
+    readout.id = 'verdict';
+    document.body.appendChild(readout);
+    var frames = SIZES.map(function (size) {
+      var frame = document.createElement('iframe');
+      frame.width = String(size[0]);
+      frame.height = String(size[1]);
+      frame.src = location.pathname + '?w=' + size[0];
+      box.appendChild(frame);
+      return frame;
+    });
+    var deadline = Date.now() + 30000;
+    (function collect() {
+      var lines = [];
+      var problem = null;
+      var pending = false;
+      for (var i = 0; i < frames.length; i++) {
+        var child;
+        try {
+          child = frames[i].contentWindow;
+        } catch (blocked) {
+          fail('the fixture must be SERVED (http://), not opened from disk: ' +
+            'a file:// parent cannot read its own iframes');
+          return;
+        }
+        if (!child || child.__fixtureVerdict === undefined) { pending = true; continue; }
+        lines.push(SIZES[i][0] + 'px: ' + (child.__fixtureVerdict || 'ok'));
+        if (child.__fixtureVerdict && !problem) {
+          problem = SIZES[i][0] + 'px: ' + child.__fixtureVerdict;
+        }
+      }
+      readout.textContent = lines.join('\n');
+      if (pending && !problem) {
+        if (Date.now() > deadline) {
+          fail('a width never reported: ' + lines.join(' | '));
+          return;
+        }
+        setTimeout(collect, 100);
+        return;
+      }
+      window.__fixtureOverflow = problem;
+      document.documentElement.setAttribute('data-fixture-drawn', 'true');
+      if (problem) fail(problem);
+      else document.documentElement.setAttribute('data-replay-loaded', 'true');
+    })();
+    return;
+  }
+
+  // ------------------------------------------------------------------
+  // Child: the page's own chrome, at this width, with both seats' readouts
+  // at their full rune caps.
+  // ------------------------------------------------------------------
   var notes = repeatRunes('\u{1F400} betray at 700 then take the crowns ', 20);
-  notes = Array.from(notes).slice(0, MAX_NOTE_RUNES).join('');
-  var motto = Array.from(repeatRunes('\u{1F9C0} Trust, briefly. ', 10))
+  notes = runes(notes).slice(0, MAX_NOTE_RUNES).join('');
+  var motto = runes(repeatRunes('\u{1F9C0} Trust, briefly. ', 10))
     .slice(0, MAX_MOTTO_RUNES).join('');
-
-  if (runeLen(notes) !== MAX_NOTE_RUNES || runeLen(motto) !== MAX_MOTTO_RUNES) {
-    throw new Error('the fixture did not build full-cap strings');
+  if (runes(notes).length !== MAX_NOTE_RUNES ||
+      runes(motto).length !== MAX_MOTTO_RUNES) {
+    fail('the fixture did not build full-cap strings');
+    return;
   }
 
   var ALIASES = ['CLAN ASH', 'CLAN BASIL'];
@@ -115,52 +157,131 @@
       'throws rats to cats'
   ];
 
-  for (var slot = 0; slot < 2; slot++) {
-    document.getElementById('n' + slot).textContent = ALIASES[slot];
-    document.getElementById('s' + slot).textContent = NAMES[slot] + ' · ' + motto;
-  }
-  document.getElementById('coopchip').textContent =
-    'BACKSTAB — Clan Basil, round 1612';
+  // relayout()'s own arithmetic (client/replay_broadcast.html): --hudscale
+  // from the width, --topband from the scale, --band from the measured
+  // transport height (76 px is what the inherited bar measures).
+  var scale = Math.max(0.62, Math.min(1, window.innerWidth / 1100));
+  var root = document.documentElement.style;
+  root.setProperty('--hudscale', String(scale));
+  root.setProperty('--topband', Math.round(58 * scale) + 'px');
+  root.setProperty('--band', '76px');
 
-  var html = '';
-  for (var i = 0; i < 2; i++) {
-    html += '<div class="dline"><span class="dname">' + ALIASES[i] +
-      '</span> — ' + WORDS[i] + '<br><i>' + notes + '</i></div>';
+  function plate(slot, team) {
+    return '<div class="plate ' + team + '">' +
+      '<span class="plate-name">' + ALIASES[slot] + '</span>' +
+      '<span class="plate-sub">' + NAMES[slot] + ' \u00b7 ' + motto + '</span>' +
+      '<span class="plate-pts">' + (slot === 0 ? 73 : 26) + '</span>' +
+      '</div>';
   }
-  document.getElementById('doctrines').innerHTML = html;
-
-  var rows = [['kings built', 4, 2], ['cheese delivered', 12480, 9310],
-              ['cats damaged', 8000, 6120], ['traps laid', 106, 34],
-              ['dirt placed', 218, 96]];
   var econ = '<span></span><b>Clan Ash</b><b>Clan Basil</b>';
-  rows.forEach(function (r) {
+  [['kings built', 4, 2], ['cheese delivered', 12480, 9310],
+   ['cats damaged', 8000, 6120], ['traps laid', 106, 34],
+   ['dirt placed', 218, 96]].forEach(function (r) {
     econ += '<span>' + r[0] + '</span><span>' + r[1] + '</span><span>' +
       r[2] + '</span>';
   });
-  document.getElementById('econ').innerHTML = econ;
+  var doctrines = '';
+  for (var i = 0; i < 2; i++) {
+    doctrines += '<div class="dline"><span class="dname">' + ALIASES[i] +
+      '</span> — ' + WORDS[i] + '<br><i>' + notes + '</i></div>';
+  }
 
-  // The verdict: did any readout escape the frame?
-  function overflows() {
-    var frame = document.getElementById('frame').getBoundingClientRect();
-    var ids = ['scorebug', 'coopchip', 'doctrines', 'econ'];
-    for (var i = 0; i < ids.length; i++) {
-      var box = document.getElementById(ids[i]).getBoundingClientRect();
-      if (box.left < frame.left - 1 || box.right > frame.right + 1 ||
-          box.top < frame.top - 1 || box.bottom > frame.bottom + 1) {
-        return ids[i];
+  document.body.innerHTML =
+    '<div id="viewport"><div id="stage"><div id="chrome">' +
+      '<div id="scorebug">' +
+        '<div class="plates" id="plates-l">' + plate(0, 'ash') + '</div>' +
+        '<div class="clock-col"><div class="clock amb" id="clock">' +
+          '<div class="time" id="clock-time">0:00</div>' +
+          '<div class="caption" id="clock-caption">game 3 of 3 — DefaultMedium</div>' +
+        '</div></div>' +
+        '<div class="plates" id="plates-r">' + plate(1, 'basil') + '</div>' +
+      '</div>' +
+      '<div id="coopchip" class="backstab">BACKSTAB — Clan Basil, round 1612</div>' +
+      '<div id="econ">' + econ + '</div>' +
+      '<div id="doctrines">' + doctrines + '</div>' +
+    '</div></div></div>';
+
+  // The verdict: nothing may leave the frame, and nothing may hide text
+  // inside itself. Every element under #chrome is measured, not just the four
+  // containers — a container fixed to the frame's width cannot report that
+  // the caption inside it ran off the end.
+  function problem() {
+    if (getComputedStyle(document.getElementById('doctrines')).position !==
+        'absolute') {
+      return 'page_styles.css did not load — the fixture would be testing ' +
+        'nothing (extracted from client/replay_broadcast.html by ci.yml)';
+    }
+    var frame = document.documentElement.getBoundingClientRect();
+    var nodes = document.querySelectorAll('#chrome, #chrome *');
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (getComputedStyle(el).display === 'none') continue;
+      var b = el.getBoundingClientRect();
+      var id = el.id || el.className || el.tagName;
+      if (b.width === 0 && b.height === 0) continue;
+      if (b.left < frame.left - 1 || b.right > frame.right + 1 ||
+          b.top < frame.top - 1 || b.bottom > frame.bottom + 1) {
+        return id + ' escapes the frame [' + Math.round(b.left) + ',' +
+          Math.round(b.top) + ',' + Math.round(b.right) + ',' +
+          Math.round(b.bottom) + '] of [0,0,' + Math.round(frame.right) +
+          ',' + Math.round(frame.bottom) + ']';
       }
+    }
+    // Hidden content, over the readouts this fixture FILLS: a box that
+    // clips its own text reads short and reports nothing. (The inherited
+    // clock column is measured for containment above, but its text is the
+    // starter's, not a doctrine's.)
+    var filled = document.querySelectorAll(
+      '#scorebug .plate, #scorebug .plate *, #coopchip, #econ, #econ *, ' +
+      '#doctrines, #doctrines *');
+    for (var j = 0; j < filled.length; j++) {
+      var node = filled[j];
+      if (getComputedStyle(node).display === 'none') continue;
+      if (node.scrollWidth > node.clientWidth + 1 ||
+          node.scrollHeight > node.clientHeight + 1) {
+        return (node.id || node.className || node.tagName) +
+          ' hides its own content (' + node.scrollWidth + 'x' +
+          node.scrollHeight + ' inside ' + node.clientWidth + 'x' +
+          node.clientHeight + ')';
+      }
+    }
+    // The strings must still be at their caps: one quietly shortened remark
+    // leaves this fixture passing while testing nothing.
+    var sub = document.querySelector('.plate-sub');
+    if (runes(sub.textContent).length !==
+        runes(NAMES[0]).length + 3 + MAX_MOTTO_RUNES) {
+      return 'the motto was shortened before it was measured';
+    }
+    if (document.querySelectorAll('#doctrines .dline i')[0].textContent !==
+        notes) {
+      return 'the notes were shortened before they were measured';
     }
     return null;
   }
 
-  requestAnimationFrame(function () {
-    window.__fixtureOverflow = overflows();
+  // NOT requestAnimationFrame: an iframe scrolled out of the parent's view is
+  // rAF-throttled and would never report, which reads as "the fixture hung"
+  // rather than "one width was never measured". Fonts first — a metric read
+  // before the font settles is a different measurement.
+  function measure() {
+    var found = problem();
+    window.__fixtureOverflow = found;
     document.documentElement.setAttribute('data-fixture-drawn', 'true');
-    // The harness also accepts the standard replay signals, so this page can
-    // be driven by tools/ci/viewer_smoke.mjs unchanged.
-    document.documentElement.setAttribute(
-      window.__fixtureOverflow ? 'data-replay-error' : 'data-replay-loaded',
-      window.__fixtureOverflow || 'true');
-  });
+    if (found) {
+      fail(found);
+    } else {
+      document.documentElement.setAttribute('data-replay-loaded', 'true');
+    }
+    // The parent reads this directly (same origin, hence "serve it"): the
+    // harness replaces `window.parent` with a bridge stub in every frame, so
+    // a postMessage from here would never reach the real parent.
+    window.__fixtureVerdict = found;
+  }
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { setTimeout(measure, 50); });
+  } else {
+    setTimeout(measure, 50);
+  }
 })();
 </script>
+</body>

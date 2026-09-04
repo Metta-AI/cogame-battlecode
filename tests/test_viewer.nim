@@ -188,6 +188,34 @@ check("and not with a class that has no rule",
 check("the page uses the renamed static-replay adapter",
   "BcStaticReplay" in page)
 
+## THE RENDERER FIXTURE TESTS THE PAGE, NOT ITSELF.
+## The full-cap doctrine-text fixture used to carry its own copy of the game
+## block's CSS — and three declarations (`max-width`/`overflow` on the plate,
+## an ellipsis on the plate-sub, `overflow: hidden` on #doctrines) that the
+## page does not ship, which is precisely what a box cannot overflow. It now
+## LINKS the page's own <style> block, extracted by ci.yml, and defines no
+## rule for any element it measures.
+block:
+  let fixture = readFile("tools/ci/renderer_fixture.html")
+  check("the fixture links the page's own stylesheet",
+    "<link rel=\"stylesheet\" href=\"page_styles.css\">" in fixture)
+  for own in ["#scorebug .plate {", "#scorebug .plate-name",
+              "#scorebug .plate-sub", "#doctrines {", "#econ {", "#coopchip {",
+              "@media"]:
+    check("the fixture does not re-declare " & own,
+      own notin fixture)
+  check("it fails loudly when the page's CSS is missing",
+    "page_styles.css did not load" in fixture)
+  ## The caps it lays out are the caps the server enforces.
+  check("the fixture uses MaxNoteRunes",
+    "MAX_NOTE_RUNES = " & $MaxNoteRunes in fixture)
+  check("and MaxMottoRunes",
+    "MAX_MOTTO_RUNES = " & $MaxMottoRunes in fixture)
+  ## And ci.yml drives it through the same harness as the bundle.
+  let workflow = readFile(".github/workflows/ci.yml")
+  check("ci.yml drives the fixture with viewer_smoke --strict-text-bounds",
+    "renderer_fixture.html\" \\\n            --timeout 60 \\\n            --strict-text-bounds" in workflow)
+
 # --- the sim really produces a drawable frame -------------------------------
 # Everything the wasm entry does EXCEPT the emscripten shell: parse a replay,
 # build a deriver, step it, and emit a bitworld sprite packet.

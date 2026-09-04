@@ -554,37 +554,42 @@ jobs:
       # The text the CI replay never carries. Every replay CI produces is
       # SCRIPTED, so its notes and motto are the short strings baselines.nim
       # emits; a hosted episode carries whatever an LLM wrote, up to the full
-      # rune caps. This fixture lays both seats out at those caps, in the
-      # page's own CSS, at three widths including the 360 px featured-match
-      # frame, and fails if any readout escapes its box. It stands in for
-      # --strict-text-bounds, which a pannable board cannot use.
+      # rune caps. The fixture lays both seats out at those caps, in THE
+      # PAGE'S OWN CSS -- extracted from client/replay_broadcast.html right
+      # here, never copied into the fixture, because a fixture with private
+      # rules is green about itself and says nothing about the page -- at
+      # three widths including the 360 px featured-match frame, and fails if
+      # any readout escapes its frame or hides its own text. It is driven by
+      # the same harness as the bundle, with --strict-text-bounds, and it is
+      # SERVED rather than opened from disk (the fixture reads its own
+      # iframes; file:// documents are opaque origins).
       - name: Render the full-cap doctrine-text fixture
         run: |
           set -euo pipefail
-          cp tools/ci/renderer_fixture.html dist/static-replay-viewer/
-          node -e "
-            const { chromium } = require('playwright');
-            (async () => {
-              const browser = await chromium.launch();
-              const page = await browser.newPage();
-              page.on('console', (m) => console.log('  [page] ' + m.text()));
-              for (const size of [[360, 640], [720, 900], [1280, 720]]) {
-                await page.setViewportSize({ width: size[0], height: size[1] });
-                await page.goto('file://' + process.cwd() +
-                  '/dist/static-replay-viewer/renderer_fixture.html');
-                await page.waitForSelector('html[data-fixture-drawn=\"true\"]',
-                  { timeout: 20000 });
-                const overflow = await page.evaluate(() => window.__fixtureOverflow);
-                console.log('renderer fixture at ' + size[0] + 'x' + size[1] +
-                  ': overflow=' + overflow);
-                if (overflow) {
-                  throw new Error('full-cap doctrine text overflowed #' +
-                    overflow + ' at ' + size[0] + 'px');
-                }
-              }
-              await browser.close();
-            })().catch((e) => { console.error(e); process.exit(1); });
-          "
+          mkdir -p dist/fixture
+          cp tools/ci/renderer_fixture.html dist/fixture/
+          python3 - <<'PY'
+          import pathlib, re
+          page = pathlib.Path("client/replay_broadcast.html").read_text()
+          styles = re.findall(r"<style>(.*?)</style>", page, re.S)
+          if not styles:
+              raise SystemExit("::error::no <style> block in client/replay_broadcast.html")
+          pathlib.Path("dist/fixture/page_styles.css").write_text("\n".join(styles))
+          print(f"page_styles.css: {sum(len(s) for s in styles)} bytes from "
+                f"{len(styles)} <style> block(s)")
+          PY
+          python3 -m http.server 8099 --directory dist/fixture >/dev/null 2>&1 &
+          server=$!
+          trap 'kill "${server}" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 50); do
+            curl -fsS "http://127.0.0.1:8099/renderer_fixture.html" >/dev/null 2>&1 && break
+            sleep 0.2
+          done
+          node tools/ci/viewer_smoke.mjs \
+            --url "http://127.0.0.1:8099/renderer_fixture.html" \
+            --timeout 60 \
+            --strict-text-bounds \
+            --out dist/fixture
 
       - name: Upload the viewer smoke evidence
         # Always: the screenshot and the JSON are most useful when the job is red.
@@ -595,6 +600,8 @@ jobs:
           path: |
             viewer-smoke.png
             viewer-smoke.json
+            dist/fixture/viewer-smoke.png
+            dist/fixture/viewer-smoke.json
           if-no-files-found: warn
           retention-days: 14
 
