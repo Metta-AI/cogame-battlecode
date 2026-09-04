@@ -229,19 +229,25 @@ block:
   checkEq("re-reading the same bytes gives the same chain",
     toHex(again.session.w26.hashChain), outcome.hashChain)
 
-# --- the year-neutral layer really does dispatch three years ----------------
+# --- the year-neutral layer really does dispatch four years -----------------
 block:
-  ## `test_determinism` is bc26's shard, and its bc20 and bc21 twins are
-  ## `tests/test_bc20_replay.nim` and `tests/test_bc21_replay.nim`. What
-  ## belongs HERE is the one determinism property that spans them: the SAME
-  ## year-neutral entry point, given the same seed and the same sheets, must
-  ## produce the same chain in every registered year — and a different one in
-  ## each, because they are different games.
+  ## `test_determinism` is bc26's shard, and its bc20, bc21 and bc24 twins are
+  ## `tests/test_bc20_replay.nim`, `tests/test_bc21_replay.nim` and
+  ## `tests/test_bc24_replay.nim`. What belongs HERE is the one determinism
+  ## property that spans them: the SAME year-neutral entry point, given the
+  ## same seed and the same sheets, must produce the same chain in every
+  ## registered year — and a different one in each, because they are different
+  ## games.
+  ##
+  ## `bc24`'s map is `Yinyang` and not a `DefaultSmall`: three bc24 map names
+  ## are ALSO bc26 map names, and this loop must be seen to pick each year's
+  ## own file.
   var chains: seq[string]
   for (year, mapName, chassis) in [
       ("bc26", "DefaultSmall", [scAwu, scAwu]),
       ("bc20", "maptestsmall", [scBowlOfChowder, scExamplefuncsplayer]),
-      ("bc21", "maptestsmall", [scCaliforniaRoll, scExamplefuncsplayer21])]:
+      ("bc21", "maptestsmall", [scCaliforniaRoll, scExamplefuncsplayer21]),
+      ("bc24", "Yinyang", [scGoneSharkin, scExamplefuncsplayer24])]:
     let s = [baselineSheet(year, defaultBaselineFor(year)),
              baselineSheet(year, defaultBaselineFor(year))]
     let (a, _) = playGameFor(year, mapName, s, chassis, 0, 0, 150, 0)
@@ -252,10 +258,12 @@ block:
     checkEq(year & ": and the same points", a.points, b.points)
     check(year & ": the chain is not empty", a.hashChain.len > 0)
     chains.add(a.hashChain)
-  checkEq("three registered years were played", chains.len, 3)
-  check("and no two of them are the same game",
-    chains[0] != chains[1] and chains[1] != chains[2] and
-    chains[0] != chains[2])
+  checkEq("four registered years were played", chains.len, 4)
+  var allDistinct = true
+  for i in 0 ..< chains.len:
+    for j in i + 1 ..< chains.len:
+      if chains[i] == chains[j]: allDistinct = false
+  check("and no two of them are the same game", allDistinct)
 
 block:
   ## `ScriptedChassis` is the YEAR-NEUTRAL chassis vocabulary, and a name
@@ -274,6 +282,21 @@ block:
   checkEq("for bc20 it is bowl-of-chowder", $strongChassisFor("bc20"),
     "bowl-of-chowder")
   checkEq("and for bc26 it is awu", $strongChassisFor("bc26"), "awu")
+  checkEq("for bc24 it is gone-sharkin", $strongChassisFor("bc24"),
+    "gone-sharkin")
+  block:
+    ## The same fallback, one year on: a bc20/bc21/bc26 chassis name on a bc24
+    ## game plays gone-sharkin rather than nothing.
+    let s24 = [baselineSheet("bc24", blGoneSharkin),
+               baselineSheet("bc24", blGoneSharkin)]
+    let strong24 = playGameFor("bc24", "Yinyang", s24,
+      [scGoneSharkin, scGoneSharkin], 0, 0, 220, 0)[0]
+    let foreign24 = playGameFor("bc24", "Yinyang", s24,
+      [scCaliforniaRoll, scAwu], 0, 0, 220, 0)[0]
+    checkEq("a foreign chassis name on a bc24 game plays gone-sharkin",
+      foreign24.hashChain, strong24.hashChain)
+    checkEq("and the bc24 chassis strings round-trip",
+      $parseScriptedChassis("examplefuncsplayer24"), "examplefuncsplayer24")
   checkEq("a recorded chassis string round-trips",
     $parseScriptedChassis("examplefuncsplayer21"), "examplefuncsplayer21")
   checkEq("and an unknown one is not a crash", $parseScriptedChassis("nope"),

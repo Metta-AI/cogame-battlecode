@@ -13,9 +13,11 @@ hand-edited constant fails the build.
         --out src/battlecode/years/bc26/constants.nim
     tools/gen_year_constants.py --engine ... --check   # diff, exit 1 on drift
 
-`--year bc20` and `--year bc21` do the same job for Battlecode 2020 "Soup" against a checkout
-of github.com/battlecode/battlecode20 at the pinned commit, reading
-`common/GameConstants.java` and `common/RobotType.java`:
+`--year bc20`, `--year bc21` and `--year bc24` do the same job for the other
+year modules against a checkout of the matching engine at its pinned commit.
+bc20 and bc21 read `common/GameConstants.java` and `common/RobotType.java`;
+bc24 reads `common/GameConstants.java`, `common/SkillType.java`,
+`common/TrapType.java` and `common/GlobalUpgrade.java`:
 
     tools/gen_year_constants.py --year bc20 --engine /path/to/battlecode20 \
         --out src/battlecode/years/bc20/constants.nim
@@ -63,6 +65,8 @@ def nim_literal(java_type: str, raw: str) -> tuple[str, str]:
     JAVA_EXPRESSIONS = {
         "Integer.MIN_VALUE/2": "-1073741824",
         "Integer.MAX_VALUE/2": "1073741823",
+        # 2024's MAX_SHARED_ARRAY_VALUE, written as a shift.
+        "(1<<16)-1": "65535",
     }
     text = JAVA_EXPRESSIONS.get(text.replace(" ", ""), text)
     if re.fullmatch(r"[-+0-9._eE]+[LlFfDd]?", text):
@@ -417,9 +421,180 @@ def render_bc21(engine: pathlib.Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+# ---------------------------------------------------------------------------
+#  Battlecode 2024 "Breadwars"
+# ---------------------------------------------------------------------------
+
+BC24_COMMIT = "166c79bbf4156c866caf434062cb1f403c01695f"
+
+BC24_SKILL_RE = re.compile(r"^\s*(ATTACK|BUILD|HEAL)\((.*?)\)\s*[,;]\s*$", re.M)
+BC24_TRAP_RE = re.compile(
+    r"^\s*(EXPLOSIVE|WATER|STUN|NONE)\s*\((.*?)\)\s*[,;]\s*$", re.M)
+BC24_UPGRADE_RE = re.compile(
+    r"^\s*(ATTACK|HEALING|CAPTURING|ACTION)\((.*?)\)\s*[,;]\s*$", re.M)
+BC24_TABLE_RE = re.compile(r"int\[\]\s+(\w+)\s*=\s*\{([^}]*)\}\s*;")
+
+BC24_DECISION_OPS = 2500
+    ## The per-robot budget that replaces the JVM's 25 000-bytecode limit.
+    ## One tenth of the Java limit, the same convention bc20 and bc21 use;
+    ## docs/RULES-BC24.md §Divergences item 1 and §Tests Tier A carry the
+    ## measurement that makes it harmless in this year.
+
+
+def bc24_tables(src: str) -> dict[str, list[int]]:
+    out: dict[str, list[int]] = {}
+    for name, body in BC24_TABLE_RE.findall(src):
+        out[name] = [int(v.strip()) for v in body.split(",") if v.strip()]
+    return out
+
+
+def render_bc24(engine: pathlib.Path) -> str:
+    common = engine / "engine/src/main/battlecode/common"
+    consts = read_constants_from(common / "GameConstants.java",
+                                 strip_comments=True)
+    skill_src = (common / "SkillType.java").read_text()
+    trap_src = (common / "TrapType.java").read_text()
+    upgrade_src = (common / "GlobalUpgrade.java").read_text()
+
+    skills = [(n, [v.strip() for v in a.split(",")])
+              for n, a in BC24_SKILL_RE.findall(skill_src)]
+    if len(skills) != 3:
+        raise SystemExit(f"::error::expected 3 SkillType entries, saw {len(skills)}")
+    tables = bc24_tables(skill_src)
+    for needed in ("attackExperience", "buildExperience", "healExperience",
+                   "attackCooldown", "buildCooldown", "healCooldown",
+                   "attackSkill", "buildSkill", "healSkill",
+                   "attackPenalty", "buildPenalty", "healPenalty"):
+        if needed not in tables or len(tables[needed]) != 7:
+            raise SystemExit(f"::error::SkillType.{needed} is not a 7-entry table")
+
+    traps = [(n, [v.strip() for v in a.split(",")])
+             for n, a in BC24_TRAP_RE.findall(trap_src)
+             if len([v for v in a.split(",")]) == 10]
+    if len(traps) != 4:
+        raise SystemExit(f"::error::expected 4 TrapType entries, saw {len(traps)}")
+
+    upgrades = [(n, [v.strip() for v in a.split(",")])
+                for n, a in BC24_UPGRADE_RE.findall(upgrade_src)
+                if len(a.split(",")) == 4]
+    if len(upgrades) != 4:
+        raise SystemExit(
+            f"::error::expected 4 GlobalUpgrade entries, saw {len(upgrades)}")
+
+    def row(name: str) -> str:
+        return "[" + ", ".join(str(v) for v in tables[name]) + "]"
+
+    lines: list[str] = []
+    add = lines.append
+    add('## Battlecode 2024 "Breadwars" gameplay constants -- GENERATED, do not edit.')
+    add("##")
+    add(f"## Source: github.com/battlecode/battlecode24 at commit `{BC24_COMMIT}`,")
+    add("## files `common/GameConstants.java`, `common/SkillType.java`,")
+    add("## `common/TrapType.java` and `common/GlobalUpgrade.java`, read by")
+    add("## `tools/gen_year_constants.py --year bc24`. The `test` job of")
+    add("## `.github/workflows/ci.yml` re-runs that generator with `--check`,")
+    add("## which byte-diffs this file, so an edit here fails the build instead")
+    add("## of quietly changing the rules under a `GameVersion` that no longer")
+    add("## describes them.")
+    add("##")
+    add("## `SpecVersion` here is MASTER's string. The released oracle jar is")
+    add("## 3.0.5 and every gameplay constant in it is identical; the")
+    add("## `parity-oracle-bc24` job proves that rather than assuming it")
+    add("## (docs/RULES-BC24.md §Divergences item 9).")
+    add("##")
+    add("## THE TWO ROUNDING REGIMES are not in this file — they are in")
+    add("## `skills.nim`, which is the only place that multiplies these tables")
+    add("## out: damage and heal are a Java FLOAT32 product through")
+    add("## `Math.round(float)`, and every cooldown and every crumb cost is a")
+    add("## FLOAT64 product through `Math.round(double)`.")
+    add("")
+    add(f'const EngineCommit* = "{BC24_COMMIT}"')
+    add('const OracleJarVersion* = "3.0.5"')
+    add("")
+    add("type")
+    add("  SkillKind* = enum")
+    for name, _ in skills:
+        add(f'    sk{camel(name)} = "{name}"')
+    add("")
+    add("  TrapKind* = enum")
+    for name, _ in traps:
+        add(f'    tk{camel(name)} = "{name}"')
+    add("")
+    add("  UpgradeKind* = enum")
+    for name, _ in upgrades:
+        add(f'    ug{camel(name)} = "{name}"')
+    add("")
+    add("  SkillSpec* = object")
+    add("    ## `common/SkillType.java`'s constructor arguments plus its four")
+    add("    ## seven-entry tables, indexed by LEVEL 0..6.")
+    add("    skillEffect*, cooldown*: int")
+    add("    experience*: array[7, int]")
+    add("    cooldownDelta*: array[7, int]")
+    add("    effectDelta*: array[7, int]")
+    add("    penalty*: array[7, int]")
+    add("")
+    add("  TrapSpec* = object")
+    add("    ## `common/TrapType.java`'s constructor arguments, verbatim.")
+    add("    buildCost*, triggerRadius*, enterRadius*, interactRadius*: int")
+    add("    enterDamage*, interactDamage*: int")
+    add("    doesDig*: bool")
+    add("    actionCooldownIncrease*: int")
+    add("    isInvisible*: bool")
+    add("    opponentCooldown*: int")
+    add("")
+    add("  UpgradeSpec* = object")
+    add("    ## `common/GlobalUpgrade.java`'s constructor arguments, verbatim.")
+    add("    baseAttackChange*, baseHealChange*: int")
+    add("    flagReturnDelayChange*, movementDelayChange*: int")
+    add("")
+    add("const")
+    for name, nim_type, literal in consts:
+        if nim_type == "float32":
+            literal = f32_literal(literal)
+        add(f"  {camel(name)}*: {nim_type} = {literal}")
+    add("")
+    add(f"  DecisionOps*: int = {BC24_DECISION_OPS}")
+    add("    ## Replaces `BytecodeLimit` outside the JVM: no mid-turn")
+    add("    ## resumption, enforced by the sim rather than by the bot.")
+    add("")
+    add("  SkillSpecs*: array[SkillKind, SkillSpec] = [")
+    prefix = {"ATTACK": "attack", "BUILD": "build", "HEAL": "heal"}
+    for name, a in skills:
+        p = prefix[name]
+        add(f"    sk{camel(name)}: SkillSpec(skillEffect: {bc20_num(a[0])}, "
+            f"cooldown: {bc20_num(a[1])},")
+        add(f"      experience: {row(p + 'Experience')},")
+        add(f"      cooldownDelta: {row(p + 'Cooldown')},")
+        add(f"      effectDelta: {row(p + 'Skill')},")
+        add(f"      penalty: {row(p + 'Penalty')}),")
+    add("  ]")
+    add("")
+    add("  TrapSpecs*: array[TrapKind, TrapSpec] = [")
+    for name, a in traps:
+        add(f"    tk{camel(name)}: TrapSpec(buildCost: {a[0]}, "
+            f"triggerRadius: {a[1]}, enterRadius: {a[2]},")
+        add(f"      interactRadius: {a[3]}, enterDamage: {a[4]}, "
+            f"interactDamage: {a[5]},")
+        add(f"      doesDig: {a[6]}, actionCooldownIncrease: {a[7]}, "
+            f"isInvisible: {a[8]},")
+        add(f"      opponentCooldown: {a[9]}),")
+    add("  ]")
+    add("")
+    add("  UpgradeSpecs*: array[UpgradeKind, UpgradeSpec] = [")
+    for name, a in upgrades:
+        add(f"    ug{camel(name)}: UpgradeSpec(baseAttackChange: {a[0]}, "
+            f"baseHealChange: {a[1]},")
+        add(f"      flagReturnDelayChange: {a[2]}, "
+            f"movementDelayChange: {a[3]}),")
+    add("  ]")
+    add("")
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--year", default="bc26", choices=["bc26", "bc20", "bc21"])
+    ap.add_argument("--year", default="bc26",
+                    choices=["bc26", "bc20", "bc21", "bc24"])
     ap.add_argument("--engine", required=True, type=pathlib.Path)
     ap.add_argument("--out", type=pathlib.Path, default=None)
     ap.add_argument("--check", action="store_true",
@@ -428,9 +603,10 @@ def main() -> int:
 
     out = args.out or pathlib.Path(
         f"src/battlecode/years/{args.year}/constants.nim")
-    label = {"bc26": TAG, "bc20": BC20_COMMIT, "bc21": BC21_COMMIT}[args.year]
+    label = {"bc26": TAG, "bc20": BC20_COMMIT, "bc21": BC21_COMMIT,
+             "bc24": BC24_COMMIT}[args.year]
     text = {"bc26": render, "bc20": render_bc20,
-            "bc21": render_bc21}[args.year](args.engine)
+            "bc21": render_bc21, "bc24": render_bc24}[args.year](args.engine)
     if args.check:
         current = out.read_text() if out.exists() else ""
         if current != text:

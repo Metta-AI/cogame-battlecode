@@ -157,6 +157,58 @@ proc collectGameEvents(
       events.add(ev("rush_launched", game = gameIndex, round = e.c,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                     "units": e.b}))
+    of "setup_end":
+      ## "The dam falls." `teleported` is how many clans failed the six-tile
+      ## spacing rule and had all three of their flags sent home.
+      events.add(ev("setup_end", game = gameIndex, round = e.round,
+        fields = %*{"traps": [e.b, e.c], "teleported": e.a}))
+    of "first_action":
+      ## `first_action.action` names the ACTION, not the unit: bc24 has one
+      ## unit type, and an event field with an undocumented vocabulary is an
+      ## event field nobody can draw (the r1-F14 lesson).
+      ##
+      ## THE FIELD IS `action`, NOT THE DESIGN NOTE'S `kind`. `MatchEvent`
+      ## flattens `fields` into the same object as the event's own `kind` key,
+      ## so a field called `kind` SILENTLY OVERWRITES THE EVENT KIND and the
+      ## replay comes back carrying events of kind "move" and "spawn".
+      ## bc20 and bc21 avoided it by calling their field `unit`; bc24 calls
+      ## its field `action`.
+      events.add(ev("first_action", game = gameIndex, round = e.c,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "action": Bc24ActionNames[e.b]}))
+    of "flag_taken":
+      events.add(ev("flag_taken", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "flag": e.b, "x": e.c div 100, "y": e.c mod 100}))
+    of "flag_dropped":
+      events.add(ev("flag_dropped", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "flag": e.b, "x": e.c div 100, "y": e.c mod 100,
+                    "cause": e.s}))
+    of "flag_returned":
+      events.add(ev("flag_returned", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, 1 - e.a),
+                    "flag": e.b}))
+    of "flag_captured":
+      events.add(ev("flag_captured", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "flag": e.b, "total": e.c}))
+    of "trap_wave":
+      events.add(ev("trap_wave", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "triggered_total": e.b, "damage_total": e.c}))
+    of "upgrade":
+      events.add(ev("upgrade", game = gameIndex, round = e.c,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "upgrade": Bc24UpgradeNames[e.b]}))
+    of "mastery":
+      events.add(ev("mastery", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "skill": Bc24SkillNames[e.b], "level": e.c}))
+    of "rout":
+      events.add(ev("rout", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "jailed": e.b}))
     of "drone_water_drop":
       ## A drone drops whatever it is holding, which may be its own unit or a
       ## neutral cow, so the victim's TEAM rides on the event (`e.s`) rather

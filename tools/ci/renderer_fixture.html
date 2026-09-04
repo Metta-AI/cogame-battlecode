@@ -63,10 +63,11 @@
   // The featured-match frame, a tablet width and desktop -- ONE ROW PER
   // YEAR, because each year's readouts are different elements under
   // different CSS and a fixture that only lays out bc26 says nothing about
-  // bc20's flood, soup, unit and doctrine panels — or bc21's vote, influence,
-  // unit and doctrine panels.
+  // bc20's flood, soup, unit and doctrine panels, bc21's vote, influence,
+  // unit and doctrine panels, or bc24's flag, crumb, level and doctrine
+  // panels.
   var SIZES = [[360, 640], [720, 900], [1280, 720]];
-  var YEARS = ['bc26', 'bc20', 'bc21'];
+  var YEARS = ['bc26', 'bc20', 'bc21', 'bc24'];
 
   function runes(text) { return Array.from(text); }
   function repeatRunes(text, count) {
@@ -83,7 +84,8 @@
   var params = new URLSearchParams(location.search);
   var inner = params.get('w');
   var yearParam = params.get('year');
-  var year = (yearParam === 'bc20' || yearParam === 'bc21') ? yearParam : 'bc26';
+  var year = (yearParam === 'bc20' || yearParam === 'bc21' ||
+              yearParam === 'bc24') ? yearParam : 'bc26';
 
   // ------------------------------------------------------------------
   // Parent: one iframe per width, each posting its own verdict back.
@@ -268,6 +270,41 @@
       '<br><i>' + notes + '</i></div>';
   }
 
+  // --- the bc24 row: the same full-cap strings through bc24's own words ---
+  var BC24_WORDS = [
+    'a balanced flock, rushes the flags at round 450, spends 30 % of its ' +
+      'crumbs on traps, traps ringing its own flags, stun and explosive ' +
+      'traps in turn, heals the most wounded, digs water across the ' +
+      'approaches, takes attack, then heal, then capture upgrades, trades ' +
+      'down to 400 HP, sends 2 escorts with a carrier',
+    'all-in on attack, rushes the flags at round 260, spends 10 % of its ' +
+      'crumbs on traps, traps at the chokes, stun traps only, heals the flag ' +
+      'carrier first, fills a path through the water, takes capture, then ' +
+      'attack, then heal upgrades, trades down to 250 HP, sends 5 escorts ' +
+      'with a carrier'
+  ];
+  var bc24Crumbs = '<span></span><span>Clan Ash</span><span>Clan Basil</span>';
+  [['crumbs', 18422, 9103], ['income', 10, 10], ['traps', 31, 24],
+   ['water', 412, 412]].forEach(function (r) {
+    bc24Crumbs += '<span>' + r[0] + '</span><b>' + r[1] + '</b><b>' +
+      r[2] + '</b>';
+  });
+  var bc24Levels = '';
+  for (var k24 = 0; k24 < 2; k24++) {
+    bc24Levels += '<div>' + ALIASES[k24] +
+      ' \u2694 <b>118</b> \u271a <b>64</b> \u26cf <b>22</b> ' +
+      '<b>47</b>/50 <span class="jail">jail 3</span>' +
+      '<span class="up lit">\u2694</span><span class="up lit">\u2691</span>' +
+      '<span class="up">\u271a</span></div>';
+  }
+  bc24Levels += '<div class="jail">jail rail A25 A18 A7 B22 B11 B4</div>';
+  var bc24Doctrines = '';
+  for (var m24 = 0; m24 < 2; m24++) {
+    bc24Doctrines += '<div class="dline"><span class="dname">' +
+      ALIASES[m24] + '</span> ' + NAMES[m24] + ' — ' + BC24_WORDS[m24] +
+      '<br><i>' + notes + '</i></div>';
+  }
+
   document.body.innerHTML =
     '<div id="viewport"><div id="stage"><div id="chrome">' +
       '<div id="scorebug">' +
@@ -277,6 +314,7 @@
           '<div class="caption" id="clock-caption">game 3 of 3 — DefaultMedium</div>' +
           '<button type="button" id="bc20-doctrines-toggle" hidden>doctrines</button>' +
           '<button type="button" id="bc21-doctrines-toggle" hidden>doctrines</button>' +
+          '<button type="button" id="bc24-doctrines-toggle" hidden>doctrines</button>' +
         '</div></div>' +
         '<div class="plates" id="plates-r">' + plate(1, 'basil') + '</div>' +
       '</div>' +
@@ -305,6 +343,18 @@
         '<button type="button" id="bc21-doctrines-close" ' +
         'aria-label="Dismiss doctrines">&times;</button>' +
         '<div id="bc21-doctrines-body">' + bc21Doctrines + '</div></div>' +
+      '<div id="bc24-flags"><span class="lbl">CLAN ASH</span>' +
+        '<span class="pips">\u25cf<i class="carried">\u25cf</i>\u25cb</span>' +
+        '<span>\u2014</span>' +
+        '<span class="pips">\u25cf\u25cb\u25cb</span>' +
+        '<span class="lbl">CLAN BASIL</span>' +
+        '<span class="towin">2 to win</span></div>' +
+      '<div id="bc24-levels">' + bc24Levels + '</div>' +
+      '<div id="bc24-crumbs">' + bc24Crumbs + '</div>' +
+      '<div id="bc24-doctrines">' +
+        '<button type="button" id="bc24-doctrines-close" ' +
+        'aria-label="Dismiss doctrines">&times;</button>' +
+        '<div id="bc24-doctrines-body">' + bc24Doctrines + '</div></div>' +
     '</div></div></div>';
 
   // The verdict: nothing may leave the frame, and nothing may hide text
@@ -357,7 +407,10 @@
         '#bc20-doctrines, #bc20-doctrines *',
       bc21: '#scorebug .plate, #scorebug .plate *, #bc21-votes, #bc21-votes *, ' +
         '#bc21-influence, #bc21-influence *, #bc21-units, #bc21-units *, ' +
-        '#bc21-doctrines, #bc21-doctrines *'
+        '#bc21-doctrines, #bc21-doctrines *',
+      bc24: '#scorebug .plate, #scorebug .plate *, #bc24-flags, #bc24-flags *, ' +
+        '#bc24-crumbs, #bc24-crumbs *, #bc24-levels, #bc24-levels *, ' +
+        '#bc24-doctrines, #bc24-doctrines *'
     };
     var filled = document.querySelectorAll(FILLED[year]);
     for (var j = 0; j < filled.length; j++) {
