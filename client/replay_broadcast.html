@@ -2879,14 +2879,18 @@ html:not([data-year="bc21"]) #bc21-bids { display: none !important; }
 #bc21-bids .msg { opacity: .8; }
 
 /* CSS for EVERY beat kind this year emits. A kind with no rule is an
-   invisible marker. */
-.beat-marker.doctrine { background: #d8c48a; }
-.beat-marker.capture { background: #8fbf6a; width: 3px; }
-.beat-marker.votes { background: #d8c48a; }
-.beat-marker.bid { background: #b08a3a; }
-.beat-marker.expose { background: #7fb2e8; }
-.beat-marker.empower { background: #e0523a; }
-.beat-marker.wipe { background: #e0523a; width: 3px; }
+   invisible marker. Year-scoped like every other rule in this block: two of
+   these kinds are also emitted by the other years -- `doctrine` (bc26, blue)
+   and `capture` (the inherited coworld-ctf rule, team-coloured and
+   board-scaled) -- and an unscoped rule this late in the sheet won for them
+   too. */
+html[data-year="bc21"] .beat-marker.doctrine { background: #d8c48a; }
+html[data-year="bc21"] .beat-marker.capture { background: #8fbf6a; width: 3px; }
+html[data-year="bc21"] .beat-marker.votes { background: #d8c48a; }
+html[data-year="bc21"] .beat-marker.bid { background: #b08a3a; }
+html[data-year="bc21"] .beat-marker.expose { background: #7fb2e8; }
+html[data-year="bc21"] .beat-marker.empower { background: #e0523a; }
+html[data-year="bc21"] .beat-marker.wipe { background: #e0523a; width: 3px; }
 
 @media (max-width: 760px) {
   #bc21-influence, #bc21-units, #bc21-doctrines { font-size: 9px; }
