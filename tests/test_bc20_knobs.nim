@@ -14,10 +14,12 @@
 ##
 ## The thresholds live in ONE table so tuning is a one-line change, and each is
 ## set at roughly half the measured delta so a real regression trips it and
-## ordinary drift does not. Measured at GameVersion GV04:
+## ordinary drift does not. Measured at GameVersion GV05:
 ##
 ##   knob                     low -> high              measured        gate
 ##   opening                  turtle -> rush           adj 0 -> 2      >= 1
+##                                                     enemy half      -100
+##                                                       1811 -> 878     /game
 ##   terraform_start_round    900 -> 100               dirt 761->6286  +150 %
 ##   lattice_radius           3 -> 10                  raised 163->380 +60
 ##   landscaper_count_curve   lean -> swarm            land 14 -> 43   +50 %
@@ -27,8 +29,21 @@
 ##   drone_role               carry -> harass          drops 0 -> 20   +5
 ##   net_gun_ring             0 -> 6                   guns 0 -> 15    +4
 ##   rush_trigger             0 -> 220                 adj 0 -> 1      >= 1
+##                                                     by round 350    0 -> >=1
+##                                                       0 -> 1
 ##   wall_hq_round            0 -> 250                 drowned 4 -> 0
 ##                                                     ring 0 -> 32    +6
+##
+## `opening` and `rush_trigger` each carry TWO gates: the +1-game arrival
+## counter, and the design note's own statistic. The note asks that
+## `opening`'s first enemy-half unit arrive "≥ 200 rounds earlier"; the
+## measured delta is 233 rounds a game (1811 → 878 summed over the four
+## games), and the gate is set at 100 a game — the same half-the-measured-delta
+## rule every other threshold here follows, on the note's own statistic rather
+## than on a proxy. `rush_trigger`'s second gate is the note's clause verbatim:
+## a friendly unit adjacent to the enemy HQ BY ROUND 350, which happens in no
+## game at 0 and in one of four at 220. The games run 500 rounds so the
+## counter above stays measurable.
 ##
 ## DECLARED DEVIATION from the design note's table: `net_gun_ring` is gated on
 ## net guns BUILT only, not additionally on enemy drones shot down. The HQ has
@@ -46,11 +61,20 @@ import battlecode/years/bc20/chassis/kit
 const
   Maps = ["WateredDown", "ALandDivided"]
   Chassis = [ckBowlOfChowder, ckBowlOfChowder]
+  Games = Maps.len * 2        ## two maps under both side assignments
 
 type Measured = object
   landscapers, miners, drones, netGuns, vaporators: int
   dirt, waterDrops, hqDrowned, ringAboveFive, raisedNearHq: int
   reachedEnemyHq: int
+  enemyHalfRoundSum: int
+    ## Summed over the four games: the round a friendly unit FIRST stood
+    ## closer to the enemy HQ than to its own, or the round cap when none ever
+    ## did. Lower is earlier, and the sentinel keeps the sum defined for a
+    ## doctrine that never crosses.
+  adjacentBy350: int
+    ## Games in which a friendly unit stood Chebyshev <= 1 from the enemy HQ
+    ## by round 350 — the note's own `rush_trigger` statistic.
   pollutionAt1000: int
 
 proc runSet(knobs: string, rounds: int): Measured =
@@ -66,14 +90,19 @@ proc runSet(knobs: string, rounds: int): Measured =
       let hqs = spec.hqLocations()
       let mine = hqs[team]
       let theirs = hqs[1 - team]
-      var reached = false
+      var reachedAt = 0
+      var crossedAt = 0
       for round in 1 .. rounds:
         runRound(w, sides, Chassis)
-        if not reached:
+        if reachedAt == 0 or crossedAt == 0:
           for id, r in w.robotsById:
-            if r.team == Team(team) and chebyshev(r.loc, theirs) <= 1:
-              reached = true
-              break
+            if r.team != Team(team): continue
+            if reachedAt == 0 and chebyshev(r.loc, theirs) <= 1:
+              reachedAt = round
+            if crossedAt == 0 and
+                chebyshev(r.loc, theirs) < chebyshev(r.loc, mine):
+              crossedAt = round
+            if reachedAt > 0 and crossedAt > 0: break
         if round == 1000:
           result.pollutionAt1000 += w.globalPollution
         if not w.running: break
@@ -85,7 +114,9 @@ proc runSet(knobs: string, rounds: int): Measured =
       result.dirt += w.stats.dirtMoved[team]
       result.waterDrops += w.stats.droneWaterDrops[team]
       if w.stats.destroyedHq[team]: result.hqDrowned += 1
-      if reached: result.reachedEnemyHq += 1
+      if reachedAt > 0: result.reachedEnemyHq += 1
+      if reachedAt in 1 .. 350: result.adjacentBy350 += 1
+      result.enemyHalfRoundSum += (if crossedAt > 0: crossedAt else: rounds)
       for l in w.ringTiles(mine):
         if w.getDirt(l) >= 5: result.ringAboveFive += 1
       for x in max(0, mine.x - 10) .. min(w.width - 1, mine.x + 10):
@@ -104,6 +135,15 @@ block:
   check("opening turtle -> rush puts a unit next to the enemy HQ (" &
     $low.reachedEnemyHq & " -> " & $high.reachedEnemyHq & ")",
     high.reachedEnemyHq >= low.reachedEnemyHq + 1)
+  ## The note's own statistic: the first friendly unit on the ENEMY HALF
+  ## arrives earlier. Summed over the four games, with the round cap standing
+  ## in for "never crossed", so the sum is defined for a turtle that stays
+  ## home.
+  check("and its first unit crosses into the enemy half " &
+    $((low.enemyHalfRoundSum - high.enemyHalfRoundSum) div Games) &
+    " rounds earlier per game, gate 100 (" & $low.enemyHalfRoundSum &
+    " -> " & $high.enemyHalfRoundSum & " summed over " & $Games & ")",
+    high.enemyHalfRoundSum <= low.enemyHalfRoundSum - 100 * Games)
 
 # --- terraform_start_round --------------------------------------------------
 block:
@@ -168,6 +208,13 @@ block:
   check("rush_trigger 0 -> 220 puts a unit next to the enemy HQ by round " &
     "500 (" & $low.reachedEnemyHq & " -> " & $high.reachedEnemyHq & ")",
     high.reachedEnemyHq >= low.reachedEnemyHq + 1)
+  ## The note's own statistic: adjacent to the enemy HQ BY ROUND 350. The
+  ## games run to 500 so the counter above is measurable too, but this gate
+  ## reads only the arrivals inside the note's window.
+  check("and it does so BY ROUND 350, which never happens at 0 (" &
+    $low.adjacentBy350 & " -> " & $high.adjacentBy350 & " of " & $Games &
+    " games)",
+    low.adjacentBy350 == 0 and high.adjacentBy350 >= 1)
 
 # --- wall_hq_round ----------------------------------------------------------
 block:
