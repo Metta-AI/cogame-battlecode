@@ -234,7 +234,8 @@ sites, all writes — so nothing it computes can reach the game. The job
 therefore **bypasses Gradle entirely** (which also sidesteps the dead
 `jcenter()` repository and the `$JAVA_HOME/lib/tools.jar` javadoc dependency),
 stands four ~30-line no-op files in `tools/oracle/bc21/jsi-shim/` in for the
-dead artifact, and compiles the **94** gameplay sources with a bare `javac`.
+dead artifact, and compiles the **94** gameplay sources with a bare `javac` (no `--release 8`:
+that flag arrived in JDK 9, and the compiler here IS 8).
 `battlecode/doc/**` is excluded: it is javadoc taglets against
 `com.sun.tools.doclets` (the only thing that ever needed `tools.jar`) and
 contains no gameplay.

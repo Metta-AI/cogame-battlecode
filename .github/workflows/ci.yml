@@ -758,16 +758,19 @@ jobs:
           echo "engine sources: ${#SRC[@]}"
           test "${#SRC[@]}" -eq 94 || {
             echo "::error::expected 94 engine sources, found ${#SRC[@]}"; exit 1; }
-          javac -nowarn --release 8 -cp "${CP}/tmp/oracle/classes" \
+          # NOT `--release 8`: that flag arrived in JDK 9 and this job runs
+          # JDK 8 on purpose (the instrumenter's ASM 5.0.4 refuses class-file
+          # versions above 52). The compiler IS 8, so the target is 8.
+          javac -nowarn -cp "${CP}/tmp/oracle/classes" \
             -d /tmp/oracle/classes "${SRC[@]}"
           # Every non-.java file under battlecode/ (MethodCosts.txt,
           # AllowedPackages.txt, DisallowedClasses.txt and the 76 .map21).
           (cd "$BC21_DIR/engine/src/main" && \
             find battlecode -type f ! -name '*.java' \
               -exec cp --parents {} /tmp/oracle/classes/ \;)
-          javac -nowarn --release 8 -cp "${CP}/tmp/oracle/classes" \
+          javac -nowarn -cp "${CP}/tmp/oracle/classes" \
             -d /tmp/oracle/classes tools/oracle/bc21/Bc21Trace.java
-          javac -nowarn --release 8 -cp "${CP}/tmp/oracle/classes" \
+          javac -nowarn -cp "${CP}/tmp/oracle/classes" \
             -d /tmp/oracle/bot \
             tools/oracle/bc21/examplefuncsplayer21/RobotPlayer.java
 
