@@ -24,12 +24,21 @@ The probes, in the runner's order:
   4. GET  /client/global                             2xx   (_require_http_ok)
   5. WS   /global   Ping -> Pong ECHOING the payload, then a non-empty message
                               (_require_global_message with require_pong=True)
+        Probed with TWO payloads: the certifier's own
+        b"coworld-certification-ping" and a random one. Python's `websockets`
+        keys its pong waiter BY PAYLOAD, so a waiter that resolves is proof
+        the Pong echoed -- and the random payload is what separates a real
+        echo from a server that answers with a fixed or empty Pong. That is
+        the exact defect that failed 0.1.3:
+        `websocket.send("", Pong)` instead of
+        `websocket.send(message.data, Pong)`.
   6. the game exits 0                              (_wait_for_game_exit)
   7. results.json validates against the manifest's results_schema
                                                    (_validate_results_file)
 """
 import asyncio
 import json
+import os
 import sys
 
 import httpx
@@ -40,7 +49,7 @@ from websockets.exceptions import ConnectionClosed, InvalidHandshake, InvalidSta
 PORT = int(sys.argv[1])
 RESULTS = sys.argv[2] if len(sys.argv) > 2 else None
 MANIFEST = sys.argv[3] if len(sys.argv) > 3 else None
-GOOD = "token-0"
+GOOD = os.environ.get("CERT_PROBE_TOKEN", "token-0")
 
 failures = []
 
@@ -89,17 +98,35 @@ async def require_bad_player_rejected(url):
         bad("bad player token", "was ACCEPTED")
 
 
+async def require_pong_echo(ws, url, payload, label):
+    """`ws.ping(payload)` returns a future that `websockets` keys BY PAYLOAD
+    and resolves only when a Pong carrying those exact bytes arrives (2 s,
+    as the certifier uses). Resolution is therefore proof of the echo RFC
+    6455 §5.5.3 requires."""
+    try:
+        waiter = await ws.ping(payload)
+        await asyncio.wait_for(waiter, timeout=2.0)
+        ok(f"Ping -> Pong echoes {label} ({payload!r})")
+        return True
+    except (OSError, asyncio.TimeoutError, ConnectionClosed) as exc:
+        bad(f"Ping -> Pong echo of {label}", f"{exc!r} -- the Pong did not "
+            f"carry {payload!r}; RFC 6455 5.5.3 requires it and the "
+            f"certifier checks it")
+        return False
+
+
 async def require_global_message(url, require_pong=True):
     try:
         backpressure = {"max_queue": None} if require_pong else {}
         async with websockets.connect(url, open_timeout=5, max_size=None, **backpressure) as ws:
             if require_pong:
-                try:
-                    waiter = await ws.ping(b"coworld-certification-ping")
-                    await asyncio.wait_for(waiter, timeout=2.0)
-                    ok("global socket answers a Ping with a Pong")
-                except (OSError, asyncio.TimeoutError, ConnectionClosed) as exc:
-                    return bad("global Ping -> Pong", exc)
+                # The certifier's own payload...
+                await require_pong_echo(
+                    ws, url, b"coworld-certification-ping", "the certifier's payload")
+                # ...and a RANDOM one. A server that answers with an empty or
+                # hardcoded Pong can pass the first and never the second.
+                await require_pong_echo(
+                    ws, url, os.urandom(12), "a random payload")
             message = await asyncio.wait_for(ws.recv(), timeout=10.0)
     except (OSError, asyncio.TimeoutError, ConnectionClosed, InvalidHandshake, InvalidStatus) as exc:
         return bad("global message", exc)
@@ -131,5 +158,8 @@ if RESULTS and MANIFEST:
         except jsonschema.ValidationError as exc:
             bad("results_schema validation", exc.message)
 
-print("FAILURES:", failures if failures else "none")
-sys.exit(1 if failures else 0)
+if failures:
+    print(f"CONTRACT PROBE FAILED: {failures}")
+    sys.exit(1)
+print("CONTRACT PROBE: all checks passed")
+sys.exit(0)

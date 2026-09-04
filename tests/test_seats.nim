@@ -95,12 +95,31 @@ block:
   check("/client/global answers a GET", "\"/client/global\"" in server)
 
 ## The probe harness itself: it is the only thing that checks the contract
-## end to end without spending a release dispatch, so it has to exist and it
-## has to name every probe.
+## end to end without spending a release dispatch, so it has to exist, it has
+## to name every probe, and CI has to actually RUN it.
 block:
   let probe = readFile("tools/ci/cert_probe.py")
   for named in ["/healthz", "/client/player", "/client/global", "/global",
                 "token=bad", "coworld-certification-ping", "results_schema"]:
     check("cert_probe.py covers " & named, named in probe)
+
+  ## The Ping is sent with TWO payloads: the certifier's own and a RANDOM
+  ## one. `websockets` keys its pong waiter by payload, so a resolved waiter
+  ## proves the echo — and the random payload is what separates a real echo
+  ## from a server answering with a fixed or empty Pong, which is exactly
+  ## the 0.1.3 defect.
+  check("the ping probe uses a random payload as well as the fixed one",
+    "os.urandom" in probe)
+  check("and says so when it fails", "RFC 6455 5.5.3 requires it" in probe)
+
+  ## A probe nothing runs is a decoration.
+  let smoke = readFile("tools/ci/docker_smoke.sh")
+  check("docker_smoke.sh runs the contract probe", "cert_probe.py" in smoke)
+  check("against a published host port", "SMOKE_HOST_PORT" in smoke)
+  check("and fails loudly when its client libraries are missing",
+    "SMOKE_CONTRACT_PROBE=0 to skip it deliberately" in smoke)
+  let ci = readFile(".github/workflows/ci.yml")
+  check("and ci.yml installs those libraries",
+    "pip install --quiet websockets httpx jsonschema" in ci)
 
 finish("test_seats")

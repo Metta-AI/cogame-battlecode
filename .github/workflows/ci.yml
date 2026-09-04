@@ -405,6 +405,12 @@ jobs:
       - name: Build image
         run: docker build --platform=linux/amd64 -t "${IMAGE}:ci" .
 
+      # The contract probe inside docker_smoke.sh speaks WebSocket to the
+      # running game exactly as `coworld certify` does. Without these it
+      # fails loudly rather than skipping (see SMOKE_CONTRACT_PROBE).
+      - name: Install the contract probe's client libraries
+        run: python3 -m pip install --quiet websockets httpx jsonschema
+
       - name: Raw-Docker episode smoke
         # SMOKE_SLUG is passed explicitly so the workflow's SLUG is the single
         # source for the game/player entrypoint names; the script's own

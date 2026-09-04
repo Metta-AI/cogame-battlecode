@@ -27,6 +27,14 @@
 #                              not a fallback -- a missing or inconsistent
 #                              num_agents is a hard failure
 #   SMOKE_PORT                 game port inside the network     (8080)
+#   SMOKE_HOST_PORT            host port the game is published on, so the
+#                              certification contract probe can reach it
+#                              (derived from the pid)
+#   SMOKE_CONTRACT_PROBE      1 to run tools/ci/cert_probe.py against the
+#                              running game, 0 to skip it (default 1). The
+#                              skip is an OPT-OUT you have to type: a silently
+#                              skipped contract check is how four release
+#                              dispatches got spent (battlecode 0.1.0-0.1.3).
 #   SMOKE_TIMEOUT              seconds to wait for the episode  (900)
 #   SMOKE_REQUIRE_REPLAY_JSON  1 = replay must parse as JSON    (1)
 #                              set 0 for binary replay formats
@@ -53,6 +61,8 @@ player_bin="${SMOKE_PLAYER_BIN:-/bin/${slug}-player}"
 manifest="${SMOKE_MANIFEST:-${repo_dir}/coworld_manifest_template.json}"
 seats_expected="${SMOKE_SEATS:-2}"
 port="${SMOKE_PORT:-8080}"
+host_port="${SMOKE_HOST_PORT:-$(( 18000 + ($$ % 900) ))}"
+contract_probe="${SMOKE_CONTRACT_PROBE:-1}"
 timeout_s="${SMOKE_TIMEOUT:-900}"
 require_replay_json="${SMOKE_REQUIRE_REPLAY_JSON:-1}"
 replay_out="${SMOKE_REPLAY_OUT:-${repo_dir}/dist/smoke/replay.json}"
@@ -201,6 +211,7 @@ fi
 echo "starting game container (${image} ${game_bin}) ..."
 docker run -d --name "${prefix}-game" \
   --network "${network}" --network-alias "${prefix}-game" \
+  -p "127.0.0.1:${host_port}:${port}" \
   -e COGAME_HOST=0.0.0.0 \
   -e COGAME_PORT="${port}" \
   -e COGAME_CONFIG_URI=file:///coworld/config.json \
@@ -210,6 +221,50 @@ docker run -d --name "${prefix}-game" \
   ${game_env[@]+"${game_env[@]}"} \
   -v "${work_dir}:/coworld:rw" \
   "${image}" "${game_bin}" >/dev/null
+
+# --------------------------------------------------------------------------
+# THE CERTIFICATION CONTRACT PROBE (battlecode).
+#
+# `coworld certify` probes the game container's HTTP and WebSocket surface
+# before and during the episode, and any probe failing fails the whole
+# release with `game_contract_violation`. tools/ci/cert_probe.py replays
+# those probes -- lifted from the pinned coworld runner, same order, same
+# payloads, same timeouts -- so a contract regression is caught HERE, in CI,
+# against the real image, instead of costing a release dispatch to discover.
+#
+# Run before the players so the game is provably answering on its own.
+# --------------------------------------------------------------------------
+if [ "${contract_probe}" = "1" ]; then
+  probe="$(dirname "${BASH_SOURCE[0]}")/cert_probe.py"
+  if [ ! -f "${probe}" ]; then
+    echo "FAIL: ${probe} is missing; it is the only check that the game still" >&2
+    echo "      satisfies the certifier's WebSocket/HTTP contract." >&2
+    exit 1
+  fi
+  if ! python3 -c 'import websockets, httpx, jsonschema' 2>/dev/null; then
+    echo "FAIL: the contract probe needs python websockets, httpx and jsonschema." >&2
+    echo "      Install them (pip install websockets httpx jsonschema) or set" >&2
+    echo "      SMOKE_CONTRACT_PROBE=0 to skip it deliberately." >&2
+    dump_logs
+    exit 1
+  fi
+  echo "probing the certification contract on 127.0.0.1:${host_port} ..."
+  for attempt in $(seq 1 30); do
+    if curl -fsS -o /dev/null "http://127.0.0.1:${host_port}/healthz" 2>/dev/null; then
+      break
+    fi
+    sleep 1
+  done
+  if ! python3 "${probe}" "${host_port}"; then
+    echo "FAIL: the game no longer satisfies the certifier's contract." >&2
+    echo '      This is exactly what coworld certify fails on, so fix it' >&2
+    echo "      here rather than spending a release dispatch on it." >&2
+    dump_logs
+    exit 1
+  fi
+else
+  echo "::warning::SMOKE_CONTRACT_PROBE=0: the certification contract was NOT checked"
+fi
 
 for ((slot = 0; slot < seats; slot++)); do
   eval "penv=( $(cat "${work_dir}/env-${slot}.args") )"
