@@ -23,6 +23,8 @@ type
     blExamplefuncsplayer = "examplefuncsplayer"
     blCaliforniaRoll = "california-roll"
     blExamplefuncsplayer21 = "examplefuncsplayer21"
+    blGoneSharkin = "gone-sharkin"
+    blExamplefuncsplayer24 = "examplefuncsplayer24"
 
 proc defaultBaselineFor*(year: string): Baseline =
   ## A seat that says nothing useful plays the year's STRONG published
@@ -30,6 +32,7 @@ proc defaultBaselineFor*(year: string): Baseline =
   case yearIdOf(year)
   of yBc20: blBowlOfChowder
   of yBc21: blCaliforniaRoll
+  of yBc24: blGoneSharkin
   of yBc26: blAwu
 
 proc baselineFor*(year, name: string): Baseline =
@@ -46,6 +49,11 @@ proc baselineFor*(year, name: string): Baseline =
     of "scaffold", "examplefuncsplayer", "examplefuncsplayer21", "example":
       blExamplefuncsplayer21
     else: blCaliforniaRoll
+  of yBc24:
+    case key
+    of "scaffold", "examplefuncsplayer", "examplefuncsplayer24", "example":
+      blExamplefuncsplayer24
+    else: blGoneSharkin
   of yBc26:
     case key
     of "scaffold", "examplefuncsplayer", "example": blScaffold
@@ -76,6 +84,8 @@ proc baselineChassis*(kind: Baseline): ScriptedChassis =
   of blCaliforniaRoll: scCaliforniaRoll
   of blExamplefuncsplayer21: scExamplefuncsplayer21
   of blBowlOfChowder: scBowlOfChowder
+  of blGoneSharkin: scGoneSharkin
+  of blExamplefuncsplayer24: scExamplefuncsplayer24
   of blAwu: scAwu
 
 proc baselineReply*(kind: Baseline): string =
@@ -119,6 +129,19 @@ proc baselineReply*(kind: Baseline): string =
                  "convert_over_kill":true,"eco_exponential_round":700},
         "notes":"default california-roll doctrine",
         "motto":"Vote early, vote often."}"""
+  of blGoneSharkin, blExamplefuncsplayer24:
+    ## The all-defaults bc24 sheet, which is ALSO the fallback sheet
+    ## §Decisions prints verbatim. `examplefuncsplayer24` reads no knob, so it
+    ## answers with the same sheet: the chassis, not the sheet, is what makes
+    ## it the weak floor (D1).
+    """{"sheet":{"specialisation_split":"balanced","flag_rush_round":450,
+                 "trap_budget":30,"trap_placement":"flag_ring",
+                 "trap_mix":"mixed","heal_priority":"wounded_first",
+                 "water_dig_policy":"choke_dig",
+                 "upgrade_order":["attack","heal","capture"],
+                 "retreat_hp":400,"flag_carry_escort":2},
+        "notes":"default gone-sharkin doctrine",
+        "motto":"Bread first, blood after."}"""
 
 proc baselineSheet*(year: string, kind: Baseline): Sheet =
   result = parseReply(baselineReply(kind), year)

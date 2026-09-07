@@ -10,6 +10,7 @@ year**, chosen by `game_config.year`:
 | `bc26` | 2026 "Uneasy Alliances" | rat clans allied against NPC cats until one of them betrays |
 | `bc20` | 2020 "Soup" | the water rises every round, and a team either terraforms above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt |
 | `bc21` | 2021 "Campaign" | every round auctions one citizen's vote; influence buys units, buys votes, and is what an enemy politician takes when it converts your Enlightenment Center |
+| `bc24` | 2024 "Breadwars" | fifty identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off |
 
 ---
 
@@ -148,6 +149,57 @@ chassis (behaviour ported from Stone Tao's 2021 bot);
 `PLAYER_SCRIPTED=examplefuncsplayer21` is the ported 2021 example bot,
 deliberately weak, and the bot the bc21 parity oracle runs.
 
+---
+
+## `bc24` — Battlecode 2024 "Breadwars"
+
+**The clock is the dam.** Two cogs each command a flock of **fifty identical
+ducks**. For the first 200 rounds an impassable dam splits the map and nobody
+can attack: ducks spawn, walk crumbs off the floor, dig water, fill water, lay
+invisible traps and — uniquely in this year — **carry their own three flags to
+wherever they want them**, subject to a minimum spacing of six tiles. At round
+200 the dam evaporates, the flag placements freeze, and **the only thing that
+ends the game early is capturing all three enemy flags.** Otherwise round 2000
+decides it on flags captured, then total skill levels, then crumbs, then a coin
+flip.
+
+Every duck is the same duck. What makes them different is what they *do*:
+attacking, healing and building each earn experience in that skill, each skill
+has six levels, and at level 4 a duck gains **mastery** — that skill can keep
+climbing to 6 while the other two freeze at 3. A duck that dies goes to
+**jail** for 25 rounds, comes back at full health, and loses experience in its
+own best skill on the way in. So a flock is a portfolio: attackers that hit for
+240 instead of 150, healers that mend 100 instead of 80, builders whose
+200-crumb explosive trap costs 100.
+
+Crumbs are the only resource and they are **global per team**: 400 to start, 10
+a round for free, whatever the ducks walk over, and 30 for every kill made
+while standing on enemy ground. They buy digging (20), filling (30), stun and
+water traps (100) and explosive traps (200) — and nothing else, because ducks
+are free and infinite. Every crumb spent on a moat is a crumb not spent on an
+explosive trap ringing the flag the enemy is running at.
+
+```
+points = int(60 * flag share + 25 * level share + 15 * crumb share)
+score  = 100 * games won + mean(points over games played)
+```
+
+Ten knobs — `specialisation_split`, `flag_rush_round`, `trap_budget`,
+`trap_placement`, `trap_mix`, `heal_priority`, `water_dig_policy`,
+`upgrade_order`, `retreat_hp`, `flag_carry_escort` — which is the triangle the
+year is actually about: **level up, fortify, or run at the flags.** Champions:
+
+| policy | doctrine |
+| --- | --- |
+| `battlecode-bc24-fortress` | they never get one out: build-heavy, explosives ringing the flags, a moat, and retreat early to keep levelling |
+| `battlecode-bc24-flagrush` | capturing all three ends the game instantly, so get there first: all-in on attack, rush at round 220–350, fill the road, capture upgrade first |
+
+`PLAYER_SCRIPTED=gone-sharkin` is the strong baseline and the champion chassis
+(behaviour ported from the four AGPL-3.0 bots credited in `NOTICE`);
+`PLAYER_SCRIPTED=examplefuncsplayer24` is the ported 2024 example bot,
+deliberately weak, and the bot the bc24 parity oracle runs — **whole games,
+bit-exact, with an empty divergence ledger.**
+
 ## What is in here
 
 | path | what |
@@ -155,6 +207,7 @@ deliberately weak, and the bot the bc21 parity oracle runs.
 | `src/battlecode/years/bc26/` | the 2026 rule set: `world.nim` (state, geometry, legality), `cats.nim` (the NPC state machine), `rules.nim` (the round loop), `knobs.nim` (the doctrine table), `chassis/` (the two bots and every knob's site) |
 | `src/battlecode/years/bc20/` | the 2020 rule set: `world.nim`, `flood.nim`, `pollution.nim`, `blockchain.nim`, `cows.nim`, `rules.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/bc21/` | the 2021 rule set: `world.nim`, `empower.nim`, `votes.nim`, `economy.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
+| `src/battlecode/years/bc24/` | the 2024 rule set: `world.nim`, `skills.nim`, `traps.nim`, `flags.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/{registry,dispatch}.nim` | the year boundary: the ONE place the year-neutral machinery meets a year module |
 | `src/battlecode/rng.nim` | `java.util.Random` and `IDGenerator`, bit-exact |
 | `src/battlecode/{sheet,decide,llm,baselines}.nim` | the doctrine schema, the one sealed parallel batch, the provider ladder, the scripted table |
@@ -169,6 +222,11 @@ deliberately weak, and the bot the bc21 parity oracle runs.
   and every deliberate divergence from the Java engine.
 * [`docs/RULES-BC20.md`](docs/RULES-BC20.md) — the 2020 rule set, its ten
   knobs, and its own §Divergences list.
+* [`docs/RULES-BC21.md`](docs/RULES-BC21.md) — the 2021 rule set, likewise.
+* [`docs/RULES-BC24.md`](docs/RULES-BC24.md) — the 2024 rule set, its ten
+  knobs, THE TWO ROUNDING REGIMES, and its own §Divergences list.
+* [`docs/PARITY.md`](docs/PARITY.md) — the Java oracles, tier by tier, and
+  every accepted divergence with its root cause.
 * [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — `cogame.battlecode.v1`: what a seat
   sends, what a cog sees, and what it never sees.
 * [`docs/REPLAY.md`](docs/REPLAY.md) — the replay document and how the viewer

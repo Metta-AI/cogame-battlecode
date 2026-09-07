@@ -17,6 +17,8 @@ import battlecode/years/bc26/[maps, rules]
 import battlecode/years/dispatch
 from battlecode/years/bc21/maps as maps21 import nil
 from battlecode/years/bc21/rules as rules21 import nil
+from battlecode/years/bc24/maps as maps24 import nil
+from battlecode/years/bc24/rules as rules24 import nil
 
 proc sha(path: string): string =
   for b in sha256(readFile(path)):
@@ -277,6 +279,78 @@ for aliased in ["renderClock", "renderTransport", "getSpoilers",
 check("and it registers itself on its own global",
   "window.Bc21Block" in page and "window.Bc20Block" in page)
 
+## ---- THE APPENDED bc24 GAME BLOCK -----------------------------------------
+## No starter element is removed and no existing id is reused: every id the
+## bc24 block adds is new and prefixed.
+for added in ["id=\"bc24-flags\"", "id=\"bc24-crumbs\"",
+              "id=\"bc24-levels\"", "id=\"bc24-doctrines\"",
+              "id=\"bc24-doctrines-close\"", "id=\"bc24-doctrines-toggle\"",
+              "id=\"bc24-traps\""]:
+  check("the bc24 block adds " & added, added in page)
+check("under its own banner comment",
+  "BC24 additions to the inherited cogame-battlecode chrome" in page)
+check("and the bc26 block's own elements are still there",
+  "id=\"coopchip\"" in page and "id=\"doctrines\"" in page)
+check("and the bc20 block's", "id=\"bc20-flood\"" in page and
+  "id=\"bc20-chain\"" in page)
+check("and the bc21 block's", "id=\"bc21-votes\"" in page and
+  "id=\"bc21-bids\"" in page)
+check("#viewpanel is KEPT: a 59-wide board renders 944 px against a 360 px " &
+  "featured-match frame", "id=\"viewpanel\"" in page)
+
+## The year is ONE attribute plus CSS, not a rewrite.
+check("the stylesheet hides the other years' readouts under bc24",
+  "html[data-year=\"bc24\"] #coopchip" in page)
+check("including bc20's", "html[data-year=\"bc24\"] #bc20-flood" in page)
+check("and bc21's", "html[data-year=\"bc24\"] #bc21-votes" in page)
+check("both ways", "html:not([data-year=\"bc24\"]) #bc24-flags" in page)
+
+## D3: the bc24 doctrine overlay is DISMISSIBLE and never sits in the
+## transport band.
+block:
+  let start = page.find("#bc24-doctrines {")
+  check("the page has a #bc24-doctrines rule", start >= 0)
+  let rule = page[start ..< page.find("}", start)]
+  check("and it sits ABOVE the transport band",
+    "bottom: calc(var(--band, 0px) + 8px);" in rule)
+check("with a dismiss control that says what it does",
+  "id=\"bc24-doctrines-close\"" in page and
+  page.count("aria-label=\"Dismiss doctrines\"") >= 3)
+check("an Escape binding scoped to the bc24 year",
+  "getAttribute('data-year') !== 'bc24'" in page)
+check("and a re-open chip", "id=\"bc24-doctrines-toggle\" hidden" in page)
+for panel in ["#bc24-crumbs {", "#bc24-levels {"]:
+  let start = page.find(panel)
+  check("the page has a " & panel & " rule", start >= 0)
+  let rule = page[start ..< page.find("}", start)]
+  check(panel & " sits above the transport band too",
+    "var(--band, 0px) +" in rule)
+
+## CSS for EVERY beat kind bc24 emits — all twelve, with the five NEW ones
+## SCOPED to the bc24 year (the bc21 r1-F4 fix, kept).
+for kind in ["doctrine", "game", "setup", "build", "steal", "return",
+             "capture", "trap", "upgrade", "level", "rout", "end"]:
+  check("the page styles .beat-marker." & kind & " (bc24)",
+    ".beat-marker." & kind in page)
+for kind in ["setup", "trap", "upgrade", "level", "rout"]:
+  check("and .beat-marker." & kind & " is scoped to the bc24 year",
+    "html[data-year=\"bc24\"] .beat-marker." & kind in page)
+
+## The tandem hoisting collision, a fourth time: the bc24 block's beat builder
+## may share neither `markBeat`, nor bc26's `buildBeatButtons`, nor bc20's,
+## nor bc21's.
+check("the bc24 block has its OWN beat builder",
+  "function buildBc24BeatButtons" in page)
+check("and its own spoiler gate", "function applyBc24BeatSpoilers" in page)
+for aliased in ["renderClock", "renderTransport", "getSpoilers",
+                "setSpoilers", "renderBeatMarkers", "markBeat",
+                "buildBeatButtons", "buildBc20BeatButtons",
+                "buildBc21BeatButtons"]:
+  check("the bc24 block does not shadow " & aliased,
+    page.count("function " & aliased & "(") <= 1)
+check("and it registers itself on its own global",
+  "window.Bc24Block" in page and "window.Bc21Block" in page)
+
 ## ---- THE KILLFEED / STAT-BOX OVERLAP FIX ----------------------------------
 ## `#killfeed` is anchored in board-scaled units and the year stat boxes in
 ## pixels off the transport band, so at FIT zoom on a small board the feed
@@ -297,6 +371,8 @@ block:
 check("relayout sets --statrail", "root.setProperty('--statrail'" in page)
 check("by MEASURING the visible year stat boxes, not by guessing",
   "'econ', 'bc20-soup', 'bc20-units', 'bc21-influence', 'bc21-units'" in page)
+check("and bc24's two boxes are in the measured set", 
+  "'bc24-crumbs', 'bc24-levels'" in page)
 check("and a year change re-runs the measurement",
   "setAttribute('data-year', year);" in page and "relayout();" in page)
 check("the viewer smoke gates on the overlap",
@@ -307,17 +383,23 @@ check("and at both FIT and 2x zoom", "[[\"fit\", 0], [\"2x\", 91]]" in
   readFile("tools/ci/viewer_smoke.mjs"))
 block:
   let ci = readFile(".github/workflows/ci.yml")
-  check("on all three years' replays", "dist/smoke/replay-bc21.json" in ci and
-    "dist/smoke/replay-bc20.json" in ci and "dist/smoke/replay.json" in ci)
+  check("on all four years' replays", "dist/smoke/replay-bc21.json" in ci and
+    "dist/smoke/replay-bc20.json" in ci and "dist/smoke/replay.json" in ci and
+    "dist/smoke/replay-bc24.json" in ci)
+  check("and bc24's viewer smoke gets the longer settle its round cost needs",
+    "--timeout 120 --soak 15" in ci)
 
 ## The renderer fixture lays the full-cap doctrine text out for EVERY year.
 block:
   let fixture = readFile("tools/ci/renderer_fixture.html")
-  check("the fixture has a bc21 row",
-    "var YEARS = ['bc26', 'bc20', 'bc21'];" in fixture)
+  check("the fixture has a row per year",
+    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24'];" in fixture)
   check("and fills bc21's own readouts",
     "bc21-influence" in fixture and "bc21-votes" in fixture and
     "bc21-doctrines-body" in fixture)
+  check("and bc24's",
+    "bc24-crumbs" in fixture and "bc24-flags" in fixture and
+    "bc24-levels" in fixture and "bc24-doctrines-body" in fixture)
 
 ## Transport rules from the design note.
 check("relayout sets --hudscale", "--hudscale" in page)
@@ -607,5 +689,93 @@ block:
                "muck_blue", "dirt", "swamp", "empower_red_1", "expose_red",
                "camo_red", "embezzle_red_1", "death_empty"]:
     check("the bc21 atlas carries " & name, "\"" & name & "\"" in atlas)
+
+# --- the bc24 sim really produces a drawable frame --------------------------
+block:
+  ## The same end-to-end path for the fourth year: parse a replay, build a
+  ## deriver, step it past the dam, and emit a bitworld sprite packet from the
+  ## bc24 atlas.
+  let doctrines = [baselineSheet("bc24", blGoneSharkin),
+                   baselineSheet("bc24", blExamplefuncsplayer24)]
+  let (w24, outcome24) = rules24.playGame(maps24.loadMap("Yinyang"),
+    doctrines, [rules24.ckGoneSharkin, rules24.ckExamplefuncsplayer24],
+    0, 0, 240, 0)
+  var plan = MatchPlan(seed: 9, year: "bc24", maxRounds: 240,
+    maps: @["Yinyang"], sideAslots: @[0], abandonAfter: @[-1],
+    sheets: doctrines,
+    chassis: [scGoneSharkin, scExamplefuncsplayer24])
+  var seats: array[2, SeatReport]
+  for slot in 0 .. 1:
+    seats[slot] = SeatReport(name: "s" & $slot, alias: aliasFor(slot),
+      policyKind: "scripted", sheet: doctrines[slot],
+      chassis: (if slot == 0: "gone-sharkin" else: "examplefuncsplayer24"))
+  var doc = ReplayDoc(gameVersion: GameVersion, year: "bc24", config: %*{},
+    seed: 9, seats: seats, plan: plan, result: %*{},
+    games: @[GameHeader(index: 0, map: "Yinyang",
+      mapSha: mapSha("bc24", "Yinyang"), sideAslot: 0,
+      rounds: outcome24.roundsPlayed, hashChain: outcome24.hashChain)])
+  for slot in 0 .. 1: doc.names[slot] = "s" & $slot
+
+  let back = parseReplay($doc.toJson())
+  let deriver = newDeriver(back)
+  let renderer = newRenderer(yearSpec("bc24").atlas)
+  var view = initViewerState()
+  discard deriver.advance()
+  let beats = beatsFor(back, proc (g, r: int): int = 0)
+  let first = renderer.buildSessionPacket(deriver.session,
+    sessionChromeJson(back, deriver.session, view, 0, deriver.totalFrames,
+      0, 0, beats, newJArray(), false))
+  check("the first bc24 frame is a non-empty sprite packet", first.len > 1000)
+  let messages = parseSpritePacket(first)
+  var sawChrome, sawTerrain, sawLayer, sawViewport, sawObject = false
+  for m in messages:
+    case m.kind
+    of spkSprite:
+      if m.sprite.id == BroadcastChromeSpriteId:
+        sawChrome = true
+        check("the bc24 chrome label is the JSON document",
+          m.sprite.label.startsWith("{") and
+          "\"bc24_flags\"" in m.sprite.label)
+      elif m.sprite.label == "terrain":
+        sawTerrain = true
+        checkEq("the bc24 terrain sprite is the whole board",
+          m.sprite.width, deriver.session.w24.width * render.TileSize)
+    of spkLayer:
+      sawLayer = true
+      checkEq("the bc24 board layer is zoomable", m.layer.flags, 1)
+    of spkViewport: sawViewport = true
+    of spkObject: sawObject = true
+    else: discard
+  check("the bc24 packet defines the board layer", sawLayer)
+  check("and its viewport", sawViewport)
+  check("and the terrain sprite", sawTerrain)
+  check("and places objects", sawObject)
+  check("and defines the chrome sprite", sawChrome)
+
+  ## THE DAM DISSOLVE is the most legible moment in the year, so the terrain
+  ## sprite is re-cut when it falls: a frame that crosses round 200 carries a
+  ## whole new board, and every other frame is a diff.
+  var crossing = 0
+  for step in 0 ..< 40:
+    discard deriver.advance()
+  let later = renderer.buildSessionPacket(deriver.session,
+    sessionChromeJson(back, deriver.session, view, deriver.frame,
+      deriver.totalFrames, 0, 0, beats, newJArray(), false))
+  check("a later bc24 frame is a DIFF, not the whole board",
+    later.len < first.len)
+  check("but still carries something to draw", later.len > 16)
+  checkEq("(the crossing counter is unused scaffolding)", crossing, 0)
+
+# --- the bc24 sprite atlas --------------------------------------------------
+block:
+  check("the bc24 atlas image is committed", fileExists("data/atlas_bc24.png"))
+  check("with its index", fileExists("data/atlas_bc24.json"))
+  let atlas = readFile("data/atlas_bc24.json")
+  for name in ["duck_brown", "duck_brown_attack", "duck_brown_build",
+               "duck_brown_heal", "duck_brown_jailed", "duck_white",
+               "duck_white_attack", "trap_brown_explosive",
+               "trap_brown_stun", "trap_brown_water", "trap_white_explosive",
+               "flag", "flag_outline_thick", "crumb_1", "crumb_2", "crumb_3"]:
+    check("the bc24 atlas carries " & name, "\"" & name & "\"" in atlas)
 
 finish("test_viewer")

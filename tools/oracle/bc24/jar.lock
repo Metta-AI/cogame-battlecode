@@ -1,0 +1,8 @@
+{
+  "url": "https://releases.battlecode.org/maven/org/battlecode/battlecode24/3.0.5/battlecode24-3.0.5.jar",
+  "version": "3.0.5",
+  "bytes": 17064521,
+  "sha256": "9cbfc6f0b812c71a861bb203d7a100c97c694fe8440c186b3b203a58757a4095",
+  "engine_commit": "166c79bbf4156c866caf434062cb1f403c01695f",
+  "spec_version": "3.0.5"
+}

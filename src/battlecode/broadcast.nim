@@ -20,6 +20,9 @@ from years/bc21/world as w21 import nil
 from years/bc21/constants as c21 import nil
 from years/bc21/economy as e21 import nil
 from years/bc21/rules as r21 import nil
+from years/bc24/world as w24 import nil
+from years/bc24/constants as c24 import nil
+from years/bc24/rules as r24 import nil
 
 const
   PlaybackSpeeds* = [1, 2, 3, 4, 8, 16]
@@ -476,6 +479,202 @@ proc bc21ChromeJson*(
   }
   $node
 
+# ---------------------------------------------------------------------------
+#  bc24 -- flags, crumbs, levels and the war panel
+# ---------------------------------------------------------------------------
+
+proc bc24Flags(w: w24.World, sideAslot: int): JsonNode =
+  ## `#bc24-flags`: the headline readout. Three pips a clan -- CAPTURED,
+  ## CARRIED and HOME -- and the two captures that clinch the game.
+  result = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: w24.teamA else: w24.teamB)
+    let t = ord(team)
+    var carried = 0
+    var home = 0
+    var away = 0
+    for f in w.allFlags:
+      if f.team != w24.other(team): continue
+      ## The pips a clan shows are about the ENEMY's flags: those are the ones
+      ## it is trying to take home.
+      if f.carriedBy >= 0:
+        let carrier = w24.robotById(w, f.carriedBy)
+        if carrier != nil and carrier.team == team: carried += 1
+      elif f.locIsStartRef: home += 1
+      else: away += 1
+    result.add(%*{
+      "alias": aliasFor(slot),
+      "captured": w.stats.flagsCaptured[t],
+      "carried": carried,
+      "enemy_home": home,
+      "enemy_dropped": away,
+      "picked_up": w.stats.flagsPickedUp[t],
+      "to_win": max(0, c24.NumberFlags - w.stats.flagsCaptured[t])
+    })
+
+proc bc24Crumbs(w: w24.World, sideAslot: int): JsonNode =
+  ## `#bc24-crumbs`: per clan, crumbs banked, income a round, traps standing
+  ## and water tiles owned.
+  var water = 0
+  for v in w.water:
+    if v: water += 1
+  result = newJArray()
+  for slot in 0 .. 1:
+    let t = if slot == sideAslot: 0 else: 1
+    result.add(%*{
+      "crumbs": w.stats.crumbs[t],
+      "income": c24.PassiveCrumbsIncrease,
+      "collected": w.stats.crumbsCollected[t],
+      "spent": w.stats.crumbsSpent[t],
+      "kill_crumbs": w.stats.killCrumbs[t],
+      "traps": max(0, w.stats.trapsBuilt[t] - w.stats.trapsTriggered[t]),
+      "traps_built": w.stats.trapsBuilt[t],
+      "traps_triggered": w.stats.trapsTriggered[t],
+      "dug": w.stats.tilesDug[t],
+      "filled": w.stats.tilesFilled[t],
+      "water_tiles": water
+    })
+
+proc bc24Levels(w: w24.World, sideAslot: int): JsonNode =
+  ## `#bc24-levels`: per clan, the three level sums, ducks alive, ducks in
+  ## jail and the upgrades owned as lit glyphs.
+  result = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: w24.teamA else: w24.teamB)
+    let t = ord(team)
+    var attack, build, heal, alive, jailed = 0
+    for duck in w.robots:
+      if duck.team != team: continue
+      attack += w24.levelOf(duck, c24.skAttack)
+      build += w24.levelOf(duck, c24.skBuild)
+      heal += w24.levelOf(duck, c24.skHeal)
+      if duck.spawned: alive += 1
+      elif duck.spawnCooldown > 0: jailed += 1
+    result.add(%*{
+      "attack": attack,
+      "build": build,
+      "heal": heal,
+      "total": attack + build + heal,
+      "alive": alive,
+      "roster": c24.RobotCapacity,
+      "jailed": jailed,
+      "masteries": w.stats.masteries[t],
+      "upgrades": [w.stats.upgrades[t][0], w.stats.upgrades[t][1],
+                   w.stats.upgrades[t][2]],
+      "upgrade_points": w.stats.upgradePoints[t]
+    })
+
+proc bc24Traps(w: w24.World, sideAslot: int): JsonNode =
+  ## `#bc24-traps`, the endcard's WAR PANEL. NOTHING about traps, water or
+  ## levels is stored in the replay: the wasm sim re-derives every round and
+  ## this reads the re-derived totals.
+  var clans = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: w24.teamA else: w24.teamB)
+    let t = ord(team)
+    var levels = 0
+    for duck in w.robots:
+      if duck.team == team: levels += w24.levelSumOf(duck)
+    var rounds = newJArray()
+    for i in 0 .. 2: rounds.add(%w.stats.upgradeRound[t][i])
+    clans.add(%*{
+      "alias": aliasFor(slot),
+      "picked_up": w.stats.flagsPickedUp[t],
+      "dropped": w.stats.flagsDropped[t],
+      "returned": w.stats.flagsReturned[t],
+      "captured": w.stats.flagsCaptured[t],
+      "traps_built": w.stats.trapsBuilt[t],
+      "traps_triggered": w.stats.trapsTriggered[t],
+      "trap_damage": w.stats.trapDamage[t],
+      "dug": w.stats.tilesDug[t],
+      "filled": w.stats.tilesFilled[t],
+      "crumbs_collected": w.stats.crumbsCollected[t],
+      "crumbs_on_dig": w.stats.crumbsSpentDig[t],
+      "crumbs_on_fill": w.stats.crumbsSpentFill[t],
+      "crumbs_on_traps": w.stats.crumbsSpentTraps[t],
+      "levels": levels,
+      "masteries": w.stats.masteries[t],
+      "upgrade_rounds": rounds,
+      "jailed": w.stats.ducksJailed[t],
+      "kills": w.stats.kills[t],
+      "damage": w.stats.damageDealt[t],
+      "healed": w.stats.healDealt[t]
+    })
+  %*{
+    "clans": clans,
+    "setup_teleports": w.stats.setupFlagTeleports,
+    "rounds_with_carry": w.stats.roundsWithAnyCarry
+  }
+
+proc bc24Jail(w: w24.World, sideAslot: int): JsonNode =
+  ## The JAIL RAIL beside the scorebug: twenty-five rounds of absence is a
+  ## story and an empty tile is not, so a jailed duck is drawn greyed with a
+  ## countdown rather than simply vanishing.
+  result = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: w24.teamA else: w24.teamB)
+    var rail = newJArray()
+    for duck in w.robots:
+      if duck.team != team or duck.spawned: continue
+      if duck.spawnCooldown <= 0: continue
+      if rail.len >= 12: break
+      rail.add(%*{"id": duck.execIndex,
+                  "rounds": (duck.spawnCooldown + c24.CooldownsPerTurn - 1) div
+                            c24.CooldownsPerTurn})
+    result.add(rail)
+
+proc bc24ChromeJson*(
+  doc: ReplayDoc, w: w24.World, view: ViewerState,
+  frame, totalFrames, gameIndex, sideAslot: int,
+  beats: JsonNode, gameChips: JsonNode, ended: bool
+): string =
+  ## One frame of bc24 chrome. `t` / `st` / `mx` / `mt` are the GENERIC
+  ## timeline keys `chrome_common.js` reads, unchanged, so the clock, the
+  ## transport and the scrubber are driven by the starter's own code; the
+  ## `bc24_*` keys are what the APPENDED bc24 game block draws.
+  let phase = if ended: "gameover" else: "playing"
+  let points = r24.gamePoints(w)
+  var node = %*{
+    "t": frame,
+    "st": 0,
+    "mx": max(1, totalFrames - 1),
+    "mt": 0,
+    "sp": view.speed,
+    "pl": view.playing,
+    "lp": view.loop,
+    "sk": view.skipLulls,
+    "ff": false,
+    "en": true,
+    "ph": phase,
+    "lob": 0,
+    "pov": -1,
+    "nim": GameVersion,
+    "year": "bc24",
+    "beats": beats,
+    "game": gameIndex + 1,
+    "games": doc.games.len,
+    "map": doc.plan.maps[min(gameIndex, doc.plan.maps.high)],
+    "round": w.currentRound,
+    "rounds": doc.plan.maxRounds,
+    "setup_rounds": c24.SetupRounds,
+    "setup": w24.isSetupPhase(w),
+    "aliases": [AliasA, AliasB],
+    "names": [doc.names[0], doc.names[1]],
+    "sides": [(if sideAslot == 0: "A" else: "B"),
+              (if sideAslot == 0: "B" else: "A")],
+    "points": [points[(if sideAslot == 0: 0 else: 1)],
+               points[(if sideAslot == 0: 1 else: 0)]],
+    "bc24_flags": bc24Flags(w, sideAslot),
+    "bc24_crumbs": bc24Crumbs(w, sideAslot),
+    "bc24_levels": bc24Levels(w, sideAslot),
+    "bc24_traps": bc24Traps(w, sideAslot),
+    "bc24_jail": bc24Jail(w, sideAslot),
+    "gamechips": gameChips,
+    "doctrines": doctrineWords(doc),
+    "result": doc.result
+  }
+  $node
+
 proc bc20ChromeJson*(
   doc: ReplayDoc, w: w20.World, view: ViewerState,
   frame, totalFrames, gameIndex, sideAslot: int,
@@ -539,4 +738,7 @@ proc sessionChromeJson*(
       beats, gameChips, ended)
   of yBc21:
     bc21ChromeJson(doc, s.w21, view, frame, totalFrames, gameIndex, sideAslot,
+      beats, gameChips, ended)
+  of yBc24:
+    bc24ChromeJson(doc, s.w24, view, frame, totalFrames, gameIndex, sideAslot,
       beats, gameChips, ended)

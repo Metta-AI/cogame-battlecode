@@ -23,6 +23,8 @@ from years/bc20/flood as f20 import nil
 from years/bc20/constants as c20 import nil
 from years/bc21/world as w21 import nil
 from years/bc21/constants as c21 import nil
+from years/bc24/world as w24 import nil
+from years/bc24/constants as c24 import nil
 
 const
   TileSize* = 16
@@ -66,6 +68,20 @@ const
   ## a game, so the terrain sprite is cut ONCE per game.
   Bc21SwampColor = rgba(46, 58, 52, 255)
   Bc21DirtColor = rgba(150, 122, 84, 255)
+
+  ## bc24's board is land, water, wall and -- for the first two hundred rounds
+  ## only -- THE DAM. The 2024 client draws all four procedurally, so there is
+  ## nothing upstream to reuse and nothing to credit: these are this
+  ## repository's own paintbot-derived tones. The dam is drawn as a visibly
+  ## TEMPORARY barricade because its dissolve at round 200 is the single most
+  ## legible moment in the year, and the terrain sprite is therefore re-cut
+  ## when the dam falls and whenever the water line moves.
+  Bc24LandColor = rgba(58, 48, 36, 255)
+  Bc24WaterColor = rgba(30, 66, 104, 255)
+  Bc24WallColor = rgba(96, 82, 66, 255)
+  Bc24DamColor = rgba(148, 120, 72, 255)
+  Bc24SpawnAColor = rgba(96, 70, 44, 255)
+  Bc24SpawnBColor = rgba(120, 116, 108, 255)
 
 type
   Atlas = ref object
@@ -476,6 +492,155 @@ proc buildBc21Packet(r: Renderer, w: w21.World, gameIndex, sideAslot: int,
   packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
   packet
 
+# ---------------------------------------------------------------------------
+#  bc24 -- one unit type, three trap types, six flags and a dam
+# ---------------------------------------------------------------------------
+
+proc bc24DuckSprite(w: w24.World, duck: w24.Robot): string =
+  ## Palette follows the CLIENT's own two team colours: brown = side A, white
+  ## = side B. A duck is drawn with the sprite of its DOMINANT SKILL --
+  ## `base` until it has a level at all -- so a spectator can read the
+  ## flock's specialisation off the board without a legend.
+  let side = if duck.team == w24.teamA: "duck_brown" else: "duck_white"
+  if not duck.spawned: return side & "_jailed"
+  let a = w24.levelOf(duck, c24.skAttack)
+  let b = w24.levelOf(duck, c24.skBuild)
+  let h = w24.levelOf(duck, c24.skHeal)
+  if a == 0 and b == 0 and h == 0: return side
+  if a >= b and a >= h: return side & "_attack"
+  if b >= h: return side & "_build"
+  side & "_heal"
+
+proc bc24TrapSprite(w: w24.World, trap: w24.Trap): string =
+  let side = if trap.team == w24.teamA: "trap_brown" else: "trap_white"
+  case trap.kind
+  of c24.tkExplosive: side & "_explosive"
+  of c24.tkStun: side & "_stun"
+  of c24.tkWater: side & "_water"
+  of c24.tkNone: side & "_stun"
+
+proc bc24CrumbSprite(amount: int): string =
+  if amount >= 400: "crumb_3"
+  elif amount >= 200: "crumb_2"
+  else: "crumb_1"
+
+proc bc24TerrainStage(w: w24.World): int =
+  ## The terrain is re-cut when the dam falls and then once every sixteen
+  ## rounds, which is often enough to show digging and filling and rare enough
+  ## that a 59x59 board is not re-rasterised a hundred times a second.
+  if w24.isSetupPhase(w): 0 else: 1 + w.currentRound div 16
+
+proc renderBc24Terrain(r: Renderer, w: w24.World): Image =
+  result = newImage(w.width * TileSize, w.height * TileSize)
+  result.fill(Bc24LandColor)
+  let ctx = newContext(result)
+  let setup = w24.isSetupPhase(w)
+  for y in 0 ..< w.height:
+    for x in 0 ..< w.width:
+      let px = x * TileSize
+      ## The board's y axis grows NORTH; the canvas grows down.
+      let py = (w.height - 1 - y) * TileSize
+      let i = x + y * w.width
+      var colour = Bc24LandColor
+      if w.walls[i]: colour = Bc24WallColor
+      elif w.water[i]: colour = Bc24WaterColor
+      elif setup and w.dam[i]: colour = Bc24DamColor
+      elif w.spawnZones[i] == 1: colour = Bc24SpawnAColor
+      elif w.spawnZones[i] == 2: colour = Bc24SpawnBColor
+      ctx.fillStyle = colour
+      ctx.fillRect(rect(float32(px), float32(py),
+                        float32(TileSize), float32(TileSize)))
+
+proc buildBc24Packet(r: Renderer, w: w24.World, gameIndex, sideAslot: int,
+                     chrome: string): seq[uint8] =
+  var packet: seq[uint8]
+  let newGame = r.terrainGame != gameIndex
+  let stage = bc24TerrainStage(w)
+
+  if newGame:
+    r.terrainGame = gameIndex
+    r.terrainStage = -1
+    r.liveObjects.clear()
+    r.prevRobotSprite.clear()
+    packet.addClearObjects()
+    packet.addLayer(MapLayerId, MapLayerKind, ZoomableFlag)
+    packet.addViewport(MapLayerId, w.width * TileSize, w.height * TileSize)
+
+  if r.terrainStage != stage:
+    r.terrainStage = stage
+    let terrain = r.renderBc24Terrain(w)
+    packet.addSprite(TerrainSpriteId, terrain.width, terrain.height,
+      straightPixels(terrain), "terrain")
+    packet.addObject(1, 0, 0, -32768, MapLayerId, TerrainSpriteId)
+
+  ## Crumb piles, sized by amount.
+  var crumbSeen = initHashSet[int]()
+  for i in 0 ..< w.crumbTiles.len:
+    let amount = int(w.crumbTiles[i])
+    if amount == 0: continue
+    let objectId = CheeseObjectBase + i
+    crumbSeen.incl(objectId)
+    let sprite = r.spriteId(packet, bc24CrumbSprite(amount))
+    let l = w24.indexToLoc(w, i)
+    r.addObj(packet, objectId, l.x * TileSize,
+      (w.height - 1 - l.y) * TileSize, 1, sprite)
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= CheeseObjectBase and objectId < TrapAObjectBase and
+        objectId notin crumbSeen:
+      r.dropObj(packet, objectId)
+
+  ## OWN TRAPS ARE DRAWN, ENEMY TRAPS ARE NOT -- the fog belongs to the ducks,
+  ## and drawing a hidden explosive would make every trap wave unsurprising.
+  ## Which side is "own" is the SIDE-A seat's, so the spectator sees the clan
+  ## whose plate is on the left.
+  var trapSeen = initHashSet[int]()
+  for i in 0 ..< w.trapLocations.len:
+    let trap = w.trapLocations[i]
+    if trap == nil: continue
+    let base = if trap.team == w24.teamA: TrapAObjectBase else: TrapBObjectBase
+    let objectId = base + i
+    trapSeen.incl(objectId)
+    let sprite = r.spriteId(packet, bc24TrapSprite(w, trap))
+    let l = w24.indexToLoc(w, i)
+    r.addObj(packet, objectId, l.x * TileSize,
+      (w.height - 1 - l.y) * TileSize, 2, sprite)
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= TrapAObjectBase and objectId < RobotObjectBase and
+        objectId notin trapSeen:
+      r.dropObj(packet, objectId)
+
+  ## The six flags. A carried flag rides its carrier.
+  var flagSeen = initHashSet[int]()
+  for f in w.allFlags:
+    let objectId = SoupObjectBase + f.id
+    flagSeen.incl(objectId)
+    let sprite = r.spriteId(packet,
+      (if f.carriedBy >= 0: "flag_outline_thick" else: "flag"))
+    r.addObj(packet, objectId, f.loc.x * TileSize,
+      (w.height - 1 - f.loc.y) * TileSize, 6, sprite)
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= SoupObjectBase and objectId notin flagSeen:
+      r.dropObj(packet, objectId)
+
+  ## The hundred ducks. Object ids are stable for a duck's whole life, so the
+  ## client's motion interpolation glides it between rounds; a JAILED duck is
+  ## dropped from the board and reported in the jail rail instead.
+  var seen = initHashSet[int]()
+  for duck in w.robots:
+    if not duck.spawned: continue
+    let objectId = RobotObjectBase + duck.execIndex
+    seen.incl(objectId)
+    let sprite = r.spriteId(packet, bc24DuckSprite(w, duck))
+    r.addObj(packet, objectId, duck.loc.x * TileSize,
+      (w.height - 1 - duck.loc.y) * TileSize, 5, sprite)
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= RobotObjectBase and objectId < SoupObjectBase and
+        objectId notin seen:
+      r.dropObj(packet, objectId)
+
+  packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
+  packet
+
 proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   ## The ONE place the renderer branches on the year. `Session` is an object
   ## variant, so the compiler checks that a new year gets an arm here.
@@ -483,3 +648,4 @@ proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   of yBc26: r.buildPacket(s.w26, s.gameIndex, s.sideAslot, chrome)
   of yBc20: r.buildBc20Packet(s.w20, s.gameIndex, s.sideAslot, chrome)
   of yBc21: r.buildBc21Packet(s.w21, s.gameIndex, s.sideAslot, chrome)
+  of yBc24: r.buildBc24Packet(s.w24, s.gameIndex, s.sideAslot, chrome)

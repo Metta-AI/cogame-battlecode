@@ -13,12 +13,30 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV06"
+  GameVersion* = "GV07"
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV07 — the `bc24` year module: Battlecode 2024 "Breadwars" ported from
+    ##        battlecode24 at commit 166c79bb (spec 3.0.5/3.0.6, oracle jar
+    ##        3.0.5): the eight-step round loop over a FIXED hundred-duck exec
+    ##        order, the setup phase and the dam, flag carry/drop/return with
+    ##        the object-identity start-location test and the round-200
+    ##        confirmation, the three trap types with their enter/interact
+    ##        split, specialisation with the level-4 mastery freeze and the
+    ##        jail penalty, the two rounding regimes (float32 for damage and
+    ##        heal, float64 for every cooldown and crumb cost), the 64-slot
+    ##        shared array, the flag broadcast, the three global upgrades and
+    ##        the four-rung end ladder, behind `game_config.year`. bc26, bc20
+    ##        AND bc21 SEMANTICS ARE UNCHANGED: nothing a GV04, GV05 or GV06
+    ##        recording carries changed meaning — the sheet envelope, the
+    ##        results document and the replay all gained year-neutral shape
+    ##        without moving a byte an older recording holds — which is why
+    ##        `ReplayCompatibleGameVersions` is EXTENDED rather than reset and
+    ##        every hosted bc26, bc20 and bc21 replay keeps rendering.
     ##
     ## GV06 — the `bc21` year module: Battlecode 2021 "Campaign" ported from
     ##        battlecode21 at commit ed39c1a4 (release 2021.3.0.5): the
@@ -85,7 +103,7 @@ const
     ##        round loop, cheese, kings, combat, ratnap/throw, traps, dirt,
     ##        formation, squeaks, cats, backstab, float32-narrowed scoring.
 
-  ReplayCompatibleGameVersions* = ["GV04", "GV05", GameVersion]
+  ReplayCompatibleGameVersions* = ["GV04", "GV05", "GV06", GameVersion]
     ## Versions whose recordings this build can still re-derive. A replay
     ## carrying anything else is refused with a readable message rather than
     ## silently re-simulated under different rules.
@@ -125,6 +143,8 @@ type
     scExamplefuncsplayer = "examplefuncsplayer"
     scCaliforniaRoll = "california-roll"
     scExamplefuncsplayer21 = "examplefuncsplayer21"
+    scGoneSharkin = "gone-sharkin"
+    scExamplefuncsplayer24 = "examplefuncsplayer24"
 
   ConfigError* = object of CatchableError
     ## An unusable `game_config`. The container exits 2 on this, per ctf.

@@ -109,5 +109,42 @@
       "PLAYER_SCRIPTED": "examplefuncsplayer21",
       "PLAYER_POLICY_LABEL": "examplefuncsplayer21"
     }
+  },
+  {
+    "name": "battlecode-bc24-fortress",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a flock of 50 ducks in Battlecode 2024. Three of your flags; three of theirs; 2000 rounds. Your doctrine: they never get one out. Set specialisation_split to \"build\" or \"balanced\", trap_budget high (45-60) and trap_placement \"flag_ring\" or \"spawn_ring\" so a raider who reaches a flag still has to walk it home through explosives - an explosive trap does 750 damage inside a radius of 2 tiles and a duck has 1000 HP. Use water_dig_policy \"moat\" or \"choke_dig\": water is impassable and only a 30-crumb fill undoes it. Set trap_mix \"mixed\" or \"explosive\", heal_priority \"wounded_first\" and retreat_hp high (600-800) so your ducks live to level up - healing feeds heal levels and attack feeds attack levels, and levels are the second tiebreak at round 2000. Set flag_rush_round late (700-1100) and flag_carry_escort 3-5 for the one raid you do make. Put \"capture\" late in upgrade_order and \"attack\" or \"heal\" first. In notes, say which of your three flags is the weak one and what you have done about it.",
+      "PLAYER_POLICY_LABEL": "fortress"
+    }
+  },
+  {
+    "name": "battlecode-bc24-flagrush",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a flock of 50 ducks in Battlecode 2024. Capturing all three enemy flags ends the game instantly - nothing else does. Your doctrine: get there first. Set specialisation_split \"attack\", flag_rush_round early (220-350) so you arrive before their traps are paid for, trap_budget low (0-15) and water_dig_policy \"fill_paths\" so your crumbs open the road instead of closing yours. Set trap_placement \"choke\" for what little you build, heal_priority \"carrier_first\" and flag_carry_escort 4-6: a carried flag drops where its carrier dies and returns to their base 4 rounds later, so the escort is the difference between a capture and a gift. retreat_hp low (150-350) - you are trading. Put \"capture\" first in upgrade_order: it cuts your flag-carry movement cooldown from 20 to 12 and stretches THEIR dropped-flag return from 4 rounds to 25. In notes, say which enemy flag you go for first and what you do if the first raid fails.",
+      "PLAYER_POLICY_LABEL": "flagrush"
+    },
+    "player": "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d"
+  },
+  {
+    "name": "battlecode-gone-sharkin",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "gone-sharkin",
+      "PLAYER_POLICY_LABEL": "gone-sharkin"
+    }
+  },
+  {
+    "name": "battlecode-examplefuncsplayer24",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "examplefuncsplayer24",
+      "PLAYER_POLICY_LABEL": "examplefuncsplayer24"
+    }
   }
 ]

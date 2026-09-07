@@ -84,6 +84,15 @@ block:
     else:
       check("bc21's key " & key & " collides with neither older year",
         key notin Bc26GameKeys and key notin Bc20GameKeys)
+  for key in Bc24GameKeys:
+    check("the schema declares bc24's optional game key " & key,
+      key in gameProps)
+  for key in Bc24GameKeys:
+    ## bc24 shares NOTHING with the other three: one unit type, one resource
+    ## and a flag game.
+    check("bc24's key " & key & " collides with no older year",
+      key notin Bc26GameKeys and key notin Bc20GameKeys and
+      key notin Bc21GameKeys)
 
   var endReasons: seq[string]
   for v in game["results_schema"]["properties"]["games"]["items"]["properties"]["end_reason"]["enum"]:
@@ -91,14 +100,23 @@ block:
   var wantEndReasons = @EndReasons
   endReasons.sort()
   wantEndReasons.sort()
-  checkEq("end_reason is the union of both years plus abandoned", endReasons,
-    wantEndReasons)
+  checkEq("end_reason is the union of all four years plus abandoned",
+    endReasons, wantEndReasons)
+  check("and bc24's two DEAD RUNGS are absent: `checkEndOfMatch` never calls " &
+    "MORE_FLAGS_PICKED and no action a doctrine can reach produces " &
+    "RESIGNATION",
+    "more_flags_picked" notin endReasons and "resignation" notin endReasons)
 
   var yearEnum: seq[string]
   for v in game["config_schema"]["properties"]["year"]["enum"]:
     yearEnum.add(v.getStr())
-  checkEq("config_schema.year.enum names all three years", yearEnum,
-    @["bc26", "bc20", "bc21"])
+  checkEq("config_schema.year.enum names all four years", yearEnum,
+    @["bc26", "bc20", "bc21", "bc24"])
+  ## bc24 plays to 2000 rounds, which is EXACTLY the existing ceiling, so no
+  ## schema change was needed -- and this is the assertion that says so.
+  let rounds = game["config_schema"]["properties"]["maxRounds"]
+  checkEq("maxRounds still tops out at 2000", rounds["maximum"].getInt(), 2000)
+  checkEq("and still bottoms at 50", rounds["minimum"].getInt(), 50)
 
 block:
   ## The third leg: what docker_smoke.sh actually asserts.
@@ -111,11 +129,11 @@ block:
 # --- num_agents -------------------------------------------------------------
 block:
   ## ONE VARIANT PER BATTLECODE YEAR.
-  checkEq("one variant per registered year", variants.len, 3)
+  checkEq("one variant per registered year", variants.len, 4)
   var variantIds: seq[string]
   for variant in variants: variantIds.add(variant["id"].getStr())
   checkEq("and they are the registered years", variantIds,
-    @["bc26", "bc20", "bc21"])
+    @["bc26", "bc20", "bc21", "bc24"])
   for variant in variants:
     check("variant " & variant["id"].getStr() & " is a registered year",
       isRegisteredYear(variant["game_config"]["year"].getStr()))
@@ -161,6 +179,22 @@ block:
   for id in declared:
     check("every DECLARED player has a certification slot: " & id,
       id in seated)
+  ## And the pair of checks that closes it: the certifier also requires
+  ## `len(certification.players) == certification.game_config.num_agents`, so
+  ## with two seats there are exactly TWO cert slots and `player[]` may
+  ## therefore contain exactly those two ids and nothing else. bc24 adds no
+  ## `player[]` entry at all; `PLAYER_SCRIPTED` resolves PER YEAR in
+  ## `src/battlecode/baselines.nim`, so seating `awu` on a bc24 episode
+  ## already plays Gone Sharkin'.
+  checkEq("len(certification.players) == certification num_agents",
+    cert["players"].len, cert["game_config"]["num_agents"].getInt())
+  checkEq("player[] is exactly the two ids the fixture seats", declared,
+    @["awu", "scaffold"])
+  checkEq("and the certification fixture stays on bc26",
+    cert["game_config"]["year"].getStr(), "bc26")
+  for p in manifest["player"]:
+    check(p["id"].getStr() & "'s description names its bc24 resolution",
+      "bc24" in p["description"].getStr())
 
 # --- no runner-managed tokens, and bounded arrays ---------------------------
 proc walkArrays(node: JsonNode, path: string) =
@@ -223,7 +257,7 @@ block:
   checkEq("docs.readme is an object", docs["readme"].kind, JObject)
   check("docs.readme has type and value",
     docs["readme"].hasKey("type") and docs["readme"].hasKey("value"))
-  checkEq("five doc pages ship — one rules page per year", docs["pages"].len, 5)
+  checkEq("six doc pages ship — one rules page per year", docs["pages"].len, 6)
   var ids: seq[string]
   for page in docs["pages"]:
     ids.add(page["id"].getStr())
@@ -237,7 +271,8 @@ block:
       toUpperAscii() & ".md"
     check("the page's file exists: " & target, fileExists(target))
   checkEq("the pages are the ones the design note names", ids,
-    @["rules.md", "rules-bc20.md", "rules-bc21.md", "replay.md", "parity.md"])
+    @["rules.md", "rules-bc20.md", "rules-bc21.md", "rules-bc24.md",
+      "replay.md", "parity.md"])
 
 # --- the rest of the shape --------------------------------------------------
 block:
@@ -283,7 +318,7 @@ block:
 block:
   let policies = parseJson(readFile("tools/ci/policies.json"))
   ## Four per year: two `PLAYER_PROMPT` champions and two scripted fillers.
-  checkEq("twelve policies ship — four per year", policies.len, 12)
+  checkEq("sixteen policies ship — four per year", policies.len, 16)
   var prompts = 0
   var scripted = 0
   var owned = 0
@@ -306,9 +341,9 @@ block:
         p["env"]["PLAYER_PROMPT"].getStr().len > 200)
     if p["env"].hasKey("PLAYER_SCRIPTED"): inc scripted
     if p.hasKey("player"): inc owned
-  checkEq("two LLM champions per year", prompts, 6)
-  checkEq("two scripted baselines per year", scripted, 6)
-  checkEq("each year's champion #2 carries its owning player", owned, 3)
+  checkEq("two LLM champions per year", prompts, 8)
+  checkEq("two scripted baselines per year", scripted, 8)
+  checkEq("each year's champion #2 carries its owning player", owned, 4)
   checkEq("bc26 champion #2 is the second prompt policy",
     policies[1]["player"].getStr(),
     "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
@@ -336,6 +371,22 @@ block:
   checkEq("and bc21 champion #2 carries its owning player",
     policies[9]["player"].getStr(),
     "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
+  checkEq("bc24 champion #1 is the fortress",
+    policies[12]["name"].getStr(), "battlecode-bc24-fortress")
+  checkEq("bc24 champion #2 is the flag rush",
+    policies[13]["name"].getStr(), "battlecode-bc24-flagrush")
+  checkEq("and bc24 champion #2 carries its owning player",
+    policies[13]["player"].getStr(),
+    "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
+  check("the two bc24 champion prompts differ",
+    policies[12]["env"]["PLAYER_PROMPT"].getStr() !=
+    policies[13]["env"]["PLAYER_PROMPT"].getStr())
+  checkEq("the bc24 fillers name the two published chassis",
+    policies[14]["env"]["PLAYER_SCRIPTED"].getStr() & "," &
+    policies[15]["env"]["PLAYER_SCRIPTED"].getStr(),
+    "gone-sharkin,examplefuncsplayer24")
+  check("and neither bc24 filler is a champion",
+    not policies[14].hasKey("player") and not policies[15].hasKey("player"))
   check("the two bc21 champion prompts differ",
     policies[8]["env"]["PLAYER_PROMPT"].getStr() !=
     policies[9]["env"]["PLAYER_PROMPT"].getStr())

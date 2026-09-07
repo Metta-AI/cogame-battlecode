@@ -286,3 +286,75 @@ Ten knobs, and **no `chassis`** (D1). The caps are the year-neutral ones: 16 KB
 of bytes for the whole reply, ≤ 32 sheet keys, 280 runes of `notes`, 48 of
 `motto`, ≤ 16 unknown keys recorded at ≤ 40 runes each — every one cut on a
 rune boundary.
+
+## bc24
+
+The wire shape is identical — same protocol id, same registration blob, same
+one-shot sealed doctrine. Only the year-dependent *payload* differs.
+
+### The bc24 observation
+
+`year: "bc24"`, the three map cards, and these year blocks:
+
+```jsonc
+"economy": {"start_crumbs": 400, "passive_per_round": 10,
+            "kill_reward_in_enemy_territory": 30,
+            "dig_cost": 20, "fill_cost": 30,
+            "trap_costs": {"explosive": 200, "stun": 100, "water": 100},
+            "trap_effects": {...},
+            "flag_return_rounds": 4,
+            "flag_return_rounds_with_enemy_capture_upgrade": 25},
+"units":    {"per_team": 50, "hp": 1000, "vision_r2": 20, "attack_r2": 4,
+             "heal_r2": 4, "interact_r2": 2, "jail_rounds": 25,
+             "damage_by_attack_level": [150,158,161,165,195,203,240],
+             "heal_by_heal_level": [80,82,84,86,88,92,100],
+             "xp_to_level": {...},
+             "mastery": "at level 4 in one skill the other two freeze at 3"},
+"upgrades": {"rounds": [600, 1200, 1800], "attack": "...", "heal": "...",
+             "capture": "..."},
+"sheet_schema": { ...all ten knobs, their values, ranges and defaults... },
+"scoring":  {"weights": {"flag_share": 60, "level_share": 25,
+                         "crumb_share": 15},
+             "win_bonus_per_game": 100, "games": 3,
+             "note": "shares are float32; points truncate to an integer"}
+```
+
+Each map card carries `map`, `width`, `height`, `symmetry`, `you_are`,
+`setup_rounds`, `your_spawn_centers`, `enemy_spawn_centers`,
+`min_spawn_separation`, `terrain` (`walls` / `water` / `dam` /
+`passable_pct`) and `crumbs` (`piles` / `total` / `nearest_pile_to_you`).
+Because every map is symmetric the two seats' cards are numerically identical
+in every aggregate; the only asymmetry is `you_are` and which mirrored
+coordinate set is labelled "yours".
+
+**Two things the design note describes that this build does NOT send**, both
+for the same reason bc20 did not: `rules_digest` is the ~6 KB condensed spec,
+and it is in the system PREAMBLE (`Bc24Preamble` in `src/battlecode/
+decide.nim`) rather than in the per-seat JSON, because the preamble is where a
+model reads prose and the observation is where it reads numbers. Nothing is
+withheld from a seat.
+
+**Hidden**, always: the opponent's doctrine, sheet, notes and motto (sealed and
+simultaneous — never sent, in either direction, at any time); the opponent's
+real player name; every in-match state (a cog receives **no** per-round
+observation — one sealed doctrine, then the war); the other seat's fallback
+status.
+
+### The bc24 reply
+
+```json
+{"sheet":{"specialisation_split":"attack","flag_rush_round":260,
+          "trap_budget":10,"trap_placement":"choke","trap_mix":"stun",
+          "heal_priority":"carrier_first","water_dig_policy":"fill_paths",
+          "upgrade_order":["capture","attack","heal"],
+          "retreat_hp":250,"flag_carry_escort":5},
+ "notes":"Their south flag is 9 tiles from the dam; take it before round 300.",
+ "motto":"Quack once, run twice."}
+```
+
+Caps are the year-neutral ones: 16 KB of BYTES on the whole reply (cut on a
+rune boundary), ≤ 32 sheet keys, 280 runes of `notes`, 48 runes of `motto`,
+≤ 16 unknown keys at ≤ 40 runes each, 200 runes of provider error text.
+`upgrade_order` must be exactly three DISTINCT strings from the enum; any
+malformation takes the whole default array and is recorded ONCE. A submitted
+`chassis` is recorded as an unknown field and never honoured (D1).

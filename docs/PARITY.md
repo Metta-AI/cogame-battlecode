@@ -361,3 +361,143 @@ maps — including 245 rounds and 8 635 lines of it on `Star`.
   measures where it starts to differ and gates on that number; it does not
   claim the rounds after it agree.
 * **The `.bc21` flatbuffer.** Nothing in this repository reads or writes one.
+
+---
+
+# bc24 — a whole-game oracle, and an empty ledger
+
+The 2024 oracle is the cheapest of the series and the strongest. Everything
+below was executed, not estimated.
+
+## Why it is only a jar
+
+The published fat jar
+<https://releases.battlecode.org/maven/org/battlecode/battlecode24/3.0.5/battlecode24-3.0.5.jar>
+(17 064 521 bytes, sha256
+`9cbfc6f0b812c71a861bb203d7a100c97c694fe8440c186b3b203a58757a4095`, pinned in
+`tools/oracle/bc24/jar.lock`) is **self-contained**: 11 612 entries, all 254
+`battlecode` classes, every bundled dependency — `net.sf.jsi` among them, so
+the dead-artifact problem that shaped the bc20 and bc21 jobs simply does not
+arise — `MethodCosts.txt`, and all 79 `.map24` map resources. There is
+therefore **no Gradle, no jsi shim, no 94-file `javac`, no Maven Central
+download list and no `deps.lock`** in `parity-oracle-bc24`.
+
+**JDK 8 is mandatory.** The instrumenter rewrites `java.util` classes with ASM
+5.0.4, which refuses class-file versions above 52; under a newer JDK every
+player class load throws and the match ends empty — which is exactly what a
+"green" oracle looks like when it is proving nothing. `tools/oracle/bc24/
+Bc24Trace.java` therefore **fails loudly if no duck ever spawns**, and
+`tools/oracle/bc24/build_oracle.sh` compiles with plain `-source 8 -target 8`:
+`--release` arrived in JDK 9 and dies with "invalid flag" on a Temurin 8
+compiler in seconds.
+
+Two more things that cost a local iteration each and are written down so they
+cost nobody else one:
+
+* **The player URL must be the compiled classes directory.** An empty URL
+  fails class loading and the world constructor NPEs.
+* **`System.getProperty` returns null inside the instrumented sandbox**, so the
+  teleport variant of the scenario bot cannot be selected by a `-D` flag. It is
+  a SECOND PACKAGE, `bc24scenariotel`, generated from the same source by two
+  `sed` substitutions in `build_oracle.sh`.
+
+## The trace
+
+One line per record, printed from the LIVE OBJECTS, with the units **in exec
+order** — which is what makes an ordering bug visible at all:
+
+```
+R <round> T <A|B> crumbs=<n> caps=<n> picked=<n> lvl=<n> alive=<n> up=<abc> upp=<n>
+R <round> U <id> team=<A|B> sp=<0|1> x=<n> y=<n> hp=<n> acd=<n> mcd=<n>
+           ax=<n> bx=<n> hx=<n> flag=<id|-1> ra=<n> bc=<n>
+R <round> F <flagId> team=<A|B> x=<n> y=<n> start=<0|1> carried=<id|-1> dropped=<n>
+R <round> W winner=<A|B|-> dom=<NAME|->
+```
+
+`tools/parity_trace_bc24.nim` prints the same lines from the Nim port. The
+Java side's `bc=` column is stripped before the diff — there is no bytecode
+counter on the Nim side by design — and is read separately for the Tier A
+headroom assertion. A full 2000-round game is ≈ 216 000 trace lines and ≈ 15 s
+of JVM per map.
+
+## The tiers
+
+* **Tier A (BLOCKING) — rounds 1…2000 BIT-EXACT, WHOLE GAMES**, on five
+  `small` maps (`DefaultSmall`, `Yinyang`, `BreadPudding`, `Rivers`,
+  `Tunnels`), `examplefuncsplayer` against itself, every field of every
+  record.
+* **Tier A′ (BLOCKING) — the scenario pairs, whole games, bit-exact.** Tier A's
+  own measurement showed what it cannot cover: after 2000 rounds
+  `examplefuncsplayer24` leaves all three global upgrade points unspent on
+  every map, never builds a stun or water trap, and on three of the five never
+  picks a flag up at all. Those are exactly the "rare code paths that fire
+  mid-game" the Fleet card 1218171523823317 postmortem warns about. So the job
+  runs a **second bot of our own**, `tools/oracle/bc24/bc24scenario/`, written
+  to be deterministic with no RNG at all, cheap enough that it can never be cut
+  off mid-turn, and **scripted by round number to force every rare path early**
+  — all three trap types, every trigger mode, mastery, the jail penalty, a
+  carry, a capture, all three upgrades, and (in the `bc24scenariotel` variant)
+  a deliberate failure of the six-tile spacing rule so the **round-200
+  teleport** fires. `scenario24.nim` is its Nim twin, written line for line
+  against it. The job then asserts, off the JAVA trace, that those paths really
+  did fire: upgrades bought, a flag lifted, a stun trap sprung, a duck at the
+  mastery threshold, and six flags confirmed at round 200 in the teleport run.
+* **Tier B (BLOCKING) — the arithmetic, over its WHOLE FINITE DOMAIN.**
+  `tools/JavaBc24Tables.java`, run against the jar's own classes under the CI
+  JDK, regenerates `data/bc24/skills.json` — damage and heal for all 7 levels ×
+  {upgrade on, off}, and cooldown and crumb cost for all 7 build levels ×
+  {explosive, stun, water, dig, fill} — and the job **byte-diffs** it against
+  the committed file. bc24 has **no transcendental anywhere**, so unlike bc21
+  this tier is not a sample: it is the entire domain, and the two rounding
+  regimes (float32 for damage and heal, float64 for cooldowns and costs) are
+  proved rather than argued. The same step cross-checks 53 gameplay constants
+  against the jar's classes, which is what closes the 3.0.5-jar-versus-
+  master-sources gap (`docs/RULES-BC24.md` §Divergences item 9).
+* **Tier C (BLOCKING against `tools/ci/parity_ledger_bc24.json`)** — the first
+  divergent round of every whole game, per (bot, map). It fails if a pair
+  diverges with no entry, diverges earlier than its entry, an entry no longer
+  reproduces, or **any** divergence occurs while the traced bytecode peak is
+  still inside the tier's ceiling.
+
+## THE LEDGER IS EMPTY
+
+All fifteen pairs — three bots across five `small` maps — are bit-exact against
+the published 3.0.5 jar for all 2000 rounds, on every field of every record.
+There is no accepted divergence in bc24, and the ledger file says so and says
+what an entry would have to look like if one were ever needed.
+
+## The measured bytecode headroom
+
+This is what makes a whole-game Tier A window defensible rather than hopeful.
+The port's one instrumentation divergence — a fixed 2 500-`DecisionOps` budget
+with **no mid-turn resumption** — is only observable if the JVM ever cuts a bot
+off mid-turn. Measured, over the same games the tiers diff:
+
+| bot | peak bytecodes | % of the 25 000 limit | mid-turn cut-offs |
+|---|---|---|---|
+| `examplefuncsplayer` | 297…783 | 1.2…3.2 % | **0** |
+| `bc24scenario` | 860…940 | 3.4…3.8 % | **0** |
+| `bc24scenariotel` | 880…940 | 3.5…3.8 % | **0** |
+
+The job does not assume it: it reads the `bc=` column and **fails if any duck
+on any round exceeds 50 % of the limit** (25 % for the scenario bots), naming
+the round and the duck, because past that point the comparison would have to
+shrink and this document would rather be wrong loudly than green quietly.
+
+## What is NOT compared
+
+* **Bytecodes.** There is no counter on the Nim side; the column is read, not
+  diffed (`docs/RULES-BC24.md` §Divergences item 1).
+* **`setWinnerArbitrary`.** The engine's `Math.random()` is wall-clock seeded;
+  the port draws from the world RNG. Reachable only when captures, level sums
+  and crumbs are all tied at round 2000, which none of the fifteen traced games
+  reaches (§Divergences item 2).
+* **Indicator strings, dots, lines and the profiler.** Not ported, not printed.
+* **The `.bc24` flatbuffer output.** The driver constructs
+  `new GameMaker(info, null, false)` — the null packet sink is explicitly
+  supported — so nothing is serialised on either side and there is no
+  flatbuffers reader in this repository at all.
+* **`gone-sharkin`.** The strong chassis is OURS; there is nothing upstream to
+  diff it against. It is gated instead by `tests/test_bc24_survival.nim` (with
+  an inverted control that must fail), `tests/test_bc24_knobs.nim` and
+  `tests/test_bc24_baselines.nim`'s legality audit.

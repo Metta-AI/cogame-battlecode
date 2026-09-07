@@ -51,13 +51,14 @@ proc baselineForSeat*(year: string, seat: SeatPolicy): Baseline =
 proc chassisForSeat*(year: string, seat: SeatPolicy): ScriptedChassis =
   ## D1: the chassis is fixed by the OPERATOR. A scripted seat drives the
   ## chassis its `PLAYER_SCRIPTED` names; an LLM seat drives the year's fixed
-  ## champion chassis — `bowl-of-chowder` on bc20, `california-roll` on bc21.
+  ## champion chassis — `bowl-of-chowder` on bc20, `california-roll` on bc21,
+  ## `gone-sharkin` on bc24.
   if seat.isLlm: strongChassisFor(year)
   else: baselineChassis(baselineForSeat(year, seat))
 
 proc chassisNameFor*(year: string, seat: SeatPolicy, sheet: Sheet): string =
   case yearIdOf(year)
-  of yBc20, yBc21:
+  of yBc20, yBc21, yBc24:
     (if seat.isLlm: $strongChassisFor(year)
      else: baselineName(baselineForSeat(year, seat)))
   of yBc26: $sheet.doctrine.chassis
@@ -250,10 +251,100 @@ That is not yours to choose: there is no `chassis` knob, and a reply that sends
 one has it ignored.
 """
 
+const Bc24Preamble* = """
+You command a flock of FIFTY IDENTICAL DUCKS in Battlecode 2024 "Breadwars": a
+two-clan grid war on a symmetric map, 2000 rounds a game, best of three.
+
+You do not move a single duck. Before the war you write ONE DOCTRINE - a JSON
+sheet of ten named knobs - and a deterministic simulation then plays the whole
+match from it while you watch.
+
+THE CLOCK IS THE DAM
+- For the first 200 rounds an impassable dam splits the map and NOBODY CAN
+  ATTACK. Ducks spawn, walk crumbs off the floor, dig water, fill water, lay
+  invisible traps, and carry their own three flags to wherever they want them
+  (minimum spacing 6 tiles - fail that at round 200 and all three teleport
+  home).
+- At round 200 the dam evaporates and the flag placements freeze.
+
+WHAT ENDS A GAME EARLY: NOTHING BUT CAPTURING ALL THREE ENEMY FLAGS.
+Otherwise round 2000 decides it on the ladder below.
+
+EVERY DUCK IS THE SAME DUCK
+1000 HP, vision r^2 20, attack and heal r^2 4, interact r^2 2. What makes them
+different is what they DO: attacking, healing and building each earn experience
+in that skill, six levels each, and AT LEVEL 4 A DUCK GAINS MASTERY - that
+skill keeps climbing to 6 while the other two freeze at 3.
+  damage by attack level  150 158 161 165 195 203 240   (+ATTACK upgrade: 210
+                                                          220 225 231 273 284
+                                                          336)
+  heal by heal level       80  82  84  86  88  92 100   (+HEALING: 130 134 137
+                                                          139 143 150 163)
+A duck that dies goes to JAIL for 25 rounds, comes back at full health at a
+spawn zone, and loses experience in its own best skill on the way in.
+
+CRUMBS ARE THE ONLY RESOURCE AND THEY ARE GLOBAL PER TEAM
+400 to start, 10 a round for free, whatever your ducks walk over, and 30 for
+every kill made while standing on ENEMY ground. They buy digging (20), filling
+(30), stun and water traps (100) and explosive traps (200) - and nothing else,
+because ducks are free and infinite. Build level makes all of that cheaper.
+
+THE THREE TRAPS ARE INVISIBLE TO THE ENEMY
+  EXPLOSIVE 200 crumbs  750 damage to everything in r^2 <= 4 that walks onto
+                        it; 200 in r^2 <= 2 if it is dug, filled or built on
+  STUN      100 crumbs  sets enemy movement AND action cooldowns to 40 inside
+                        r^2 <= 13
+  WATER     100 crumbs  floods every free land tile inside r^2 <= 9
+
+GLOBAL UPGRADES: one point a team at rounds 600, 1200 and 1800.
+  attack   +60 base damage
+  heal     +50 base heal
+  capture  THEIR dropped flags take 25 rounds to fly home instead of 4, and
+           YOUR flag-carry movement cooldown drops from 20 to 12
+
+HOW A GAME ENDS
+A team captures all three enemy flags, at any round - or round 2000 arrives and
+the ladder decides it, first hit wins: more flags captured; higher total of all
+skill levels over all fifty ducks (jailed included); more crumbs; coin flip
+(drawn from the map's own seed, not the wall clock).
+  points = int(60*flag share + 25*level share + 15*crumb share)
+Winning a game is worth 100 and points are worth at most 100, so the game bonus
+dominates: capture the flags or lose.
+
+YOUR REPLY
+Reply with ONE JSON object and NOTHING else. Your reply must begin with '{'.
+{"sheet": {...knobs...}, "notes": "<=280 chars", "motto": "<=48 chars"}
+
+THE KNOBS (unknown key, wrong type or out-of-range value = that field's
+default; you cannot forfeit by answering badly, only by answering weakly):
+  specialisation_split  "attack" | "heal" | "build" | "balanced"
+                                                        default "balanced"
+  flag_rush_round       201..1200                       default 450
+  trap_budget           0..60 (% of crumb income)       default 30
+  trap_placement        "choke" | "flag_ring" | "spawn_ring"
+                                                        default "flag_ring"
+  trap_mix              "stun" | "explosive" | "mixed"  default "mixed"
+  heal_priority         "wounded_first" | "attackers_first" | "carrier_first"
+                                                  default "wounded_first"
+  water_dig_policy      "none" | "choke_dig" | "moat" | "fill_paths"
+                                                      default "choke_dig"
+  upgrade_order         3 distinct of "attack" | "heal" | "capture"
+                                        default ["attack","heal","capture"]
+  retreat_hp            100..900                        default 400
+  flag_carry_escort     0..6                            default 2
+
+No setting of any knob makes your flock idle: it always spawns, always takes
+crumbs, always defends a flag it sees under threat, and always commits to an
+enemy flag by flag_rush_round. Your flock is driven by the `gone-sharkin`
+chassis. That is not yours to choose: there is no `chassis` knob, and a reply
+that sends one has it ignored.
+"""
+
 proc preambleFor*(year: string): string =
   case yearIdOf(year)
   of yBc20: Bc20Preamble
   of yBc21: Bc21Preamble
+  of yBc24: Bc24Preamble
   of yBc26: SystemPreamble
 
 proc briefFor*(
@@ -313,6 +404,43 @@ proc briefFor*(
     payload["scoring"] = %*{
       "weights": {"survival": 40, "vote_share": 35, "center_share": 15,
                   "influence_share": 10},
+      "win_bonus_per_game": 100,
+      "games": plan.maps.len,
+      "note": "shares are float32; points truncate to an integer"
+    }
+  of yBc24:
+    payload["economy"] = %*{
+      "start_crumbs": 400, "passive_per_round": 10,
+      "kill_reward_in_enemy_territory": 30,
+      "dig_cost": 20, "fill_cost": 30,
+      "trap_costs": {"explosive": 200, "stun": 100, "water": 100},
+      "trap_effects": {
+        "explosive": "750 dmg r2<=4 on entry, 200 dmg r2<=2 on dig/fill/build",
+        "stun": "enemy cooldowns set to 40, r2<=13",
+        "water": "floods every free land tile r2<=9"},
+      "flag_return_rounds": 4,
+      "flag_return_rounds_with_enemy_capture_upgrade": 25
+    }
+    payload["units"] = %*{
+      "per_team": 50, "hp": 1000, "vision_r2": 20, "attack_r2": 4,
+      "heal_r2": 4, "interact_r2": 2, "jail_rounds": 25,
+      "damage_by_attack_level": [150, 158, 161, 165, 195, 203, 240],
+      "heal_by_heal_level": [80, 82, 84, 86, 88, 92, 100],
+      "xp_to_level": {"attack": [15, 30, 45, 75, 110, 150],
+                      "build": [5, 10, 15, 20, 25, 30],
+                      "heal": [20, 40, 70, 100, 140, 180]},
+      "mastery": "at level 4 in one skill the other two freeze at level 3"
+    }
+    payload["upgrades"] = %*{
+      "rounds": [600, 1200, 1800],
+      "attack": "+60 base damage",
+      "heal": "+50 base heal",
+      "capture": "their dropped flags take 25 rounds to fly home instead of " &
+                 "4; your flag-carry movement cooldown 20 -> 12"
+    }
+    payload["sheet_schema"] = bc24SheetSchema()
+    payload["scoring"] = %*{
+      "weights": {"flag_share": 60, "level_share": 25, "crumb_share": 15},
       "win_bonus_per_game": 100,
       "games": plan.maps.len,
       "note": "shares are float32; points truncate to an integer"
