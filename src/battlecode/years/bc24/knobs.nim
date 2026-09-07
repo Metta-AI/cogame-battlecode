@@ -29,7 +29,9 @@ export sheet_common
 
 type
   Split24* = enum
-    ## `roles.nim census()` — how the 50 duck sequence-slots are cut.
+    ## `census()` below — how the 50 duck sequence-slots are cut. The cut is
+    ## applied by `chassis/kit.nim` (this port's roles and navigation fields
+    ## live there, not in a separate `roles.nim`/`pathing.nim`).
     spAttack = "attack"
     spHeal = "heal"
     spBuild = "build"

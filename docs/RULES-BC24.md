@@ -374,6 +374,13 @@ simply not converted in v1 and the converter handles any `.map24`.
     forbids.
 14. **`moat` leaves a three-tile gap** on the friendly-facing side of each
     flag's Chebyshev-2 ring, for the same reason.
+15. **Chassis file layout.** The design note's file table names
+    `chassis/roles.nim` and `chassis/pathing.nim`; in the tree the role census,
+    the role-claim rule and the navigation fields all live in
+    `chassis/kit.nim`, which the same table also lists, because all three read
+    the same per-side memory and splitting them would have meant exporting that
+    memory three ways. No behaviour named in the note is missing — it is one
+    file instead of three. `NOTICE` credits `kit.nim` accordingly.
 
 ---
 

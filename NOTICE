@@ -251,7 +251,8 @@ Repository: <https://github.com/jmerle/battlecode-2024>, **AGPL-3.0**, pinned
 at commit `d10ddcc`, `src/camel_case_v21_final/`. The 2nd-place bot. What
 derives from it, again as behaviour: the navigator structure and the
 shared-array packing discipline in
-`src/battlecode/years/bc24/chassis/{pathing,comms}.nim`.
+`src/battlecode/years/bc24/chassis/{kit,comms}.nim` (this port's navigation
+fields live in `kit.nim`, not in a separate `pathing.nim`).
 
 ## andli28/bc2024 — the BFS and comms layout
 
