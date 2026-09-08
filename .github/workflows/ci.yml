@@ -1735,7 +1735,11 @@ jobs:
       # and this smoke is 600 rounds -- less than a third of the game. The
       # weak floor paints 37 in that window, so 150 is a floor no correct
       # episode could ever clear. Fifteen is half of the measured value and
-      # is still three times what an idle seat would produce.
+      # is still three times what an idle seat would produce. (r1-F34 read
+      # the note's "never below this note's numbers" against it; the number
+      # is kept, because raising it to 150 makes every correct episode red.
+      # The across-the-pair floor in the next step, which the note also
+      # numbers, IS raised to the note's value.)
       - name: Raw-Docker episode smoke (bc25, scripted vs scripted)
         env:
           SMOKE_SLUG: ${{ env.SLUG }}
@@ -1777,7 +1781,9 @@ jobs:
           upgraded="$(sum towers_upgraded)"
           painted="$(sum squares_painted)"
           # Measured on the same run: 6 towers built, 9 upgraded, 241
-          # squares held between the two clans. The floors are 1/1/120.
+          # squares held between the two clans. The floors are the design
+          # note's own 1/1/200 (r1-F34: the squares floor was 120, below the
+          # note's 200, for no measured reason -- 241 clears 200 with room).
           echo "across the two seats: towers built=${built}" \
                "towers upgraded=${upgraded} squares painted=${painted}"
           test "${built}" -ge 1 || {
@@ -1788,7 +1794,7 @@ jobs:
           test "${upgraded}" -ge 1 || {
             echo "::error::nobody upgraded a tower in the whole episode."
             exit 1; }
-          test "${painted}" -ge 120 || {
+          test "${painted}" -ge 200 || {
             echo "::error::the two clans between them held ${painted} tiles at"
             echo "::error::the end. The score IS the colour of the map."
             exit 1; }
