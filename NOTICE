@@ -367,3 +367,106 @@ swing-versus-single scoring) and the splasher aiming heuristic, in
 `license: null`) and is **not vendored, not ported, not compiled and not read
 into any file here**, in this year as in the others. Just Woke Up (the winner)
 and Om Nom (3rd) are not published anywhere and contribute nothing.
+
+## battlecode/battlecode23 engine — AGPL-3.0
+
+Repository: <https://github.com/battlecode/battlecode23>, pinned commit
+**`af42086ecd09709dc603b2aaa9e9b98312c9ef79`**. The licence is verified three
+ways: `engine/COPYING`, `schema/LICENSE` **and** `client/LICENSE` are each the
+GNU Affero General Public License v3, and the GitHub API reports the
+repository as `AGPL-3.0`. (The repository root itself carries no `LICENSE`
+file.) That makes this year's provenance *simpler* than 2024's and 2025's,
+whose clients carried no LICENSE at all.
+
+What derives from it, named individually:
+
+* `src/battlecode/years/bc23/**` — the 2023 rule set, **hand-ported as
+  behaviour** from `world/GameWorld.java`, `world/InternalRobot.java`,
+  `world/robots/InternalCarrier.java`, `world/RobotControllerImpl.java`,
+  `world/TeamInfo.java`, `world/Island.java`, `world/Well.java`,
+  `world/Inventory.java`, `world/ObjectInfo.java` and `world/LiveMap.java`;
+* `src/battlecode/years/bc23/constants.nim` — **generated** by
+  `tools/gen_year_constants.py --year bc23` from `common/GameConstants.java`,
+  `common/RobotType.java` and `common/Anchor.java`;
+* `data/maps/bc23/*.json` — the 22 committed maps, **converted** from the
+  official `.map23` flatbuffers by `tools/convert_maps_bc23.py` (a
+  hand-written vtable walk: there is no flatbuffers library on either side of
+  this port);
+* `data/bc23/tables.json` — the whole finite arithmetic domain, regenerated
+  under the CI JDK 8 by `tools/JavaBc23Tables.java` straight out of the
+  released jar's own classes and byte-diffed by the `parity-oracle-bc23` job;
+* `src/battlecode/years/bc23/chassis/scaffold23.nim` — `examplefuncsplayer`,
+  ported **statement for statement** from
+  `example-bots/src/main/examplefuncsplayer/RobotPlayer.java`. It is one side
+  of the differential oracle and may not gain behaviour;
+* `tools/oracle/bc23/examplefuncsplayer23/RobotPlayer.java` — upstream's own
+  file, **byte for byte, with no determinism patch** (it seeds its own
+  `java.util.Random(6147)` and never calls `Math.random()`).
+
+**The engine itself is used only at CI time.** No JDK, no JRE and no upstream
+Java source or bytecode exists in any image this repository builds; the
+2023 toolchain lives only in the `parity-oracle-bc23` job, and only as the
+published jar (`tools/oracle/bc23/jar.lock` pins its URL, size and sha256).
+
+## battlecode/battlecode23 client sprites — AGPL-3.0
+
+`client/LICENSE` **is** the GNU AGPL v3 — unlike 2024 and 2025, whose clients
+had no LICENSE file — while `client/package.json` declares
+`"license": "GPL-3.0"`. Both facts are recorded here; the AGPL file is the one
+this repository relies on. `data/atlas_bc23.png` and `data/atlas_bc23.json`
+are cut by `tools/build_sprite_atlas_bc23.py` from
+`client/visualizer/src/static/img/**` at the pinned commit — the twelve
+`robots/{blue,red}_*.png` unit sprites, the six `resources/*_well*.png` well
+sprites with their upgraded variants, `resources/{anchor,accelerating_anchor}.png`,
+the three `resources/{adamantium,mana,elixir}.png` resource glyphs and
+`star.png`, out of the 83 PNGs the upstream set contains. Palette follows the
+client's own two team colours: **blue = side A, red = side B**. The storm,
+cloud and current tones in `src/battlecode/render.nim` are this repository's
+own paintbot-derived palette, because the 2023 client draws its board from
+photographic tiles that do not survive a 16 px cut.
+
+`schema/package.json` also says `GPL-3.0` while `schema/LICENSE` is the AGPL —
+the discrepancy is recorded and is moot here, because **no schema code is used
+at all**: `tools/convert_maps_bc23.py` is a hand-written vtable walk.
+
+## awesomelemonade/Battlecode2023 — Producing Perfection, AGPL-3.0
+
+Repository: <https://github.com/awesomelemonade/Battlecode2023>,
+**AGPL-3.0**, head `2e231f31`, `src/finalBot/` — the 1st-place bot, whose
+`finalBot` directory is the final submission. What derives from it, as
+**behaviour and not code**, rewritten in Nim and parameterised by this
+coworld's twelve-knob doctrine sheet:
+`src/battlecode/years/bc23/chassis/{lemonade,kit,econ,hq,carrier,launcher,micro,anchors}.nim`
+— the launcher micro and its target priority, the chunk-checkpoint navigator
+and its current- and cloud-aware stepping tiebreaks, the symmetry-based
+enemy-headquarters guess, the island and well trackers, and the headquarters
+build order.
+
+## vrangr1/BattleCode2023 — the elixir programme, AGPL-3.0
+
+Repository: <https://github.com/vrangr1/BattleCode2023>, **AGPL-3.0**, head
+`244af40e`, `src/AFinalsBot/` — 4th place, and **the only published bot of the
+three that actually ran the elixir tree**, which is why this year's headline
+doctrine axis has a real behaviour source. What derives from it:
+`src/battlecode/years/bc23/chassis/elixir.nim` — the elixir programme's target
+selection, its carrier-load deposit loop and its round/robot-count gates from
+`ElixirProducer.java`, plus the booster and destabilizer commitment rules from
+`BotBooster.java` and `BotDestabilizer.java`. One gate is deliberately
+dropped: `shouldProduceElixir`'s `MAP_SIZE > 1000` test would make
+`elixir_tech` and `elixir_spend` dead knobs on the 400-tile `small` pool
+(`docs/RULES-BC23.md` §Divergences item 13).
+
+## jmerle/battlecode-2023 — the shared array and the symmetry guesser, MIT
+
+Repository: <https://github.com/jmerle/battlecode-2023>, **MIT**, head
+`e776fcb2`, `src/camel_case_v30_final/`. What derives from it:
+`src/battlecode/years/bc23/chassis/comms.nim` — the 64-slot shared-array
+layout and its 16-bit packing, from `util/SharedArray.java` — and
+`kit.nim`'s symmetry elimination, from `util/Symmetry.java`.
+
+## 'don't @ me' and '4 Musketeers' — cited, never used
+
+The 2023 ranking's 7th (`don't @ me`) and 3rd (`4 Musketeers`) place bots are
+**not published on GitHub** and contribute nothing to this repository. As in
+every other year, an unlicensed repository is not vendored, not ported, not
+compiled and not read into any file here.

@@ -227,4 +227,103 @@ checkEq("LEVEL_TWO_MONEY_TOWER spec",
     actionRadiusSquared: 9, attackStrength: 20, aoeAttackStrength: 10,
     paintPerTurn: 0, moneyPerTurn: 30, attackMoneyBonus: 0))
 
+# ---------------------------------------------------------------------------
+#  bc23 — the sixth generated constants table, and its two generated data sets
+# ---------------------------------------------------------------------------
+block:
+  ## `BC23_DIR` is the pinned battlecode23 checkout `.github/workflows/ci.yml`
+  ## fetches. With it, the check is the real one: regenerate the constants,
+  ## re-convert all 22 committed maps, re-cut the sprite atlas and byte-diff
+  ## every one of them, and read ALL 103 official `.map23` files with the
+  ## converter's own vtable walk — a reader that only works on the maps we
+  ## ship is a reader nobody can extend the pool with.
+  let dir23 = getEnv("BC23_DIR")
+  if dir23.len > 0 and dirExists(dir23):
+    block:
+      let (output, code) = execCmdEx(
+        "python3 tools/gen_year_constants.py --year bc23 --engine " &
+        quoteShell(dir23) & " --check")
+      check("bc23 constants.nim is byte-identical to a fresh generation: " &
+        output.strip(), code == 0)
+    block:
+      let (output, code) = execCmdEx(
+        "python3 tools/convert_maps_bc23.py --engine " & quoteShell(dir23) &
+        " --out data/maps/bc23 --check")
+      check("the 22 committed bc23 maps re-convert identically: " &
+        output.strip(), code == 0)
+    block:
+      let (output, code) = execCmdEx(
+        "python3 tools/build_sprite_atlas_bc23.py --engine " &
+        quoteShell(dir23) & " --out data --check")
+      check("the bc23 sprite atlas is a fresh cut of the 2023 client art: " &
+        output.strip(), code == 0)
+    block:
+      let (output, code) = execCmdEx(
+        "python3 tools/convert_maps_bc23.py --engine " & quoteShell(dir23) &
+        " --parse-all")
+      check("the converter reads every official .map23", code == 0)
+      var parsed = 0
+      for line in output.splitLines():
+        if line.len > 0 and line.contains("\t"): parsed += 1
+      checkEq("all 103 of them", parsed, 103)
+  else:
+    echo "BC23_DIR unset; falling back to spot values from the pinned commit"
+
+import battlecode/years/bc23/constants as c23
+
+checkEq("bc23 EngineCommit", c23.EngineCommit,
+  "af42086ecd09709dc603b2aaa9e9b98312c9ef79")
+checkEq("bc23 OracleJarVersion", c23.OracleJarVersion, "3.0.15")
+checkEq("bc23 SPEC_VERSION is 3.0.14 — AND SO IS THE RELEASED 3.0.15 JAR'S, " &
+  "which is why the jar is pinned by sha256 instead", c23.SpecVersion,
+  "3.0.14")
+checkEq("GAME_MAX_NUMBER_OF_ROUNDS", c23.GameMaxNumberOfRounds, 2000)
+checkEq("WIN_PERCENTAGE_OF_ISLANDS_OCCUPIED",
+  c23.WinPercentageOfIslandsOccupied, 0.75'f32)
+checkEq("MAP_MIN_WIDTH", c23.MapMinWidth, 20)
+checkEq("MAP_MAX_WIDTH", c23.MapMaxWidth, 60)
+checkEq("MIN_STARTING_HEADQUARTERS", c23.MinStartingHeadquarters, 1)
+checkEq("MAX_STARTING_HEADQUARTERS", c23.MaxStartingHeadquarters, 4)
+checkEq("MIN_NUMBER_ISLANDS", c23.MinNumberIslands, 4)
+checkEq("MAX_NUMBER_ISLANDS", c23.MaxNumberIslands, 35)
+checkEq("MAX_ISLAND_AREA", c23.MaxIslandArea, 20)
+checkEq("INITIAL_AD_AMOUNT", c23.InitialAdAmount, 200)
+checkEq("INITIAL_MN_AMOUNT", c23.InitialMnAmount, 200)
+checkEq("PASSIVE_AD_INCREASE", c23.PassiveAdIncrease, 6)
+checkEq("PASSIVE_MN_INCREASE", c23.PassiveMnIncrease, 6)
+checkEq("PASSIVE_INCREASE_ROUNDS", c23.PassiveIncreaseRounds, 5)
+checkEq("CARRIER_CAPACITY", c23.CarrierCapacity, 40)
+checkEq("ANCHOR_WEIGHT == CARRIER_CAPACITY", c23.AnchorWeight,
+  c23.CarrierCapacity)
+checkEq("UPGRADE_TO_ELIXIR", c23.UpgradeToElixir, 600)
+checkEq("UPGRADE_WELL_AMOUNT", c23.UpgradeWellAmount, 1400)
+checkEq("WELL_STANDARD_RATE", c23.WellStandardRate, 1)
+checkEq("WELL_ACCELERATED_RATE", c23.WellAcceleratedRate, 3)
+checkEq("CURRENT_STRENGTH", c23.CurrentStrength, 1)
+checkEq("COOLDOWN_LIMIT", c23.CooldownLimit, 10)
+checkEq("COOLDOWNS_PER_TURN", c23.CooldownsPerTurn, 10)
+checkEq("CLOUD_VISION_RADIUS_SQUARED", c23.CloudVisionRadiusSquared, 4)
+checkEq("SHARED_ARRAY_LENGTH", c23.SharedArrayLength, 64)
+checkEq("MAX_SHARED_ARRAY_VALUE", c23.MaxSharedArrayValue, 65535)
+checkEq("DISTANCE_SQUARED_FROM_SIGNAL_AMPLIFIER",
+  c23.DistanceSquaredFromSignalAmplifier, 20)
+checkEq("DISTANCE_SQUARED_FROM_HEADQUARTER",
+  c23.DistanceSquaredFromHeadquarter, 9)
+checkEq("DISTANCE_SQUARED_FROM_ISLAND", c23.DistanceSquaredFromIsland, 4)
+checkEq("MAX_BOOST_STACKS", c23.MaxBoostStacks, 3)
+checkEq("MAX_DESTABILIZE_STACKS", c23.MaxDestabilizeStacks, 2)
+checkEq("MAX_ANCHOR_STACKS", c23.MaxAnchorStacks, 1)
+checkEq("BOOSTER_RADIUS_SQUARED", c23.BoosterRadiusSquared, 20)
+checkEq("DESTABILIZER_RADIUS_SQUARED", c23.DestabilizerRadiusSquared, 15)
+checkEq("BOOSTER_DURATION", c23.BoosterDuration, 10)
+checkEq("DESTABILIZER_DURATION", c23.DestabilizerDuration, 5)
+checkEq("the DecisionOps budgets are one tenth of the bytecode limits",
+  [c23.DecisionOpsHeadquarters, c23.DecisionOpsCarrier, c23.DecisionOpsOther],
+  [c23.RobotSpecs[c23.rtHeadquarters].bytecodeLimit div 10,
+   c23.RobotSpecs[c23.rtCarrier].bytecodeLimit div 10,
+   c23.RobotSpecs[c23.rtLauncher].bytecodeLimit div 10])
+checkEq("A HEADQUARTERS ACTS FIVE TIMES A TURN: cooldown 2 against a limit " &
+  "of 10", c23.CooldownLimit div c23.RobotSpecs[c23.rtHeadquarters].actionCooldown,
+  5)
+
 finish("test_constants")

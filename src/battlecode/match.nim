@@ -63,6 +63,11 @@ proc toJson*(e: MatchEvent): JsonNode =
   for key, value in e.fields:
     result[key] = value
 
+func intOrZero(text: string): int =
+  ## The event stream's `s` field carries a few packed integers; a malformed
+  ## one is a zero, never an exception.
+  try: parseInt(text) except CatchableError: 0
+
 proc buildPlan*(config: GameConfig, sheets: array[2, Sheet],
                 seed: int): MatchPlan =
   result.seed = seed
@@ -95,6 +100,68 @@ proc collectGameEvents(
   var firstBuildSeen: seq[string]
   for e in raw:
     case e.kind
+    of "anchor_built":
+      events.add(ev("anchor_built", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "anchor": Bc23AnchorNames[e.b], "total_held": e.c}))
+    of "island_captured":
+      ## `e.s` carries `<anchorOrdinal>:<tiles>:<islandsToWin>`, so the feed
+      ## line can say "9 of the 15 it needs" without the viewer re-deriving
+      ## the float32 threshold.
+      let parts = e.s.split(':')
+      var anchorOrd = 0
+      var tiles = 0
+      var toWin = 0
+      if parts.len > 0: anchorOrd = intOrZero(parts[0])
+      if parts.len > 1: tiles = intOrZero(parts[1])
+      if parts.len > 2: toWin = intOrZero(parts[2])
+      events.add(ev("island_captured", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "island": e.b, "held_now": e.c,
+                    "anchor": Bc23AnchorNames[max(0, min(2, anchorOrd))],
+                    "tiles": tiles, "to_win": toWin}))
+    of "island_lost":
+      events.add(ev("island_lost", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "island": e.b, "held_for": e.c,
+                    "held_now": intOrZero(e.s)}))
+    of "conquest_progress":
+      events.add(ev("conquest_progress", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "held": e.b, "to_win": e.c}))
+    of "well_transformed":
+      events.add(ev("well_transformed", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": e.b div 100, "y": e.b mod 100,
+                    "from": Bc23ResourceNames[e.c],
+                    "poured": 600}))
+    of "well_upgraded":
+      events.add(ev("well_upgraded", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": e.b div 100, "y": e.b mod 100,
+                    "type": Bc23ResourceNames[e.c], "rate": 3}))
+    of "first_elixir_unit":
+      events.add(ev("first_elixir_unit", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "unit": Bc23ElixirUnitNames[e.b]}))
+    of "boost_field":
+      events.add(ev("boost_field", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": e.b div 100, "y": e.b mod 100, "stacks": e.c}))
+    of "destabilize_hit":
+      events.add(ev("destabilize_hit", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": e.b div 100, "y": e.b mod 100,
+                    "victims": 1, "damage": e.c}))
+    of "duel":
+      ## `lost` is a 2-array in TEAM order (A then B), mapped to seat order by
+      ## the game's own side assignment.
+      let aSlot = plan.sideAslots[gameIndex]
+      var lost = [0, 0]
+      lost[aSlot] = e.a
+      lost[1 - aSlot] = e.b
+      events.add(ev("duel", game = gameIndex, round = e.round,
+        fields = %*{"lost": [lost[0], lost[1]]}))
     of "backstab":
       events.add(ev("backstab", game = gameIndex, round = e.round,
         fields = %*{"by_alias": plan.aliasOfTeam(gameIndex, e.a),
@@ -174,7 +241,9 @@ proc collectGameEvents(
       ## bc20 and bc21 avoided it by calling their field `unit`; bc24 calls
       ## its field `action`.
       let action =
-        if plan.year == "bc25": Bc25ActionNames[e.b] else: Bc24ActionNames[e.b]
+        if plan.year == "bc25": Bc25ActionNames[e.b]
+        elif plan.year == "bc23": Bc23ActionNames[e.b]
+        else: Bc24ActionNames[e.b]
       events.add(ev("first_action", game = gameIndex, round = e.c,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                     "action": action}))
@@ -211,7 +280,7 @@ proc collectGameEvents(
       ## bc24 spells the count `jailed` (its ducks go to jail); bc25 spells it
       ## `lost` (its robots die). Both ride the same event kind and the year
       ## on the replay header says which field to read.
-      if plan.year == "bc25":
+      if plan.year == "bc25" or plan.year == "bc23":
         events.add(ev("rout", game = gameIndex, round = e.round,
           fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                       "lost": e.b}))
@@ -363,7 +432,9 @@ func winBonusFor*(year: string): float =
   ## ordering of `results.scores` PROVABLY agree with `results.wins`.
   ## `tests/test_bc25_scoring.nim` asserts that agreement on 500 random
   ## synthetic finals — with 100 it would be a `>=`; with 200 it is a `>`.
-  if yearIdOf(year) == yBc25: 200.0 else: 100.0
+  ## bc23 pays 200 for the same reason, and its 60/22/10/5/3 weights are
+  ## strictly super-increasing so the tiebreak property is provable as well.
+  if yearIdOf(year) in {yBc25, yBc23}: 200.0 else: 100.0
 
 proc scoresFor*(games: seq[GameOutcome],
                 year = "bc26"): array[2, float] =

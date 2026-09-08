@@ -12,6 +12,7 @@ year**, chosen by `game_config.year`:
 | `bc21` | 2021 "Campaign" | every round auctions one citizen's vote; influence buys units, buys votes, and is what an enemy politician takes when it converts your Enlightenment Center |
 | `bc24` | 2024 "Breadwars" | fifty identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off |
 | `bc25` | 2025 "Chromatic Conflict" | a paint war: the score IS the colour of the map, towers are painted into existence on ruins, and a resource pattern pays every mining tower you own if it survives fifty rounds |
+| `bc23` | 2023 "Tempest" | carriers mine adamantium and mana from sky wells and haul it home at a quarter speed when full; launchers are the only unit that deals real damage and they shoot through the clouds that blind everyone; pour 600 kg of the wrong resource into a well and it becomes elixir; win by ferrying reality anchors onto 75 % of the sky islands |
 
 ---
 
@@ -210,6 +211,7 @@ bit-exact, with an empty divergence ledger.**
 | `src/battlecode/years/bc21/` | the 2021 rule set: `world.nim`, `empower.nim`, `votes.nim`, `economy.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/bc24/` | the 2024 rule set: `world.nim`, `skills.nim`, `traps.nim`, `flags.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/bc25/` | the 2025 rule set: `world.nim`, `units.nim`, `paint.nim`, `patterns.nim`, `towers.nim`, `comms.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
+| `src/battlecode/years/bc23/` | the 2023 rule set: `world.nim`, `units.nim`, `tempo.nim`, `wells.nim`, `islands.nim`, `currents.nim`, `comms.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/{registry,dispatch}.nim` | the year boundary: the ONE place the year-neutral machinery meets a year module |
 | `src/battlecode/rng.nim` | `java.util.Random` and `IDGenerator`, bit-exact |
 | `src/battlecode/{sheet,decide,llm,baselines}.nim` | the doctrine schema, the one sealed parallel batch, the provider ladder, the scripted table |

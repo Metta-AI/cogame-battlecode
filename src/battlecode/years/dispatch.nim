@@ -34,6 +34,10 @@ import bc25/maps as maps25
 import bc25/rules as rules25
 import bc25/world as world25
 import bc25/chassis/kit as kit25
+import bc23/maps as maps23
+import bc23/rules as rules23
+import bc23/world as world23
+import bc23/chassis/kit as kit23
 
 export registry
 
@@ -44,6 +48,7 @@ type
     yBc21 = "bc21"
     yBc24 = "bc24"
     yBc25 = "bc25"
+    yBc23 = "bc23"
 
   Session* = ref object
     ## One game in progress, in whichever year's sim. `stepRound` advances it;
@@ -71,6 +76,10 @@ type
       w25*: world25.World
       sides25*: array[2, kit25.Side]
       chassis25*: array[2, rules25.ChassisKind25]
+    of yBc23:
+      w23*: world23.World
+      sides23*: array[2, kit23.Side]
+      chassis23*: array[2, rules23.ChassisKind23]
 
   GameOutcome* = object
     ## The YEAR-NEUTRAL per-game outcome. `results.games[]`'s five required
@@ -126,6 +135,26 @@ const Bc25ActionNames* = [
   ## lesson, one year on: an event field with an undocumented vocabulary is an
   ## event field nobody can draw.
 
+const Bc23ActionNames* = [
+  "move", "build_robot", "build_anchor", "attack", "throw", "destabilize",
+  "boost", "collect", "transfer", "withdraw", "take_anchor", "return_anchor",
+  "place_anchor", "write_array", "disintegrate"
+]
+  ## bc23 has SIX unit types and fifteen distinct actions, so its
+  ## `first_action` names the ACTION rather than the unit — the same r1-F14
+  ## lesson, one year on: an event field with an undocumented vocabulary is an
+  ## event field nobody can draw.
+
+const Bc23AnchorNames* = ["-", "standard", "accelerating"]
+  ## `AnchorType`'s ordinals, for `anchor_built` / `island_captured`.
+
+const Bc23ResourceNames* = ["none", "adamantium", "mana", "elixir"]
+  ## `Resource`'s ordinals, for `well_transformed` / `well_upgraded`.
+
+const Bc23ElixirUnitNames* = ["destabilizer", "booster",
+                              "accelerating_anchor"]
+  ## `first_elixir_unit.unit`.
+
 const Bc25TowerNames* = ["paint", "money", "defense"]
   ## `TowerKind`'s ordinals, for `tower_built` / `tower_upgraded` /
   ## `tower_lost`.
@@ -136,6 +165,7 @@ proc yearIdOf*(year: string): YearId =
   of "bc21": yBc21
   of "bc24": yBc24
   of "bc25": yBc25
+  of "bc23": yBc23
   else: yBc26
 
 proc strongChassisFor*(year: string): ScriptedChassis =
@@ -147,6 +177,7 @@ proc strongChassisFor*(year: string): ScriptedChassis =
   of yBc21: scCaliforniaRoll
   of yBc24: scGoneSharkin
   of yBc25: scSpaark
+  of yBc23: scLemonade
 
 proc parseScriptedChassis*(name: string): ScriptedChassis =
   ## Year-free reading of a recorded `seats[].chassis` string. An unrecognised
@@ -168,6 +199,7 @@ proc poolNamesFor*(year, pool: string): seq[string] =
   of yBc21: maps21.poolNames(pool)
   of yBc24: maps24.poolNames(pool)
   of yBc25: maps25.poolNames(pool)
+  of yBc23: maps23.poolNames(pool)
 
 proc drawMapsFor*(year, pool: string, seed, count: int): seq[string] =
   case yearIdOf(year)
@@ -176,6 +208,7 @@ proc drawMapsFor*(year, pool: string, seed, count: int): seq[string] =
   of yBc21: maps21.drawMaps(pool, seed, count)
   of yBc24: maps24.drawMaps(pool, seed, count)
   of yBc25: maps25.drawMaps(pool, seed, count)
+  of yBc23: maps23.drawMaps(pool, seed, count)
 
 proc sideAslotFor*(year: string, seed, gameIndex: int): int =
   case yearIdOf(year)
@@ -184,6 +217,7 @@ proc sideAslotFor*(year: string, seed, gameIndex: int): int =
   of yBc21: maps21.sideAslotFor(seed, gameIndex)
   of yBc24: maps24.sideAslotFor(seed, gameIndex)
   of yBc25: maps25.sideAslotFor(seed, gameIndex)
+  of yBc23: maps23.sideAslotFor(seed, gameIndex)
 
 proc mapPathFor*(year, name: string): string =
   case yearIdOf(year)
@@ -192,6 +226,7 @@ proc mapPathFor*(year, name: string): string =
   of yBc21: maps21.mapPath(name)
   of yBc24: maps24.mapPath(name)
   of yBc25: maps25.mapPath(name)
+  of yBc23: maps23.mapPath(name)
 
 proc mapCardFor*(year, name: string, slot, sideAslot, rounds: int): JsonNode =
   ## The per-map facts a seat may legitimately know before writing its
@@ -224,6 +259,10 @@ proc mapCardFor*(year, name: string, slot, sideAslot, rounds: int): JsonNode =
     card
   of yBc25:
     var card = maps25.mapCard(maps25.loadMap(name), slot, sideAslot)
+    card["rounds"] = %rounds
+    card
+  of yBc23:
+    var card = maps23.mapCard(maps23.loadMap(name), slot, sideAslot)
     card["rounds"] = %rounds
     card
 
@@ -278,6 +317,15 @@ proc newSession*(year: string, mapName: string, sheets: array[2, Sheet],
                    rules25.chassisKindFor(chassis[1])]
     result.chassis25 = [kinds25[sideAslot], kinds25[1 - sideAslot]]
     result.sides25 = rules25.newSides25(sheets, sideAslot)
+  of yBc23:
+    let spec = maps23.loadMap(mapName)
+    result = Session(year: yBc23, mapName: mapName, sideAslot: sideAslot,
+                     gameIndex: gameIndex)
+    result.w23 = world23.newWorld(spec, maxRounds)
+    let kinds23 = [rules23.chassisKindFor(chassis[0]),
+                   rules23.chassisKindFor(chassis[1])]
+    result.chassis23 = [kinds23[sideAslot], kinds23[1 - sideAslot]]
+    result.sides23 = rules23.newSides23(sheets, sideAslot)
 
 proc stepRound*(s: Session) =
   case s.year
@@ -286,6 +334,7 @@ proc stepRound*(s: Session) =
   of yBc21: rules21.runRound(s.w21, s.sides21, s.chassis21)
   of yBc24: rules24.runRound(s.w24, s.sides24, s.chassis24)
   of yBc25: rules25.runRound(s.w25, s.sides25, s.chassis25)
+  of yBc23: rules23.runRound(s.w23, s.sides23, s.chassis23)
 
 proc currentRound*(s: Session): int =
   case s.year
@@ -294,6 +343,7 @@ proc currentRound*(s: Session): int =
   of yBc21: s.w21.currentRound
   of yBc24: s.w24.currentRound
   of yBc25: s.w25.currentRound
+  of yBc23: s.w23.currentRound
 
 proc running*(s: Session): bool =
   case s.year
@@ -302,6 +352,7 @@ proc running*(s: Session): bool =
   of yBc21: s.w21.running
   of yBc24: s.w24.running
   of yBc25: s.w25.running
+  of yBc23: s.w23.running
 
 proc hashChainHex*(s: Session): string =
   case s.year
@@ -310,6 +361,7 @@ proc hashChainHex*(s: Session): string =
   of yBc21: toHex(s.w21.hashChain)
   of yBc24: toHex(s.w24.hashChain)
   of yBc25: toHex(s.w25.hashChain)
+  of yBc23: toHex(s.w23.hashChain)
 
 proc mapWidth*(s: Session): int =
   case s.year
@@ -318,6 +370,7 @@ proc mapWidth*(s: Session): int =
   of yBc21: s.w21.width
   of yBc24: s.w24.width
   of yBc25: s.w25.width
+  of yBc23: s.w23.width
 
 proc mapHeight*(s: Session): int =
   case s.year
@@ -326,6 +379,7 @@ proc mapHeight*(s: Session): int =
   of yBc21: s.w21.height
   of yBc24: s.w24.height
   of yBc25: s.w25.height
+  of yBc23: s.w23.height
 
 # ---------------------------------------------------------------------------
 #  Playing a game, and converting the year's outcome to the neutral one
@@ -487,6 +541,68 @@ proc statsJson25*(o: rules25.GameOutcome25): JsonNode =
     "rounds_with_any_srp": o.roundsWithAnySrp
   }
 
+proc statsJson23*(o: rules23.GameOutcome23): JsonNode =
+  %*{
+    "islands_held_end": [o.islandsHeldEnd[0], o.islandsHeldEnd[1]],
+    "islands_captured": [o.islandsCaptured[0], o.islandsCaptured[1]],
+    "islands_lost": [o.islandsLost[0], o.islandsLost[1]],
+    "rounds_holding_any_island":
+      [o.roundsHoldingAnyIsland[0], o.roundsHoldingAnyIsland[1]],
+    "longest_hold_streak":
+      [o.longestHoldStreak[0], o.longestHoldStreak[1]],
+    "anchors_built": [o.anchorsBuilt[0], o.anchorsBuilt[1]],
+    "anchors_placed": [o.anchorsPlaced[0], o.anchorsPlaced[1]],
+    "anchors_lost": [o.anchorsLost[0], o.anchorsLost[1]],
+    "accelerating_anchors_placed":
+      [o.acceleratingAnchorsPlaced[0], o.acceleratingAnchorsPlaced[1]],
+    "adamantium_end": [o.adamantiumEnd[0], o.adamantiumEnd[1]],
+    "mana_end": [o.manaEnd[0], o.manaEnd[1]],
+    "elixir_end": [o.elixirEnd[0], o.elixirEnd[1]],
+    "adamantium_mined": [o.adamantiumMined[0], o.adamantiumMined[1]],
+    "mana_mined": [o.manaMined[0], o.manaMined[1]],
+    "elixir_mined": [o.elixirMined[0], o.elixirMined[1]],
+    "resources_thrown": [o.resourcesThrown[0], o.resourcesThrown[1]],
+    "resources_banked": [o.resourcesBanked[0], o.resourcesBanked[1]],
+    "wells_transformed": [o.wellsTransformed[0], o.wellsTransformed[1]],
+    "wells_upgraded": [o.wellsUpgraded[0], o.wellsUpgraded[1]],
+    "units_built": [o.unitsBuilt[0], o.unitsBuilt[1]],
+    "carriers_built": [o.carriersBuilt[0], o.carriersBuilt[1]],
+    "launchers_built": [o.launchersBuilt[0], o.launchersBuilt[1]],
+    "amplifiers_built": [o.amplifiersBuilt[0], o.amplifiersBuilt[1]],
+    "destabilizers_built": [o.destabilizersBuilt[0], o.destabilizersBuilt[1]],
+    "boosters_built": [o.boostersBuilt[0], o.boostersBuilt[1]],
+    "robots_alive": [o.robotsAlive[0], o.robotsAlive[1]],
+    "robots_lost": [o.robotsLost[0], o.robotsLost[1]],
+    "damage_dealt": [o.damageDealt[0], o.damageDealt[1]],
+    "throw_damage": [o.throwDamage[0], o.throwDamage[1]],
+    "destabilize_damage": [o.destabilizeDamage[0], o.destabilizeDamage[1]],
+    "hq_damage": [o.hqDamage[0], o.hqDamage[1]],
+    "anchor_heals": [o.anchorHeals[0], o.anchorHeals[1]],
+    "array_writes": [o.arrayWrites[0], o.arrayWrites[1]],
+    "boosts_cast": [o.boostsCast[0], o.boostsCast[1]],
+    "destabilizes_cast": [o.destabilizesCast[0], o.destabilizesCast[1]],
+    "carrier_rounds_loaded":
+      [o.carrierRoundsLoaded[0], o.carrierRoundsLoaded[1]],
+    "current_rides": [o.currentRides[0], o.currentRides[1]],
+    "first_anchor_round": [o.firstAnchorRound[0], o.firstAnchorRound[1]],
+    "captured_distance_mean":
+      [o.capturedDistanceMean[0], o.capturedDistanceMean[1]],
+    "strike_distance_mean":
+      [o.strikeDistanceMean[0], o.strikeDistanceMean[1]],
+    "carrier_damage_taken":
+      [o.carrierDamageTaken[0], o.carrierDamageTaken[1]],
+    "launchers_built_by_400":
+      [o.launchersBuiltBy400[0], o.launchersBuiltBy400[1]],
+    "carriers_built_by_400":
+      [o.carriersBuiltBy400[0], o.carriersBuiltBy400[1]],
+    "islands_on_map": o.islandsOnMap,
+    "islands_to_win": o.islandsToWin,
+    "headquarters_per_side": o.headquartersPerSide,
+    "cloud_tiles": o.cloudTiles,
+    "current_tiles": o.currentTiles,
+    "wells_total": o.wellsTotal
+  }
+
 proc playGameFor*(
   year, mapName: string, sheets: array[2, Sheet],
   chassis: array[2, ScriptedChassis],
@@ -544,6 +660,16 @@ proc playGameFor*(
       endReason: o.endReason, points: o.points, hashChain: o.hashChain,
       roundChains: o.roundChains, aborted: o.aborted,
       stats: statsJson25(o)), w.events)
+  of yBc23:
+    let spec = maps23.loadMap(mapName)
+    let (w, o) = rules23.playGame(spec, sheets,
+      [rules23.chassisKindFor(chassis[0]), rules23.chassisKindFor(chassis[1])],
+      index, sideAslot, maxRounds, budgetSeconds)
+    (GameOutcome(index: o.index, mapName: o.mapName, sideAslot: o.sideAslot,
+      roundsPlayed: o.roundsPlayed, winnerSlot: o.winnerSlot,
+      endReason: o.endReason, points: o.points, hashChain: o.hashChain,
+      roundChains: o.roundChains, aborted: o.aborted,
+      stats: statsJson23(o)), w.events)
 
 proc bc21Breakpoints*(): seq[int] =
   ## The slanderer influence breakpoints, for the bc21 doctrine brief. Read

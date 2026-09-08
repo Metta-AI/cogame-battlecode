@@ -158,6 +158,28 @@ const Bc25GameKeys* = [
   ## `area_without_walls`, `tiles_to_win`, `ruins` and `rounds_with_any_srp`
   ## are the five scalars.
 
+const Bc23GameKeys* = [
+  "islands_held_end", "islands_captured", "islands_lost",
+  "rounds_holding_any_island", "longest_hold_streak", "anchors_built",
+  "anchors_placed", "anchors_lost", "accelerating_anchors_placed",
+  "adamantium_end", "mana_end", "elixir_end", "adamantium_mined",
+  "mana_mined", "elixir_mined", "resources_thrown", "resources_banked",
+  "wells_transformed", "wells_upgraded", "carriers_built",
+  "launchers_built", "amplifiers_built", "destabilizers_built",
+  "boosters_built", "throw_damage", "destabilize_damage", "hq_damage",
+  "anchor_heals", "array_writes", "boosts_cast", "destabilizes_cast",
+  "carrier_rounds_loaded", "current_rides", "first_anchor_round",
+  "captured_distance_mean", "strike_distance_mean", "carrier_damage_taken",
+  "launchers_built_by_400", "carriers_built_by_400",
+  "islands_on_map", "islands_to_win", "headquarters_per_side",
+  "cloud_tiles", "current_tiles", "wells_total"
+]
+  ## bc23's own optional siblings. It REUSES `units_built`, `damage_dealt`,
+  ## `robots_alive` and `robots_lost` from bc20/bc24/bc25 rather than
+  ## duplicating them -- same meaning, same type -- and everything else is
+  ## its own. `islands_on_map`, `islands_to_win`, `headquarters_per_side`,
+  ## `cloud_tiles`, `current_tiles` and `wells_total` are the six scalars.
+
 const EndReasons* = [
   "kings_destroyed", "cats_cleared", "round_limit", "abandoned",
   "hq_destroyed", "quantity", "quality", "broadcasts", "highest_id",
@@ -165,9 +187,16 @@ const EndReasons* = [
   "more_influence", "capture", "more_flag_captures", "level_sum",
   "more_bread", "paint_enough_area", "destroy_all_units",
   "more_squares_painted", "more_towers_alive", "more_money",
-  "more_paint_in_units", "more_robots_alive"
+  "more_paint_in_units", "more_robots_alive",
+  "conquest", "more_sky_islands", "more_reality_anchors",
+  "more_elixir_net_worth", "more_mana_net_worth",
+  "more_adamantium_net_worth"
 ]
-  ## The union of all FIVE years' `DominationFactor` renderings plus our own
+  ## The union of all SIX years' `DominationFactor` renderings plus our own
+  ## wall-clock `abandoned`. bc23's six are the last row: `resignation` is
+  ## absent (unreachable from a JSON doctrine) and bc23 contributes no
+  ## `destroy_all_units`, because THERE IS NO ELIMINATION CONDITION in the
+  ## 2023 rule set at all (docs/RULES-BC23.md section Divergences item 7).
   ## wall-clock `abandoned`. bc24's `MORE_FLAGS_PICKED` and `RESIGNATION` are
   ## deliberately absent: the first is unreachable in the engine's own
   ## `checkEndOfMatch` and the second has no action a doctrine can produce

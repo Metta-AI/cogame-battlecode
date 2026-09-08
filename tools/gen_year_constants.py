@@ -13,12 +13,14 @@ hand-edited constant fails the build.
         --out src/battlecode/years/bc26/constants.nim
     tools/gen_year_constants.py --engine ... --check   # diff, exit 1 on drift
 
-`--year bc20`, `--year bc21`, `--year bc24` and `--year bc25` do the same job
+`--year bc20`, `--year bc21`, `--year bc23`, `--year bc24` and `--year bc25`
+do the same job
 for the other year modules against a checkout of the matching engine at its
 pinned commit. bc20 and bc21 read `common/GameConstants.java` and
 `common/RobotType.java`; bc24 reads `common/GameConstants.java`,
 `common/SkillType.java`, `common/TrapType.java` and `common/GlobalUpgrade.java`;
-bc25 reads `common/GameConstants.java` and `common/UnitType.java`:
+bc25 reads `common/GameConstants.java` and `common/UnitType.java`; bc23 reads
+`common/GameConstants.java`, `common/RobotType.java` and `common/Anchor.java`:
 
     tools/gen_year_constants.py --year bc20 --engine /path/to/battlecode20 \
         --out src/battlecode/years/bc20/constants.nim
@@ -91,8 +93,17 @@ def read_constants_from(path: pathlib.Path,
         # exactly the sort of thing a generator is supposed to prevent.
         src = re.sub(r"//[^\n]*", "", src)
     out = []
+    seen: dict[str, str] = {}
     for java_type, name, raw in CONST_RE.findall(src):
+        # 2023 declares `ANCHOR_WEIGHT = CARRIER_CAPACITY`: an initialiser that
+        # names an earlier constant in the same file. Resolve it from what has
+        # already been read rather than hand-typing the value here, which is
+        # the whole point of a generator.
+        key = raw.strip()
+        if key in seen:
+            raw = seen[key]
         nim_type, literal = nim_literal(java_type, raw)
+        seen[name] = raw
         out.append((name, nim_type, literal))
     return out
 
@@ -694,10 +705,160 @@ def render_bc25(engine: pathlib.Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+# ---------------------------------------------------------------------------
+#  bc23 -- Battlecode 2023 "Tempest"
+# ---------------------------------------------------------------------------
+
+BC23_COMMIT = "af42086ecd09709dc603b2aaa9e9b98312c9ef79"
+
+BC23_ROBOT_RE = re.compile(
+    r"^\s*(HEADQUARTERS|CARRIER|LAUNCHER|DESTABILIZER|BOOSTER|AMPLIFIER)"
+    r"\s*\((.*?)\)\s*[,;]?\s*$", re.M)
+BC23_ANCHOR_RE = re.compile(
+    r"^\s*(STANDARD|ACCELERATING)\s*\((.*?)\)\s*[,;]\s*$", re.M)
+
+BC23_DECISION_OPS_HQ = 2000
+BC23_DECISION_OPS_CARRIER = 1250
+BC23_DECISION_OPS_OTHER = 1000
+    # One tenth of HEADQUARTERS 20000 / CARRIER 12500 / everything else 10000,
+    # the same convention bc20, bc21, bc24 and bc25 use. docs/RULES-BC23.md
+    # §Divergences item 1 carries the measurement that makes it harmless in
+    # this year: the 2023 example bot peaks at 6.6-6.9 % of its limit with
+    # ZERO mid-turn cut-offs over three full 2000-round games.
+
+
+def render_bc23(engine: pathlib.Path) -> str:
+    common = engine / "engine/src/main/battlecode/common"
+    consts = read_constants_from(common / "GameConstants.java",
+                                 strip_comments=True)
+    robot_src = (common / "RobotType.java").read_text()
+    robot_src = re.sub(r"//[^\n]*", "", robot_src)
+    robot_src = re.sub(r"/\*.*?\*/", "", robot_src, flags=re.S)
+    robots = [(n, [v.strip() for v in a.split(",")])
+              for n, a in BC23_ROBOT_RE.findall(robot_src)]
+    if len(robots) != 6:
+        raise SystemExit(
+            f"::error::expected 6 RobotType entries, saw {len(robots)}")
+    for name, a in robots:
+        if len(a) != 10:
+            raise SystemExit(
+                f"::error::RobotType.{name} has {len(a)} arguments, expected 10")
+
+    anchor_src = (common / "Anchor.java").read_text()
+    anchor_src = re.sub(r"//[^\n]*", "", anchor_src)
+    anchor_src = re.sub(r"/\*.*?\*/", "", anchor_src, flags=re.S)
+    anchors = [(n, [v.strip() for v in a.split(",")])
+               for n, a in BC23_ANCHOR_RE.findall(anchor_src)]
+    if len(anchors) != 2:
+        raise SystemExit(
+            f"::error::expected 2 Anchor entries, saw {len(anchors)}")
+    for name, a in anchors:
+        if len(a) != 8:
+            raise SystemExit(
+                f"::error::Anchor.{name} has {len(a)} arguments, expected 8")
+
+    lines: list[str] = []
+    add = lines.append
+    add('## Battlecode 2023 "Tempest" gameplay constants '
+        "-- GENERATED, do not edit.")
+    add("##")
+    add(f"## Source: github.com/battlecode/battlecode23 at commit "
+        f"`{BC23_COMMIT}`,")
+    add("## files `common/GameConstants.java`, `common/RobotType.java` and")
+    add("## `common/Anchor.java`, read by `tools/gen_year_constants.py --year")
+    add("## bc23`. The `test` job of `.github/workflows/ci.yml` re-runs that")
+    add("## generator with `--check`, which byte-diffs this file, so an edit")
+    add("## here fails the build instead of quietly changing the rules under a")
+    add("## `GameVersion` that no longer describes them.")
+    add("##")
+    add('## `SPEC_VERSION` below is the literal string "3.0.14" -- and so is')
+    add("## the one inside the RELEASED 3.0.15 jar, which makes it useless as a")
+    add("## version pin. The ORACLE JAR is therefore pinned by sha256 in")
+    add("## `tools/oracle/bc23/jar.lock` instead, and Tier B cross-checks every")
+    add("## constant here against the jar's own classes")
+    add("## (docs/RULES-BC23.md §Divergences item 12).")
+    add("##")
+    add("## THE ONLY FLOAT32 IN BC23 is the conquest threshold 0.75f, the")
+    add("## carrier's 1.25f damage factor and 0.375f movement slope, and the")
+    add("## accelerating anchor's -0.15f; there is NO TRANSCENDENTAL ANYWHERE,")
+    add("## which is why this year's arithmetic tier is provable over its whole")
+    add("## finite domain rather than sampled.")
+    add("")
+    add(f'const EngineCommit* = "{BC23_COMMIT}"')
+    add('const OracleJarVersion* = "3.0.15"')
+    add("")
+    add("type")
+    add("  RobotType* = enum")
+    for name, _ in robots:
+        add(f'    rt{camel(name)} = "{name}"')
+    add("")
+    add("  AnchorType* = enum")
+    add('    anNone = "-"')
+    for name, _ in anchors:
+        add(f'    an{camel(name)} = "{name}"')
+    add("")
+    add("  RobotSpec* = object")
+    add("    ## `common/RobotType.java`'s ten constructor arguments, in the")
+    add("    ## file's own order. `-1` means the field has no meaning for that")
+    add("    ## type and is carried rather than normalised, because the engine")
+    add("    ## carries it: HEADQUARTERS cannot move, BOOSTER and AMPLIFIER")
+    add("    ## have no action radius, AMPLIFIER has no action cooldown.")
+    add("    buildCostAdamantium*, buildCostMana*, buildCostElixir*: int")
+    add("    actionCooldown*, movementCooldown*, health*, damage*: int")
+    add("    actionRadiusSquared*, visionRadiusSquared*, bytecodeLimit*: int")
+    add("")
+    add("  AnchorSpec* = object")
+    add("    ## `common/Anchor.java`'s eight constructor arguments, in the")
+    add("    ## file's own order.")
+    add("    totalHealth*, unitsAffected*: int")
+    add("    accelerationFactor*: float32")
+    add("    healingFrequency*, healingAmount*: int")
+    add("    manaCost*, adamantiumCost*, elixirCost*: int")
+    add("")
+    add("const")
+    for name, nim_type, literal in consts:
+        if nim_type == "float32":
+            literal = f32_literal(literal)
+        add(f"  {camel(name)}*: {nim_type} = {literal}")
+    add("")
+    add(f"  DecisionOpsHeadquarters*: int = {BC23_DECISION_OPS_HQ}")
+    add(f"  DecisionOpsCarrier*: int = {BC23_DECISION_OPS_CARRIER}")
+    add(f"  DecisionOpsOther*: int = {BC23_DECISION_OPS_OTHER}")
+    add("    ## Replace `RobotType.bytecodeLimit` outside the JVM: no mid-turn")
+    add("    ## resumption, no mid-primitive cut, enforced by the sim rather")
+    add("    ## than by the bot.")
+    add("")
+    add("  RobotSpecs*: array[RobotType, RobotSpec] = [")
+    for name, a in robots:
+        add(f"    rt{camel(name)}: RobotSpec(buildCostAdamantium: {a[0]},")
+        add(f"      buildCostMana: {a[1]}, buildCostElixir: {a[2]},")
+        add(f"      actionCooldown: {a[3]}, movementCooldown: {a[4]},")
+        add(f"      health: {a[5]}, damage: {a[6]},")
+        add(f"      actionRadiusSquared: {a[7]}, visionRadiusSquared: {a[8]},")
+        add(f"      bytecodeLimit: {a[9]}),")
+    add("  ]")
+    add("")
+    add("  AnchorSpecs*: array[AnchorType, AnchorSpec] = [")
+    add("    anNone: AnchorSpec(totalHealth: 0, unitsAffected: 0,")
+    add("      accelerationFactor: 0.0'f32, healingFrequency: 0,")
+    add("      healingAmount: 0, manaCost: 0, adamantiumCost: 0,")
+    add("      elixirCost: 0),")
+    for name, a in anchors:
+        add(f"    an{camel(name)}: AnchorSpec(totalHealth: {a[0]},")
+        add(f"      unitsAffected: {a[1]},")
+        add(f"      accelerationFactor: {f32_literal(a[2].rstrip('fF'))}'f32,")
+        add(f"      healingFrequency: {a[3]}, healingAmount: {a[4]},")
+        add(f"      manaCost: {a[5]}, adamantiumCost: {a[6]},")
+        add(f"      elixirCost: {a[7]}),")
+    add("  ]")
+    add("")
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--year", default="bc26",
-                    choices=["bc26", "bc20", "bc21", "bc24", "bc25"])
+                    choices=["bc26", "bc20", "bc21", "bc23", "bc24", "bc25"])
     ap.add_argument("--engine", required=True, type=pathlib.Path)
     ap.add_argument("--out", type=pathlib.Path, default=None)
     ap.add_argument("--check", action="store_true",
@@ -707,9 +868,11 @@ def main() -> int:
     out = args.out or pathlib.Path(
         f"src/battlecode/years/{args.year}/constants.nim")
     label = {"bc26": TAG, "bc20": BC20_COMMIT, "bc21": BC21_COMMIT,
-             "bc24": BC24_COMMIT, "bc25": BC25_COMMIT}[args.year]
+             "bc23": BC23_COMMIT, "bc24": BC24_COMMIT,
+             "bc25": BC25_COMMIT}[args.year]
     text = {"bc26": render, "bc20": render_bc20,
-            "bc21": render_bc21, "bc24": render_bc24,
+            "bc21": render_bc21, "bc23": render_bc23,
+            "bc24": render_bc24,
             "bc25": render_bc25}[args.year](args.engine)
     if args.check:
         current = out.read_text() if out.exists() else ""

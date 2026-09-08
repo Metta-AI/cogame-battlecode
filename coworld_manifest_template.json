@@ -9,7 +9,7 @@
   "episode_timeout_minutes": 20,
   "game": {
     "name": "battlecode",
-    "description": "Battlecode, played by doctrine. Two cogs each write one sealed JSON strategy sheet and a deterministic Nim port of an official Battlecode rule set plays the whole match from those two sheets. Variant `bc26` is 2026 \"Uneasy Alliances\" — rat clans allied against NPC cats until one of them betrays. Variant `bc20` is 2020 \"Soup\" — the water rises every round, and a team either terraforms its way above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt. Variant `bc21` is 2021 \"Campaign\" — Enlightenment Centers bid influence for votes and spend it on politicians, slanderers and muckrakers, and the election is decided at round 1500. Variant `bc24` is 2024 \"Breadwars\" — 50 identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off. Variant `bc25` is 2025 “Chromatic Conflict” — paint robots colour a grid, build money, paint and defense towers by painting exact patterns onto ruins, and win by owning 70 % of the map.",
+    "description": "Battlecode, played by doctrine. Two cogs each write one sealed JSON strategy sheet and a deterministic Nim port of an official Battlecode rule set plays the whole match from those two sheets. Variant `bc26` is 2026 \"Uneasy Alliances\" — rat clans allied against NPC cats until one of them betrays. Variant `bc20` is 2020 \"Soup\" — the water rises every round, and a team either terraforms its way above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt. Variant `bc21` is 2021 \"Campaign\" — Enlightenment Centers bid influence for votes and spend it on politicians, slanderers and muckrakers, and the election is decided at round 1500. Variant `bc24` is 2024 \"Breadwars\" — 50 identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off. Variant `bc25` is 2025 “Chromatic Conflict” — paint robots colour a grid, build money, paint and defense towers by painting exact patterns onto ruins, and win by owning 70 % of the map. Variant `bc23` is 2023 “Tempest” — carriers mine adamantium and mana from sky wells, launchers fight the only real war, and a faction wins by ferrying reality anchors onto 75 % of the sky islands.",
     "owner": "daveey@gmail.com",
     "replay_viewer": {
       "bundle": "static-replay-viewer"
@@ -71,6 +71,14 @@
           }
         },
         {
+          "id": "rules-bc23.md",
+          "title": "Battlecode 2023 “Tempest”: rules, knobs and divergences",
+          "content": {
+            "type": "uri",
+            "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/RULES-BC23.md"
+          }
+        },
+        {
           "id": "replay.md",
           "title": "Replay format",
           "content": {
@@ -113,7 +121,8 @@
             "bc20",
             "bc21",
             "bc24",
-            "bc25"
+            "bc25",
+            "bc23"
           ]
         },
         "pool": {
@@ -322,7 +331,13 @@
                   "more_towers_alive",
                   "more_money",
                   "more_paint_in_units",
-                  "more_robots_alive"
+                  "more_robots_alive",
+                  "conquest",
+                  "more_sky_islands",
+                  "more_reality_anchors",
+                  "more_elixir_net_worth",
+                  "more_mana_net_worth",
+                  "more_adamantium_net_worth"
                 ]
               },
               "cooperation_at_end": {
@@ -1289,6 +1304,381 @@
               },
               "rounds_with_any_srp": {
                 "type": "integer"
+              },
+              "islands_held_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: sky islands this seat holds at the final round"
+              },
+              "islands_captured": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: islands this seat anchored from neutral or from the enemy"
+              },
+              "islands_lost": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: islands whose anchor this seat let reach zero health"
+              },
+              "rounds_holding_any_island": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: rounds in which this seat held at least one island"
+              },
+              "longest_hold_streak": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: the longest run of consecutive rounds holding at least one island"
+              },
+              "anchors_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: anchors this seat's headquarters built"
+              },
+              "anchors_placed": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: anchors this seat ever planted (the second tiebreak rung)"
+              },
+              "anchors_lost": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: anchors of this seat's that were ground to zero"
+              },
+              "accelerating_anchors_placed": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: of those, the 300-elixir accelerating kind"
+              },
+              "adamantium_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: this seat's team adamantium at the final round"
+              },
+              "mana_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: this seat's team mana at the final round"
+              },
+              "elixir_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: this seat's team elixir at the final round"
+              },
+              "adamantium_mined": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: adamantium this seat's carriers collected from wells"
+              },
+              "mana_mined": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: mana this seat's carriers collected from wells"
+              },
+              "elixir_mined": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: elixir this seat's carriers collected from transformed wells"
+              },
+              "resources_thrown": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: cargo destroyed by this seat's carrier throws, hit or miss"
+              },
+              "resources_banked": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: cargo this seat's carriers actually DEPOSITED into a headquarters"
+              },
+              "wells_transformed": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: wells this seat turned into elixir wells with 600 kg of the opposite resource"
+              },
+              "wells_upgraded": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: wells this seat raised to rate 3 with 1400 kg of their own type"
+              },
+              "carriers_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: carriers built"
+              },
+              "launchers_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: launchers built"
+              },
+              "amplifiers_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: signal amplifiers built"
+              },
+              "destabilizers_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: temporal destabilizers built"
+              },
+              "boosters_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: temporal boosters built"
+              },
+              "throw_damage": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: damage dealt by carrier throws"
+              },
+              "destabilize_damage": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: damage dealt by destabiliser detonations"
+              },
+              "hq_damage": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: damage dealt by headquarters' end-of-round aura"
+              },
+              "anchor_heals": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: health this seat's robots received from its own anchors"
+              },
+              "array_writes": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: shared-array writes"
+              },
+              "boosts_cast": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: booster fields cast"
+              },
+              "destabilizes_cast": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: destabilisations cast"
+              },
+              "carrier_rounds_loaded": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: carrier-rounds spent carrying cargo"
+              },
+              "current_rides": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: times a robot of this seat was shoved by a current"
+              },
+              "first_anchor_round": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: the round this seat first planted an anchor, or 0"
+              },
+              "captured_distance_mean": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: mean Chebyshev distance from a captured island to the nearest enemy headquarters"
+              },
+              "strike_distance_mean": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: mean Chebyshev distance of the launcher centroid from its nearest own headquarters"
+              },
+              "carrier_damage_taken": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: damage this seat's carriers took"
+              },
+              "launchers_built_by_400": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: launchers built by round 400"
+              },
+              "carriers_built_by_400": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "bc23: carriers built by round 400"
+              },
+              "islands_on_map": {
+                "type": "integer",
+                "description": "bc23: how many sky islands the map carries"
+              },
+              "islands_to_win": {
+                "type": "integer",
+                "description": "bc23: islands a conquest needs under the float32 75 % test"
+              },
+              "headquarters_per_side": {
+                "type": "integer",
+                "description": "bc23: headquarters each faction starts with"
+              },
+              "cloud_tiles": {
+                "type": "integer",
+                "description": "bc23: cloud tiles on the map"
+              },
+              "current_tiles": {
+                "type": "integer",
+                "description": "bc23: tiles carrying a current"
+              },
+              "wells_total": {
+                "type": "integer",
+                "description": "bc23: wells on the map"
               }
             }
           }
@@ -1380,7 +1770,7 @@
       "id": "awu",
       "name": "awu",
       "type": "player",
-      "description": "the strong published baseline of whichever year the variant selects — distilled-awubot on bc26, Bowl of Chowder on bc20, California Roll on bc21, Gone Sharkin' on bc24, SPAARK on bc25",
+      "description": "the strong published baseline of whichever year the variant selects — distilled-awubot on bc26, Bowl of Chowder on bc20, California Roll on bc21, Gone Sharkin' on bc24, SPAARK on bc25, lemonade on bc23",
       "image": "{{PLAYER_IMAGE}}",
       "run": [
         "/bin/battlecode-player"
@@ -1403,7 +1793,7 @@
       "id": "scaffold",
       "name": "scaffold",
       "type": "player",
-      "description": "the weak scaffold baseline of whichever year the variant selects — the ported example bot (examplefuncsplayer on bc20, examplefuncsplayer21 on bc21), examplefuncsplayer24 on bc24, examplefuncsplayer25 on bc25",
+      "description": "the weak scaffold baseline of whichever year the variant selects — the ported example bot (examplefuncsplayer on bc20, examplefuncsplayer21 on bc21), examplefuncsplayer24 on bc24, examplefuncsplayer25 on bc25, examplefuncsplayer23 on bc23",
       "image": "{{PLAYER_IMAGE}}",
       "run": [
         "/bin/battlecode-player"
@@ -1538,6 +1928,33 @@
       "description": "Best of three on the mixed pool. Two clans of paint robots colour a grid. Soldiers paint one tile at a time, splashers repaint a blast radius including the enemy's ground, and moppers wipe it back to bare. Towers are built by painting an exact 5×5 pattern onto a ruin, and a Special Resource Pattern pays every mining tower you own — if it survives fifty rounds. Paint 70 % of the map, destroy everything they have, or be ahead on colour at round 2 000.",
       "game_config": {
         "year": "bc25",
+        "pool": "mixed",
+        "gamesPerMatch": 3,
+        "seed": 0,
+        "maxRounds": 2000,
+        "num_agents": 2,
+        "attempt1Ms": 20000,
+        "retryMs": 12000,
+        "doctrineBudgetMs": 45000,
+        "perGameBudgetSeconds": 110,
+        "matchBudgetSeconds": 340,
+        "connectTimeoutMs": 25000,
+        "players": [
+          {
+            "name": "Clan Ash"
+          },
+          {
+            "name": "Clan Basil"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc23",
+      "name": "Battlecode 2023 — Tempest (2 seats)",
+      "description": "Best of three on the mixed pool. Carriers mine adamantium and mana from wells and haul it home at half speed when they are full; launchers are the only unit that deals real damage, and they can shoot through the clouds that blind everyone. Pour 600 kg of the wrong resource into a well and it becomes elixir, which buys temporal boosters, destabilizers and the better kind of reality anchor. Win by anchoring 75 % of the sky islands — and an anchor only holds while your robots stand on the island.",
+      "game_config": {
+        "year": "bc23",
         "pool": "mixed",
         "gamesPerMatch": 3,
         "seed": 0,

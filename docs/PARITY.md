@@ -662,3 +662,218 @@ ruling on the bc26 run (Fleet card 1218171523823317), not a preference: an
 unexplained Tier C divergence is a **FAIL**, not a ledger line. Every entry
 would have to name a round, a map and a *root cause*, and
 `tools/ci/parity_tiers_bc25.py` rejects a cause of "unknown".
+
+---
+
+# bc23 — Battlecode 2023 "Tempest"
+
+The `parity-oracle-bc23` job runs the **published 2023 fat jar** as a
+CI-only differential oracle against `src/battlecode/years/bc23/`. Engine
+sources are pinned at commit `af42086ecd09709dc603b2aaa9e9b98312c9ef79`; the
+jar is
+`https://releases.battlecode.org/maven/org/battlecode/battlecode23/3.0.15/battlecode23-3.0.15.jar`,
+pinned in `tools/oracle/bc23/jar.lock` by **size 16 982 927** and **sha256
+`5d4e42a51946cc1c2149426485bda8096ff1c088c77e3ed075c06ce5968ed72a`**. Both
+numbers were verified in the sandbox before the job was written.
+
+## The jar is self-contained, and there is NO version-string assertion
+
+11 566 entries: every `battlecode` class, every bundled dependency —
+including **`net.sf.jsi`** and **`gnu.trove`**, so the dead-artifact problem
+that forced bc21's jsi shim, its 94-file `javac` and its `deps.lock` **does
+not arise here** — plus
+`battlecode/instrumenter/bytecode/resources/MethodCosts.txt` and all **103**
+`.map23` map resources. So there is no Gradle, no shim, no multi-file
+compile, no Maven Central download list and no `deps.lock` in this job.
+
+**The released 3.0.15 jar's `GameConstants.SPEC_VERSION` is the literal
+string `"3.0.14"`** — measured — and so is the pinned `master` sources'. bc24's
+`test "${spec}" = "3.0.5"` step therefore has **no bc23 equivalent**: the
+sha256 *is* the version pin, and Tier B cross-checks the constants instead
+(`docs/RULES-BC23.md` §Divergences item 12).
+
+## TEMURIN 8, AND WHY IT IS NOT NEGOTIABLE
+
+The engine's `build.gradle` sets `sourceCompatibility = 1.8` and the jar
+bundles **ASM 5.0.4**, which cannot read modern class files. Measured in this
+sandbox: **under JDK 21 the instrumenter throws
+`java.lang.IllegalArgumentException` inside
+`org.objectweb.asm.ClassReader.<init>` from
+`TeamClassLoaderFactory.normalReader` (via `MethodCostUtil.getMethodData`) on
+every player class load** — every robot dies as it spawns, **no robot is ever
+built**, the trace is a few hundred empty lines, and **the job exits 0**. That
+is the exact "green oracle proving nothing" trap bc25 hit from the other
+direction, and it is why `Bc23Trace.java` **exits 3 when no robot is ever
+built** and why `ci.yml` additionally asserts every game reached at least
+1 900 rounds and built at least 100 robots.
+
+Two consequences of pinning 8:
+
+* **compile with plain `javac -nowarn -encoding UTF-8 -cp <jar>` and NO
+  `--release`, no `-source`, no `-target`.** `--release` arrived in JDK 9 and
+  dies with "invalid flag" on a JDK-8 `javac` in seconds (the bc21 lesson).
+  The compiler *is* 8, so the target is 8;
+* **the driver must call `System.exit()`.** The sandboxed player threads are
+  **non-daemon**, so a driver that returns or throws without it hangs for
+  ever — measured, the first run of this driver hung until the harness
+  timeout after an unrelated exception. Every `java` invocation in the job is
+  wrapped in `timeout 600`.
+
+## The trace
+
+One line per record, printed **from the live objects** by
+`tools/oracle/bc23/Bc23Trace.java` (`package battlecode.world;`, so it needs
+reflection only for the two private fields `ObjectInfo.dynamicBodyExecOrder`
+and `GameWorld.islandIdToIsland` — reading them is the only way to print in
+exec order and in island-id order). `tools/parity_trace_bc23.nim` prints the
+same lines from the Nim port.
+
+```
+R <round> T <A|B> ad=<n> mn=<n> ex=<n> isl=<n> anch=<n> anchheld=<n>
+R <round> I <islandId> own=<0|1|2> hp=<n> anch=<STANDARD|ACCELERATING|->
+R <round> W <wellIdx> ty=<AD|MN|EX> rate=<1|3> ad=<n> mn=<n> ex=<n>
+R <round> M chk=<fnv1a64 of the per-tile per-team multiplier hundredths>
+R <round> U <id> team=<A|B> ty=<TYPE> x=<n> y=<n> hp=<n> ad=<n> mn=<n> ex=<n> anc=<n> acd=<n> mcd=<n> bc=<n>
+R <round> S <A|B> arr=<fnv1a64 of the 64-slot shared array>
+R <round> Z winner=<A|B|-> dom=<NAME|->
+```
+
+Robots are printed **in exec order**, not id order, which is what makes an
+ordering bug visible; islands in ascending id; the `M` checksum is what makes
+a single wrong tempo tile visible without printing 3 600 tiles a round. The
+Java side's `bc=` column is stripped before the diff (there is no bytecode
+counter on the Nim side) and is used only for the Tier A headroom assertion.
+
+**Measured in this sandbox:** a full 2000-round game is **210 577–264 676
+trace lines (18–22 MB)** and **26.5–31.1 s of instrumented JVM** per map, and
+the board carries **121–157 robots** at its peak (mean 97–124). Traces are
+written to `$RUNNER_TEMP`, compared **streaming** (never loaded whole), and
+only the first 200 divergent lines plus a gzipped digest are uploaded.
+
+## The measured bytecode headroom, and why Tier A is a WHOLE-GAME window
+
+Over three full 2000-round games (`DefaultMap` 32×32, `AllElements` 30×30,
+`Eyelands` 50×30) the **peak bytecode use of any robot on any round was
+823–856 — 6.6–6.9 % of the carrier's 12 500 limit — with ZERO mid-turn
+cut-offs.** So the port's "no mid-turn resumption" divergence
+(`docs/RULES-BC23.md` §Divergences item 1) is never exercised and the
+comparison stays defined to the last round. The job does not assume that: it
+reads the `bc=` column and **fails if any robot on any round exceeds 50 % of
+its type's limit**, naming the round and the robot, because past that point
+the window would have to shrink and this repository would rather be wrong
+loudly than green quietly.
+
+This is exactly where bc21 could not go: its example bot *did* hit the
+ceiling, which is why its windows were 22–245 rounds.
+
+## The tiers
+
+* **Tier A (BLOCKING)** — rounds 1…2000 **bit-exact, whole games**, on six
+  `small` pairs (`Quiet`, `SmallElements`, `Lantern`, `Spin`, `Sneaky`,
+  `Barcode`), `examplefuncsplayer23` against itself, every field above.
+* **Tier A′ — NOT SHIPPED IN THIS LANDING, and this is the one tier of the
+  four that is open.** The Nim half is committed
+  (`src/battlecode/years/bc23/chassis/scenario23.nim`, behind
+  `-d:bc23Scenario`, scripted by round number with no RNG at all); its
+  **bit-exact Java twin is a phase-30 item**, and
+  `tools/ci/parity_tiers_bc23.py` takes the bot list as an argument so adding
+  it is a one-line change to the workflow. What it would cover, whole games,
+  bit-exact:
+  Tier A's own measurement showed exactly what it cannot cover: over three
+  full 2000-round games the example bot **never took an anchor from a
+  headquarters, never placed one, never captured an island, never built an
+  amplifier, a destabilizer or a booster, never transferred a resource to a
+  headquarters, never upgraded or transformed a well, never wrote the shared
+  array, and ended every game on `MORE_MANA_NET_WORTH` at round 2000 with
+  islands 0–0 and anchors 0–0.** So `CONQUEST`, the first two ladder rungs,
+  the whole anchor and island subsystem, the elixir tree, the tempo fields
+  and every comms path would be untested by it — precisely the "rare code
+  paths that fire mid-game" the Fleet card 1218171523823317 postmortem warns
+  about. `tools/oracle/bc23/bc23scenario/RobotPlayer.java` and its Nim twin
+  `chassis/scenario23.nim` (behind `-d:bc23Scenario`) are scripted **by round
+  number** to force every one of them, with **no RNG at all** and a bytecode
+  peak the job asserts stays under 25 %. The job then asserts, **off the JAVA
+  trace**, that the paths really fired — an `I` line with
+  `own=1 anch=STANDARD` and later one with `anch=ACCELERATING`; an `I` line
+  returning to `own=0`; a `W` line's `ty=` changing from `MN` to `EX` and
+  another's `rate=` from 1 to 3; the `M` checksum changing and returning; an
+  `S` checksum changing. **A scenario bot that agrees bit for bit while doing
+  nothing proves nothing**, and that is the step that stops it.
+* **Tier B (BLOCKING) — the arithmetic, over its WHOLE FINITE DOMAIN.**
+  `tools/JavaBc23Tables.java`, run against the jar's own classes under the CI
+  JDK 8, regenerates `data/bc23/tables.json` — the whole `RobotType` table
+  (10 fields × 6 types) and `Anchor` table (8 fields × 2); the carrier
+  movement cooldown `floor(0.375f × w) + 5` for every weight 0…40; the throw
+  damage `floor(1.25f × w)` for every weight 0…40; **the entire
+  cooldown-multiplier lattice** — every reachable multiplier × every base
+  cooldown in `{2, 10, 15, 20, 25, 70, 140}` **and** every carrier base
+  5…20, as `(int) Math.round(base × multiplier)` computed by the JVM itself;
+  the conquest threshold `held / total >= 0.75f` for every island count
+  4…35; and the island occupancy `(100 × (a − b)) / area` for every `(a, b)`
+  pair up to area 20 — and the job **byte-diffs** it against the committed
+  file. bc23 has **no transcendental anywhere**, so unlike bc21 this tier is
+  not a sample: it is the entire domain. The same step cross-checks every
+  `GameConstants` field against the **jar's** classes, which is what closes
+  the "released jar versus pinned master sources" gap in the absence of a
+  usable `SPEC_VERSION`.
+* **Tier C (BLOCKING against a ledger)** — the first divergent round of every
+  whole 2000-round game, on every bot the job runs and all six maps, compared
+  against
+  `tools/ci/parity_ledger_bc23.json`. It fails if (a) a pair diverges and has
+  no ledger entry, (b) a pair diverges **earlier** than its entry, (c) a
+  ledger entry no longer reproduces, or (d) **any** divergence occurs while
+  the traced bytecode peak is still under 50 % — which, on this year's
+  evidence, means always, and therefore means a real rules bug rather than an
+  instrumentation artefact.
+
+## ROOT-CAUSE-OR-FAIL
+
+An unexplained Tier C divergence is a **FAIL**, not a ledger line. That is
+the operator's standing ruling (Fleet card 1218171523823317), not a
+preference. Every ledger entry must name a round, a map and a *root cause*; a
+cause of "unknown" is not a cause and `tools/ci/parity_tiers_bc23.py` rejects
+it.
+
+**`tools/ci/parity_ledger_bc23.json` ships EMPTY, and it is empty because it
+CAN be.** Measured in the sandbox before the job was written: all six trace
+pairs — `examplefuncsplayer23` against itself on `Quiet`, `SmallElements`,
+`Lantern`, `Spin`, `Sneaky` and `Barcode` — are **bit-exact for whole
+2000-round games**, 96 430 to 270 105 trace lines a side, with the traced
+bytecode peak at **745–893 of the carrier's 12 500 (5–7 %)** and **zero
+mid-turn cut-offs**. That is a better shipped state than bc21's (22–245-round
+windows, five root-caused entries) or bc25's, and it is why this year's design
+note could promise an empty ledger.
+
+If phase 30 finds a divergence anyway, the root-cause checklist — each item
+with its own unit test — is:
+
+the exec-order list's by-value removal and the pre-sweep snapshot
+(`test_bc23_execorder`); the per-action charge order, especially
+`boost`/`destabilize`/`placeAnchor` charging **after** their effect and `move`
+charging at the **destination** (`test_bc23_cooldown`); the float64 multiplier
+rounding (`test_bc23_tempo`); the destabilisation firing at `cast + 4` and
+hitting one robot per tile (`test_bc23_tempo`); the asymmetric stack guards
+(`test_bc23_tempo`); the island occupancy formula's truncation toward zero and
+the healing sweep's radius (`test_bc23_islands`); the anchor-override counters
+and the STANDARD-over-ACCELERATING boost quirk (`test_bc23_islands`); the well
+transformation and upgrade thresholds and the fact that a transfer into a well
+leaves the team total (`test_bc23_wells`); the carrier's weight-based movement
+and its inventory-emptying throw (`test_bc23_cooldown`, `test_bc23_units`);
+the current closure (`test_bc23_currents`); the shared-array write windows
+(`test_bc23_comms`); the cloud vision collapse in **both** directions and the
+`ceil+1` scan box (`test_bc23_sensing`); the float32 conquest threshold
+(`test_bc23_endladder`); and the `IDGenerator` stream that fixes every built
+robot's id (`test_rng`).
+
+## What is NOT compared, and why
+
+* **The bytecode counter itself.** There is none on the Nim side; the `bc=`
+  column is used only for the headroom assertion.
+* **Indicator strings, dots and lines, and the profiler.** Instrumentation
+  with no runtime meaning and no port.
+* **`.bc23` match files.** There is no flatbuffers reader on either side of
+  this port; the driver constructs `new GameMaker(info, null, false)` with a
+  null packet sink.
+* **`setWinnerArbitrary`'s `Math.random()`.** Wall-clock seeded and therefore
+  not reproducible; replaced by a world-RNG draw (D4) and reachable only when
+  all five rungs tie.

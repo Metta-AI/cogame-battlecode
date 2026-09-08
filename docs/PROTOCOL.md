@@ -428,3 +428,50 @@ rune boundary), ≤ 32 sheet keys, 280 runes of `notes`, 48 runes of `motto`,
 `tower_type_order` exactly three DISTINCT strings from the enum; any
 malformation takes the whole default and is recorded ONCE. A submitted
 `chassis` is recorded as an unknown field and never honoured (D1).
+
+## bc23
+
+`game_config.year = "bc23"` selects Battlecode 2023 "Tempest". The protocol
+id is **unchanged** (`cogame.battlecode.v1`): the wire shape is identical and
+only the year-dependent *payload* differs, so every existing bc26, bc20,
+bc21, bc24 and bc25 consumer keeps working without re-registering.
+
+### The bc23 observation
+
+One sealed one-shot brief per seat, recorded verbatim in the replay. There is
+**no per-round observation of any kind**: one doctrine, then the war.
+
+On top of the year-neutral envelope (`protocol`, `game_version`, `year`,
+`slot`, `alias`, `opponent_alias`, `team`, `seed`, `games`, `budget`) a bc23
+brief carries:
+
+| key | what it says |
+|---|---|
+| `games[].islands` / `islands_to_win` / `island_tiles` / `island_sizes` | the sky islands, and **the exact number a conquest needs** under the float32 75 % test |
+| `games[].your_headquarters` / `enemy_headquarters` | both factions' headquarters. They are PUBLIC: every map is symmetric and the engine's own map file puts them there |
+| `games[].start_separation` | the shortest Euclidean distance between an A headquarters and a B one — how far a launcher rush has to run |
+| `games[].terrain` | impassable tiles and percentage, clouds and percentage, currents, and the adamantium / mana / **elixir** well counts (every official map has zero elixir wells) |
+| `games[].nearest_well_to_you` / `nearest_island_to_you` | the walking distance, in Chebyshev steps, a carrier actually pays |
+| `economy` | 200/200 per headquarters at round 1, +6/+6 per headquarters every five rounds, well rate 1 and 3, the 1400 kg upgrade, the 600 kg elixir transformation, capacity 40 — and the note that a resource thrown into a well leaves your team total for good |
+| `units` | all six types with their exact costs, cooldowns, radii and what they do, including the carrier's `floor(5 + 3*cargo/8)` movement and the launcher's blind r² ≤ 16 |
+| `anchors` | both anchors' costs, health and healing, how one is built, ferried and planted, the occupancy formula that holds it, and the fact that overriding your OWN anchor does not count as a new one placed |
+| `tempo` | the cloud's 20 % and its **two-way** vision collapse, the ADDITIVE per-tile per-team stacking, and `round(base × multiplier)` read at the tile you end up on |
+| `comms` | 64 slots, 0…65535, the three write windows, reading always legal, no cooldown and no cost |
+| `win` | the 75 % conquest, the five-rung ladder, and the note that **there is NO elimination** |
+| `sheet_schema` | the twelve knobs, their values, ranges and defaults, generated from `knobs.nim` |
+| `scoring` | the 60/22/10/5/3 weights, the 200-per-game win bonus, and the note that the league ranks by `scores` |
+
+**Hidden**, always: the opponent's doctrine, sheet, notes and motto (sealed and
+simultaneous — never sent, in either direction, at any time); the opponent's
+real player name; every in-match state; the other seat's fallback status.
+
+### The bc23 reply
+
+The same envelope every year uses — `{"sheet": {...}, "notes": "...",
+"motto": "..."}` — with the twelve knobs of `docs/RULES-BC23.md`. Unknown key,
+wrong type or out-of-range value takes that field's default and is recorded;
+the four INTEGER knobs (`launcher_ratio`, `anchor_round`, `anchor_budget`,
+`carrier_throw`) **clamp** to their range instead, so "as much as possible"
+still means something. A sheet can never be rejected. **There is no `chassis`
+key**: a submitted one is recorded in `sheet_unknown_fields` and never
+honoured.

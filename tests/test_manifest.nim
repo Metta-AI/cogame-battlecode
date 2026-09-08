@@ -94,13 +94,28 @@ block:
       key notin Bc26GameKeys and key notin Bc20GameKeys and
       key notin Bc21GameKeys)
 
+  for key in Bc25GameKeys:
+    check("the schema declares bc25's optional game key " & key,
+      key in gameProps)
+  for key in Bc23GameKeys:
+    check("the schema declares bc23's optional game key " & key,
+      key in gameProps)
+  for key in Bc23GameKeys:
+    ## bc23 REUSES `units_built`, `damage_dealt`, `robots_alive` and
+    ## `robots_lost` deliberately -- same meaning, same type -- and those four
+    ## are not in `Bc23GameKeys` at all, so everything here must be its own.
+    check("bc23's key " & key & " collides with no other year",
+      key notin Bc26GameKeys and key notin Bc20GameKeys and
+      key notin Bc21GameKeys and key notin Bc24GameKeys and
+      key notin Bc25GameKeys)
+
   var endReasons: seq[string]
   for v in game["results_schema"]["properties"]["games"]["items"]["properties"]["end_reason"]["enum"]:
     endReasons.add(v.getStr())
   var wantEndReasons = @EndReasons
   endReasons.sort()
   wantEndReasons.sort()
-  checkEq("end_reason is the union of all four years plus abandoned",
+  checkEq("end_reason is the union of all SIX years plus abandoned",
     endReasons, wantEndReasons)
   check("and bc24's two DEAD RUNGS are absent: `checkEndOfMatch` never calls " &
     "MORE_FLAGS_PICKED and no action a doctrine can reach produces " &
@@ -110,8 +125,8 @@ block:
   var yearEnum: seq[string]
   for v in game["config_schema"]["properties"]["year"]["enum"]:
     yearEnum.add(v.getStr())
-  checkEq("config_schema.year.enum names all five years", yearEnum,
-    @["bc26", "bc20", "bc21", "bc24", "bc25"])
+  checkEq("config_schema.year.enum names all six years", yearEnum,
+    @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23"])
   ## bc24 plays to 2000 rounds, which is EXACTLY the existing ceiling, so no
   ## schema change was needed -- and this is the assertion that says so.
   let rounds = game["config_schema"]["properties"]["maxRounds"]
@@ -129,11 +144,11 @@ block:
 # --- num_agents -------------------------------------------------------------
 block:
   ## ONE VARIANT PER BATTLECODE YEAR.
-  checkEq("one variant per registered year", variants.len, 5)
+  checkEq("one variant per registered year", variants.len, 6)
   var variantIds: seq[string]
   for variant in variants: variantIds.add(variant["id"].getStr())
   checkEq("and they are the registered years", variantIds,
-    @["bc26", "bc20", "bc21", "bc24", "bc25"])
+    @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23"])
   for variant in variants:
     check("variant " & variant["id"].getStr() & " is a registered year",
       isRegisteredYear(variant["game_config"]["year"].getStr()))
@@ -257,8 +272,8 @@ block:
   checkEq("docs.readme is an object", docs["readme"].kind, JObject)
   check("docs.readme has type and value",
     docs["readme"].hasKey("type") and docs["readme"].hasKey("value"))
-  checkEq("seven doc pages ship — one rules page per year",
-    docs["pages"].len, 7)
+  checkEq("eight doc pages ship — one rules page per year",
+    docs["pages"].len, 8)
   var ids: seq[string]
   for page in docs["pages"]:
     ids.add(page["id"].getStr())
@@ -273,7 +288,7 @@ block:
     check("the page's file exists: " & target, fileExists(target))
   checkEq("the pages are the ones the design note names", ids,
     @["rules.md", "rules-bc20.md", "rules-bc21.md", "rules-bc24.md",
-      "rules-bc25.md",
+      "rules-bc25.md", "rules-bc23.md",
       "replay.md", "parity.md"])
 
 # --- the rest of the shape --------------------------------------------------
@@ -320,7 +335,7 @@ block:
 block:
   let policies = parseJson(readFile("tools/ci/policies.json"))
   ## Four per year: two `PLAYER_PROMPT` champions and two scripted fillers.
-  checkEq("twenty policies ship — four per year", policies.len, 20)
+  checkEq("twenty-four policies ship — four per year", policies.len, 24)
   var prompts = 0
   var scripted = 0
   var owned = 0
@@ -343,9 +358,9 @@ block:
         p["env"]["PLAYER_PROMPT"].getStr().len > 200)
     if p["env"].hasKey("PLAYER_SCRIPTED"): inc scripted
     if p.hasKey("player"): inc owned
-  checkEq("two LLM champions per year", prompts, 10)
-  checkEq("two scripted baselines per year", scripted, 10)
-  checkEq("each year's champion #2 carries its owning player", owned, 5)
+  checkEq("two LLM champions per year", prompts, 12)
+  checkEq("two scripted baselines per year", scripted, 12)
+  checkEq("each year's champion #2 carries its owning player", owned, 6)
   checkEq("bc26 champion #2 is the second prompt policy",
     policies[1]["player"].getStr(),
     "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
@@ -409,6 +424,27 @@ block:
     "spaark,examplefuncsplayer25")
   check("and neither bc25 filler is a champion",
     not policies[18].hasKey("player") and not policies[19].hasKey("player"))
+  checkEq("bc23 champion #1 is the launcher duel",
+    policies[20]["name"].getStr(), "battlecode-bc23-duel")
+  checkEq("bc23 champion #2 is the island/elixir alchemist",
+    policies[21]["name"].getStr(), "battlecode-bc23-alchemist")
+  checkEq("and bc23 champion #2 carries its owning player",
+    policies[21]["player"].getStr(),
+    "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
+  check("the two bc23 champion prompts differ",
+    policies[20]["env"]["PLAYER_PROMPT"].getStr() !=
+    policies[21]["env"]["PLAYER_PROMPT"].getStr())
+  check("bc23 champion #1 is the launcher-tempo pole",
+    policies[20]["env"]["PLAYER_PROMPT"].getStr().contains("launcher_rush"))
+  check("and champion #2 the island/elixir pole",
+    policies[21]["env"]["PLAYER_PROMPT"].getStr().contains(
+      "accelerating_anchors"))
+  checkEq("the bc23 fillers name the two published chassis",
+    policies[22]["env"]["PLAYER_SCRIPTED"].getStr() & "," &
+    policies[23]["env"]["PLAYER_SCRIPTED"].getStr(),
+    "lemonade,examplefuncsplayer23")
+  check("and neither bc23 filler is a champion",
+    not policies[22].hasKey("player") and not policies[23].hasKey("player"))
   check("the two bc21 champion prompts differ",
     policies[8]["env"]["PLAYER_PROMPT"].getStr() !=
     policies[9]["env"]["PLAYER_PROMPT"].getStr())

@@ -27,6 +27,8 @@ type
     blExamplefuncsplayer24 = "examplefuncsplayer24"
     blSpaark = "spaark"
     blExamplefuncsplayer25 = "examplefuncsplayer25"
+    blLemonade = "lemonade"
+    blExamplefuncsplayer23 = "examplefuncsplayer23"
 
 proc defaultBaselineFor*(year: string): Baseline =
   ## A seat that says nothing useful plays the year's STRONG published
@@ -36,6 +38,7 @@ proc defaultBaselineFor*(year: string): Baseline =
   of yBc21: blCaliforniaRoll
   of yBc24: blGoneSharkin
   of yBc25: blSpaark
+  of yBc23: blLemonade
   of yBc26: blAwu
 
 proc baselineFor*(year, name: string): Baseline =
@@ -62,6 +65,11 @@ proc baselineFor*(year, name: string): Baseline =
     of "scaffold", "examplefuncsplayer", "examplefuncsplayer25", "example":
       blExamplefuncsplayer25
     else: blSpaark
+  of yBc23:
+    case key
+    of "scaffold", "examplefuncsplayer", "examplefuncsplayer23", "example":
+      blExamplefuncsplayer23
+    else: blLemonade
   of yBc26:
     case key
     of "scaffold", "examplefuncsplayer", "example": blScaffold
@@ -96,6 +104,8 @@ proc baselineChassis*(kind: Baseline): ScriptedChassis =
   of blExamplefuncsplayer24: scExamplefuncsplayer24
   of blSpaark: scSpaark
   of blExamplefuncsplayer25: scExamplefuncsplayer25
+  of blLemonade: scLemonade
+  of blExamplefuncsplayer23: scExamplefuncsplayer23
   of blAwu: scAwu
 
 proc baselineReply*(kind: Baseline): string =
@@ -166,6 +176,19 @@ proc baselineReply*(kind: Baseline): string =
                  "splash_targets":"mixed","upgrade_policy":"money_first"},
         "notes":"default spaark doctrine",
         "motto":"Paint it and hold it."}"""
+  of blLemonade, blExamplefuncsplayer23:
+    ## The all-defaults bc23 sheet, which is ALSO the fallback sheet
+    ## §Decisions prints verbatim. `examplefuncsplayer23` reads no knob, so it
+    ## answers with the same sheet: the chassis, not the sheet, is what makes
+    ## it the weak floor (D1).
+    """{"sheet":{"opening":"balanced","launcher_ratio":45,
+                 "well_priority":"balanced","elixir_tech":"mid",
+                 "elixir_spend":"accelerating_anchors",
+                 "anchor_round":400,"anchor_budget":35,
+                 "island_priority":"nearest","amplifier_use":"one",
+                 "destabilizer_use":"defend",
+                 "retreat_on_launcher_loss":"regroup","carrier_throw":25},
+        "notes":"default lemonade doctrine","motto":"Anchor the sky."}"""
 
 proc baselineSheet*(year: string, kind: Baseline): Sheet =
   result = parseReply(baselineReply(kind), year)

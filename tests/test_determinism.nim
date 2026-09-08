@@ -311,6 +311,30 @@ block:
       $parseScriptedChassis("examplefuncsplayer25"), "examplefuncsplayer25")
     checkEq("as does the strong one", $parseScriptedChassis("spaark"),
       "spaark")
+  block:
+    ## And one year on again, six years wide: a foreign chassis name on a
+    ## bc23 game plays `lemonade` rather than nothing.
+    let s23 = [baselineSheet("bc23", blLemonade),
+               baselineSheet("bc23", blLemonade)]
+    let strong23 = playGameFor("bc23", "Quiet", s23,
+      [scLemonade, scLemonade], 0, 0, 220, 0)[0]
+    let foreign23 = playGameFor("bc23", "Quiet", s23,
+      [scSpaark, scAwu], 0, 0, 220, 0)[0]
+    checkEq("a foreign chassis name on a bc23 game plays lemonade",
+      foreign23.hashChain, strong23.hashChain)
+    checkEq("and the bc23 chassis strings round-trip",
+      $parseScriptedChassis("examplefuncsplayer23"), "examplefuncsplayer23")
+    checkEq("as does the strong one", $parseScriptedChassis("lemonade"),
+      "lemonade")
+    ## Same seed and same sheets, twice in one process.
+    let again23 = playGameFor("bc23", "Quiet", s23,
+      [scLemonade, scLemonade], 0, 0, 220, 0)[0]
+    checkEq("bc23 is deterministic in one process", again23.hashChain,
+      strong23.hashChain)
+    checkEq("down to the per-round chain", again23.roundChains,
+      strong23.roundChains)
+  checkEq("for bc23 the strong chassis is lemonade",
+    $strongChassisFor("bc23"), "lemonade")
   checkEq("for bc25 the strong chassis is spaark", $strongChassisFor("bc25"),
     "spaark")
   checkEq("a recorded chassis string round-trips",

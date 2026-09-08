@@ -3220,6 +3220,167 @@ html[data-year="bc25"] .beat-marker.end      { background: #ffffff; }
   #bc25-towers { bottom: calc(var(--band, 0px) + 66px); }
   #bc25-doctrines { max-width: 88%; font-size: 10px; }
 }
+
+/* ========================================================================
+   BC23 additions to the inherited cogame-battlecode chrome
+   ------------------------------------------------------------------------
+   The game block for the `bc23` year. Everything above this banner is the
+   page as it shipped for `bc26`, `bc20`, `bc21`, `bc24` and `bc25`. NOTHING
+   is removed and no existing id is reused for a different purpose: every id
+   below is new and `#bc23-` prefixed, and the six blocks are switched by ONE
+   attribute — `document.documentElement.dataset.year`, set from the replay
+   header — plus the rules right here. `#viewpanel` is KEPT: the `bc23`
+   variant's pool tops out at 60x30 and the reserved large pool at 60x60, so
+   the native 16 px-per-tile render is 480–960 px wide against a 360 px
+   featured-match frame, where a 60-wide board would give 6.0 px per tile.
+   ======================================================================== */
+html[data-year="bc23"] #coopchip,
+html[data-year="bc23"] #bars,
+html[data-year="bc23"] #econ,
+html[data-year="bc23"] #doctrines,
+html[data-year="bc23"] #bc20-flood,
+html[data-year="bc23"] #bc20-soup,
+html[data-year="bc23"] #bc20-units,
+html[data-year="bc23"] #bc20-doctrines,
+html[data-year="bc23"] #bc20-doctrines-toggle,
+html[data-year="bc23"] #bc20-chain,
+html[data-year="bc23"] #bc21-votes,
+html[data-year="bc23"] #bc21-influence,
+html[data-year="bc23"] #bc21-units,
+html[data-year="bc23"] #bc21-doctrines,
+html[data-year="bc23"] #bc21-doctrines-toggle,
+html[data-year="bc23"] #bc21-bids,
+html[data-year="bc23"] #bc24-flags,
+html[data-year="bc23"] #bc24-crumbs,
+html[data-year="bc23"] #bc24-levels,
+html[data-year="bc23"] #bc24-doctrines,
+html[data-year="bc23"] #bc24-doctrines-toggle,
+html[data-year="bc23"] #bc24-traps,
+html[data-year="bc23"] #bc25-coverage,
+html[data-year="bc23"] #bc25-towers,
+html[data-year="bc23"] #bc25-econ,
+html[data-year="bc23"] #bc25-doctrines,
+html[data-year="bc23"] #bc25-doctrines-toggle,
+html[data-year="bc23"] #bc25-srp { display: none !important; }
+
+html:not([data-year="bc23"]) #bc23-islands,
+html:not([data-year="bc23"]) #bc23-econ,
+html:not([data-year="bc23"]) #bc23-units,
+html:not([data-year="bc23"]) #bc23-doctrines,
+html:not([data-year="bc23"]) #bc23-doctrines-toggle,
+html:not([data-year="bc23"]) #bc23-tempest { display: none !important; }
+
+/* THE HEADLINE READOUT AND THE YEAR'S WHOLE STORY: a two-sided island tally
+   with the conquest threshold marked, the neutral count, and a health pip per
+   held island that empties as an anchor is ground down. It sits in the same
+   top-centre pill slot bc20 uses for its flood gauge and bc25 for its
+   coverage bar, ABOVE the board area and never inside the transport band. */
+#bc23-islands {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(var(--topband, 0px) + 6px);
+  display: flex; align-items: center; gap: 7px;
+  font: 600 11px/1.1 var(--mono); color: #d9cdb8;
+  background: rgba(12, 14, 20, .78); border: 1px solid #2a3342;
+  border-radius: 999px; padding: 4px 10px; z-index: 6; white-space: nowrap;
+  pointer-events: none;
+}
+#bc23-islands.flash { animation: bc23flash .9s ease-out 1; }
+@keyframes bc23flash {
+  0% { box-shadow: 0 0 0 0 rgba(143, 212, 143, .8); }
+  100% { box-shadow: 0 0 0 14px rgba(143, 212, 143, 0); }
+}
+#bc23-islands .ash { color: #7fb2e8; }
+#bc23-islands .basil { color: #e0523a; }
+#bc23-islands .pips { letter-spacing: .08em; }
+#bc23-islands .towin { color: #b6a892; }
+#bc23-islands .neutral { color: #6f6558; }
+
+/* The two stat boxes. BOTH ARE IN relayout()'s --statrail SET, so #killfeed
+   is lifted above them at every width and both zooms. */
+#bc23-econ, #bc23-units {
+  position: absolute; right: 8px;
+  width: min(300px, 46vw);
+  font: 500 10px/1.35 var(--mono); color: #cdbfa6;
+  background: rgba(12, 14, 20, .74); border: 1px solid #2a3342;
+  border-radius: 6px; padding: 5px 7px; z-index: 5; pointer-events: none;
+}
+#bc23-units { bottom: calc(var(--band, 0px) + 76px); }
+#bc23-econ { bottom: calc(var(--band, 0px) + 8px); }
+#bc23-econ .row, #bc23-units .row {
+  display: flex; gap: 6px; align-items: baseline; white-space: nowrap;
+  overflow: hidden;
+}
+#bc23-econ .who, #bc23-units .who {
+  flex: 0 0 auto; min-width: 3.2em; color: #f2e8d8;
+}
+#bc23-econ .ad { color: #d8a44a; }
+#bc23-econ .mn { color: #7fb2e8; }
+#bc23-econ .ex { color: #b98ad0; }
+#bc23-econ .prog { color: #8fd48f; }
+#bc23-units .lau { color: #e0523a; font-weight: 700; }
+#bc23-units .car { color: #d8a44a; }
+#bc23-units .anc { color: #8fd48f; }
+#bc23-units .lbl { color: #8b8375; }
+
+/* The doctrine overlay (D3): DISMISSIBLE, with a close control, an Escape
+   binding, a re-open chip and self-dismissal on the first advance. It sits
+   above the board area and NEVER inside the transport band. */
+#bc23-doctrines {
+  position: absolute; left: 8px; right: 8px;
+  top: calc(var(--topband, 0px) + 34px);
+  max-height: calc(100% - var(--topband, 0px) - var(--band, 0px) - 46px);
+  overflow: auto;
+  font: 500 11px/1.4 var(--mono); color: #d9cdb8;
+  background: rgba(10, 12, 18, .9); border: 1px solid #2a3342;
+  border-radius: 8px; padding: 8px 26px 8px 10px; z-index: 8;
+}
+#bc23-doctrines.dismissed { display: none !important; }
+#bc23-doctrines-close {
+  position: absolute; top: 3px; right: 6px;
+  background: none; border: 0; color: #b6a892; cursor: pointer;
+  font: 700 15px/1 var(--mono); padding: 2px 4px;
+}
+#bc23-doctrines-close:hover { color: #fff; }
+#bc23-doctrines .dline { margin-bottom: 6px; }
+#bc23-doctrines .dname { color: #f2e8d8; font-weight: 700; }
+#bc23-doctrines .dfall { color: #e0523a; }
+
+/* The endcard war panel. Nothing about islands, anchors, resources or tempo
+   is stored in the replay: the wasm sim re-derives every round. */
+#bc23-tempest {
+  margin-top: 8px; font: 500 11px/1.45 var(--mono);
+  color: #d9cdb8; max-height: 30vh; overflow: auto;
+}
+#bc23-tempest .clan b { color: #f0d070; }
+
+/* Beat markers, EVERY ONE scoped to html[data-year="bc23"] so none of them
+   can restyle another year's marker of the same name (`build`, `game`,
+   `rout`, `doctrine` and `end` already exist for other years). TWELVE kinds,
+   and `tests/test_bc23_beats.nim` asserts that the COMMITTED FIXTURE REPLAY
+   emits every one of them — emission, label and style, all three. */
+html[data-year="bc23"] .beat-marker.doctrine    { background: #9a8ad0; }
+html[data-year="bc23"] .beat-marker.game        { background: #b6a892; }
+html[data-year="bc23"] .beat-marker.build       { background: #7fb2e5; }
+html[data-year="bc23"] .beat-marker.anchor      { background: #8fd48f; }
+html[data-year="bc23"] .beat-marker.island      { background: #f0d070; }
+html[data-year="bc23"] .beat-marker.conquest    { background: #ffb347; width: 3px; }
+html[data-year="bc23"] .beat-marker.elixir      { background: #b98ad0; }
+html[data-year="bc23"] .beat-marker.boost       { background: #ffc46a; }
+html[data-year="bc23"] .beat-marker.destabilize { background: #6ac4ff; }
+html[data-year="bc23"] .beat-marker.duel        { background: #e0523a; width: 3px; }
+html[data-year="bc23"] .beat-marker.rout        { background: #c0392b; width: 3px; }
+html[data-year="bc23"] .beat-marker.end         { background: #ffffff; }
+
+@media (max-width: 640px) {
+  /* 360 px is the featured-match iframe width and the width this page is
+     checked at. The boxes drop their word labels to glyphs. */
+  #bc23-islands { font-size: 10px; gap: 5px; }
+  #bc23-islands .towin, #bc23-islands .neutral { display: none; }
+  #bc23-econ, #bc23-units { font-size: 9px; }
+  #bc23-econ .who, #bc23-units .who { min-width: 2.6em; }
+  #bc23-econ .prog, #bc23-units .lbl { display: none; }
+}
+
 </style>
 </head>
 <body>
@@ -3265,6 +3426,9 @@ html[data-year="bc25"] .beat-marker.end      { background: #ffffff; }
                   title="Show the doctrines">doctrines</button>
           <button type="button" id="bc24-doctrines-toggle" hidden
                   title="Show doctrines">doctrines</button>
+          <!-- BC23: re-opens #bc23-doctrines after it has been dismissed. -->
+          <button type="button" id="bc23-doctrines-toggle" hidden
+                  title="Show the doctrines">doctrines</button>
         </div>
       </div>
 
@@ -3349,6 +3513,17 @@ html[data-year="bc25"] .beat-marker.end      { background: #ffffff; }
       <div id="bc25-doctrines-body"></div>
     </div>
 
+    <!-- BC23 additions to the inherited cogame-battlecode chrome -->
+    <div id="bc23-islands"></div>
+    <div id="bc23-units"></div>
+    <div id="bc23-econ"></div>
+    <div id="bc23-doctrines" role="region" aria-label="Doctrines">
+      <button type="button" id="bc23-doctrines-close"
+              aria-label="Dismiss doctrines" title="Dismiss doctrines (Esc)"
+              >&times;</button>
+      <div id="bc23-doctrines-body"></div>
+    </div>
+
     <!-- BC24 additions to the inherited cogame-battlecode chrome -->
     <div id="bc24-flags"></div>
     <div id="bc24-levels"></div>
@@ -3409,6 +3584,10 @@ html[data-year="bc25"] .beat-marker.end      { background: #ffffff; }
       <div id="bc24-traps"></div>
       <!-- BC25 additions to the inherited cogame-battlecode chrome -->
       <div id="bc25-srp"></div>
+      <!-- BC23: the war panel. Nothing about islands, anchors, resources or
+           tempo is stored in the replay -- the wasm sim re-derives every
+           round. -->
+      <div id="bc23-tempest"></div>
       <div class="ec-replay" id="ec-replay"></div>
     </div>
   </div>
@@ -4655,6 +4834,296 @@ html[data-year="bc25"] .beat-marker.end      { background: #ffffff; }
 })();
 </script>
 
+<!-- ======================================================================
+     BC23 additions to the inherited cogame-battlecode chrome
+     ----------------------------------------------------------------------
+     The game block for the `bc23` year. It registers itself on
+     `window.Bc23Block` BEFORE the inherited block runs, and the inherited
+     block calls into it: two lines there, everything else here. No function
+     name in this file collides with `chrome_common.js`, with the bc26 block
+     or with the bc20, bc21, bc24 and bc25 ones -- the beat builder is
+     `buildBc23BeatButtons`, never `markBeat` (the tandem 2026-08-23 hoisting
+     collision), never `buildBeatButtons` (bc26), and never
+     `buildBc20BeatButtons`, `buildBc21BeatButtons`, `buildBc24BeatButtons`
+     or `buildBc25BeatButtons`.
+     ====================================================================== -->
+<script>
+(function () {
+  'use strict';
+
+  var api = null;                    // {C, send, seek, dismissEndcard}
+  var beatsBuilt = false;
+  var beatEls = [];
+  var dismissed = false;
+  var pinned = false;                // the viewer opened it themselves
+  var lastFrame = -1;
+  var lastHeld = [-1, -1];
+  var feedShown = {};
+
+  function $(id) { return document.getElementById(id); }
+  function esc(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ---- the dismissible doctrine overlay (D3) ---------------------------
+  function setDoctrinesOpen(open) {
+    dismissed = !open;
+    var panel = $('bc23-doctrines');
+    var chip = $('bc23-doctrines-toggle');
+    if (panel) panel.classList.toggle('dismissed', dismissed);
+    if (chip) chip.hidden = !dismissed;
+  }
+
+  function wireDoctrines() {
+    var close = $('bc23-doctrines-close');
+    if (close) {
+      close.addEventListener('click', function (event) {
+        event.stopPropagation();
+        pinned = false;
+        setDoctrinesOpen(false);
+      });
+    }
+    var chip = $('bc23-doctrines-toggle');
+    if (chip) {
+      chip.addEventListener('click', function (event) {
+        event.stopPropagation();
+        // A panel the viewer opened by hand STAYS open -- that is their
+        // choice, not a lid the page left on the board.
+        pinned = true;
+        setDoctrinesOpen(true);
+      });
+    }
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape' && event.key !== 'Esc') return;
+      if (document.documentElement.getAttribute('data-year') !== 'bc23') return;
+      pinned = false;
+      setDoctrinesOpen(false);
+    });
+    // The viewer who never presses play still gets the board back.
+    setTimeout(function () {
+      if (!pinned) setDoctrinesOpen(false);
+    }, 6000);
+  }
+
+  // ---- beats ------------------------------------------------------------
+  function buildBc23BeatButtons(s) {
+    if (beatsBuilt || !s.beats || !s.beats.length) return;
+    beatsBuilt = true;
+    var scrub = $('scrub');
+    var span = Math.max(1, (s.mx || 1) - (s.st || 0));
+    s.beats.forEach(function (b) {
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'beat-marker ' + (b.k || 'game');
+      el.style.left =
+        (Math.min(1, Math.max(0, (b.t - (s.st || 0)) / span)) * 100) + '%';
+      el.setAttribute('aria-label', b.label || b.k);
+      el.title = b.label || b.k;
+      el.__tick = b.t;
+      el.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (api) api.seek(b.t / span);
+      });
+      if (scrub && scrub.parentNode) scrub.parentNode.appendChild(el);
+      beatEls.push(el);
+    });
+  }
+
+  function applyBc23BeatSpoilers(s) {
+    if (!beatEls.length) return;
+    var show = !!s.sp0 || s.ph === 'gameover';
+    beatEls.forEach(function (el) {
+      el.style.visibility = (show || el.__tick <= s.t) ? 'visible' : 'hidden';
+    });
+  }
+
+  // ---- the islands pill --------------------------------------------------
+  function pips(n, glyph) {
+    var out = '';
+    for (var i = 0; i < Math.min(n, 9); i++) out += glyph;
+    return out || '\u00b7';
+  }
+
+  function renderIslands(s) {
+    var box = $('bc23-islands');
+    var isl = s.bc23_islands;
+    if (!box || !isl) return;
+    var a = isl.factions[0];
+    var b = isl.factions[1];
+    // A health pip per HELD island, emptying as its anchor is ground down.
+    function health(faction) {
+      var out = '';
+      (faction.pips || []).slice(0, 9).forEach(function (p) {
+        out += ['\u25cb', '\u25d4', '\u25d1', '\u25d5', '\u25cf'][
+          Math.max(0, Math.min(4, p.pips))];
+      });
+      return out || '\u00b7';
+    }
+    box.innerHTML =
+      '<span class="ash">ASH ' + a.held + '</span>' +
+      '<span class="pips">' + health(a) + '</span>' +
+      '<span class="towin">/ ' + isl.islands_to_win + ' to win</span>' +
+      '<span class="pips">' + health(b) + '</span>' +
+      '<span class="basil">' + b.held + ' BASIL</span>' +
+      '<span class="neutral">\u00b7 ' + isl.neutral + ' neutral of ' +
+        isl.islands + '</span>';
+    // It flashes when either side captures or loses one.
+    var flash = false;
+    [a, b].forEach(function (faction, i) {
+      if (lastHeld[i] >= 0 && faction.held !== lastHeld[i]) flash = true;
+      lastHeld[i] = faction.held;
+    });
+    if (flash) {
+      box.classList.remove('flash');
+      void box.offsetWidth;
+      box.classList.add('flash');
+    }
+  }
+
+  // ---- the two stat boxes ------------------------------------------------
+  function renderEcon(s) {
+    var box = $('bc23-econ');
+    var econ = s.bc23_econ;
+    if (!box || !econ) return;
+    var html = '';
+    econ.factions.forEach(function (faction) {
+      html += '<div class="row"><span class="who">' + esc(faction.alias) +
+        '</span>' +
+        '<span class="ad">\u25c6' + faction.adamantium + '</span>' +
+        '<span class="mn">\u25c7' + faction.mana + '</span>' +
+        '<span class="ex">\u2726' + faction.elixir + '</span>' +
+        '<span class="prog">\u2191' + faction.banked + ' banked \u00b7 ' +
+          faction.cargo + ' in flight</span>' +
+        '<span class="lbl">' + faction.wells_transformed + '\u2192Ex \u00b7 ' +
+          faction.wells_upgraded + '\u00d73</span></div>';
+    });
+    html += '<div class="row"><span class="who">wells</span><span>' +
+      econ.wells + ' worked \u00b7 ' + econ.wells_upgraded +
+      ' upgraded \u00b7 ' + econ.elixir_wells + ' elixir</span></div>';
+    box.innerHTML = html;
+  }
+
+  function renderUnits(s) {
+    var box = $('bc23-units');
+    var rows = s.bc23_units;
+    if (!box || !rows) return;
+    var html = '';
+    rows.forEach(function (faction) {
+      html += '<div class="row"><span class="who">' + esc(faction.alias) +
+        '</span>' +
+        '<span class="lau">\u2694' + faction.launchers + '</span>' +
+        '<span class="car">\u26c1' + faction.carriers + '</span>' +
+        '<span>\u25b3' + faction.amplifiers + '</span>' +
+        '<span>\u2739' + faction.destabilizers + '</span>' +
+        '<span>\u2748' + faction.boosters + '</span>' +
+        '<span class="anc">\u2693' + faction.anchors_in_stock + '</span>' +
+        '<span class="lbl">lost ' + faction.lost + '</span></div>';
+    });
+    box.innerHTML = html;
+  }
+
+  // ---- the doctrines, in plain words -------------------------------------
+  function renderDoctrines(s) {
+    var body = $('bc23-doctrines-body');
+    if (!body || !s.doctrines) return;
+    var html = '';
+    s.doctrines.forEach(function (seat) {
+      html += '<div class="dline"><span class="dname">' + esc(seat.alias) +
+        '</span> \u2014 ' + esc(seat.name || '') +
+        (seat.fallback ? ' <span class="dfall">[fallback: ' +
+          esc(seat.fallback) + ']</span>' : '') +
+        '<br>' + esc((seat.words || []).join(' \u00b7 ')) +
+        (seat.notes ? '<br><i>' + esc(seat.notes) + '</i>' : '') +
+        '</div>';
+    });
+    body.innerHTML = html;
+  }
+
+  // ---- the killfeed ------------------------------------------------------
+  function renderFeed(s) {
+    var feed = $('killfeed');
+    if (!feed || !s.beats) return;
+    var show = !!s.sp0 || s.ph === 'gameover';
+    var lines = [];
+    s.beats.forEach(function (b) {
+      if (!show && b.t > s.t) return;
+      lines.push('<div class="kf ' + (b.k || 'game') + '">' +
+        esc(b.label || b.k) + '</div>');
+    });
+    var html = lines.slice(-8).join('');
+    if (feedShown.html !== html) {
+      feedShown.html = html;
+      feed.innerHTML = html;
+    }
+  }
+
+  // ---- the endcard war panel ---------------------------------------------
+  function renderEndcardExtras(s) {
+    var panel = $('bc23-tempest');
+    var war = s.bc23_war;
+    if (!panel || !war) return;
+    var html = '';
+    war.forEach(function (faction) {
+      var d = faction.damage || {};
+      html += '<div class="clan"><b>' + esc(faction.alias) + '</b> \u2014 ' +
+        'islands ' + faction.islands_captured + ' captured / ' +
+        faction.islands_lost + ' lost / ' + faction.islands_held +
+        ' held at the end, ' + faction.rounds_holding + ' rounds holding one' +
+        '<br>anchors ' + faction.anchors_built + ' built / ' +
+        faction.anchors_placed + ' placed / ' + faction.anchors_lost +
+        ' lost (' + faction.accelerating_anchors + ' accelerating)' +
+        '<br>mined \u25c6' + faction.adamantium_mined + ' \u25c7' +
+        faction.mana_mined + ' \u2726' + faction.elixir_mined +
+        ' \u00b7 banked ' + faction.banked + ' \u00b7 thrown away ' +
+        faction.thrown +
+        '<br>wells ' + faction.wells_transformed + ' transformed / ' +
+        faction.wells_upgraded + ' upgraded' +
+        '<br>built \u26c1' + faction.carriers_built + ' \u2694' +
+        faction.launchers_built + ' \u25b3' + faction.amplifiers_built +
+        ' \u2739' + faction.destabilizers_built + ' \u2748' +
+        faction.boosters_built + ', ' + faction.robots_lost + ' lost' +
+        '<br>damage launcher ' + (d.launcher || 0) + ' / throw ' +
+        (d.throw || 0) + ' / destabiliser ' + (d.destabilizer || 0) +
+        ' / headquarters ' + (d.headquarters || 0) +
+        '<br>anchor healing ' + faction.anchor_heals +
+        ' \u00b7 array writes ' + faction.array_writes +
+        ' \u00b7 current rides ' + faction.current_rides +
+        '</div>';
+    });
+    panel.innerHTML = html;
+  }
+
+  window.Bc23Block = {
+    attach: function (host) {
+      api = host;
+      wireDoctrines();
+    },
+    // True while a bc23 replay is on screen; the inherited block asks before
+    // it draws its own year's readouts.
+    active: function (s) { return s && s.year === 'bc23'; },
+    onFrame: function (s) {
+      if (s.year !== 'bc23') return;
+      buildBc23BeatButtons(s);
+      // The board is where the story is -- so the first frame that advances
+      // the playhead closes the panel, unless the viewer opened it by hand.
+      if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {
+        setDoctrinesOpen(false);
+      }
+      lastFrame = s.t;
+      renderIslands(s);
+      renderEcon(s);
+      renderUnits(s);
+      renderDoctrines(s);
+      renderFeed(s);
+      applyBc23BeatSpoilers(s);
+      renderEndcardExtras(s);
+    }
+  };
+})();
+</script>
+
 <script>
 (function () {
   'use strict';
@@ -4727,6 +5196,16 @@ html[data-year="bc25"] .beat-marker.end      { background: #ffffff; }
   // BC25 HOOK (1 of 2): the same two lines for the fifth year.
   if (window.Bc25Block) {
     window.Bc25Block.attach({
+      C: C,
+      send: send,
+      seek: function (frac) { seek(frac); },
+      dismissEndcard: function () { dismissEndcard(); }
+    });
+  }
+
+  // BC23 HOOK (1 of 2): the same two lines for the sixth year.
+  if (window.Bc23Block) {
+    window.Bc23Block.attach({
       C: C,
       send: send,
       seek: function (frac) { seek(frac); },
@@ -5028,7 +5507,8 @@ html[data-year="bc25"] .beat-marker.end      { background: #ffffff; }
       var railTop = Infinity;
       var railBottom = -Infinity;
       ['econ', 'bc20-soup', 'bc20-units', 'bc21-influence', 'bc21-units',
-       'bc24-crumbs', 'bc24-levels', 'bc25-towers', 'bc25-econ']
+       'bc24-crumbs', 'bc24-levels', 'bc25-towers', 'bc25-econ',
+       'bc23-econ', 'bc23-units']
         .forEach(function (id) {
           var el = document.getElementById(id);
           if (!el || !el.offsetParent) return;
@@ -5158,6 +5638,7 @@ html[data-year="bc25"] .beat-marker.end      { background: #ffffff; }
     var isBc21 = !!(window.Bc21Block && window.Bc21Block.active(s));
     var isBc24 = !!(window.Bc24Block && window.Bc24Block.active(s));
     var isBc25 = !!(window.Bc25Block && window.Bc25Block.active(s));
+    var isBc23 = !!(window.Bc23Block && window.Bc23Block.active(s));
     if (window.Bc20Block) window.Bc20Block.onFrame(s);
     // BC21 HOOK (2 of 2).
     if (window.Bc21Block) window.Bc21Block.onFrame(s);
@@ -5165,7 +5646,9 @@ html[data-year="bc25"] .beat-marker.end      { background: #ffffff; }
     if (window.Bc24Block) window.Bc24Block.onFrame(s);
     // BC25 HOOK (2 of 2).
     if (window.Bc25Block) window.Bc25Block.onFrame(s);
-    if (!isBc20 && !isBc21 && !isBc24 && !isBc25) {
+    // BC23 HOOK (2 of 2).
+    if (window.Bc23Block) window.Bc23Block.onFrame(s);
+    if (!isBc20 && !isBc21 && !isBc23 && !isBc24 && !isBc25) {
       buildBeatButtons(s);
       renderCoop(s);
       renderEcon(s);
@@ -5176,7 +5659,7 @@ html[data-year="bc25"] .beat-marker.end      { background: #ffffff; }
     renderGameChips(s);
     C.renderClock(s);
     C.renderTransport(s);
-    if (!isBc20 && !isBc21 && !isBc24 && !isBc25) applyBeatSpoilers(s);
+    if (!isBc20 && !isBc21 && !isBc23 && !isBc24 && !isBc25) applyBeatSpoilers(s);
     $('clock-caption').textContent = s.ph === 'gameover'
       ? 'Match over'
       : 'game ' + s.game + ' of ' + s.games + ' — ' + s.map;
