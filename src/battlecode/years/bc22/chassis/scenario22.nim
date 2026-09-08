@@ -20,6 +20,17 @@
 ## fired: a scenario bot that agrees bit for bit while doing nothing proves
 ## nothing.
 ##
+## **EVERY QUERY BELOW IS ROBOT-LOCAL, and that is the whole reason the Java
+## twin can exist at all.** A sandboxed robot has a `RobotController`, not a
+## `GameWorld`: it cannot ask for the team's building count, for the enemy's
+## archon list, or for the anomaly cursor. So every scan goes through the
+## `visible` iterator — which is `getAllLocationsWithinRadiusSquared`, i.e. the
+## engine's own x-outer/y-inner walk over the `ceil(sqrt) + 1` box, clamped to
+## the type's vision radius — and the anomaly lookahead goes through
+## `nextScheduled`, which is `rc.getAnomalySchedule()` scanned for the first
+## entry at or after the current round. Anything this file reads that a robot
+## could not read is a defect, not a shortcut.
+##
 ## Four variants, selected by `-d:` switches:
 ##
 ## * `-d:bc22Scenario` — the base script: builder, laboratory prototype and its
@@ -28,131 +39,188 @@
 ##   transform out and back, a sage envisioning each of ABYSS/CHARGE/FURY, a
 ##   shared-array write from a robot with nothing nearby, one square mined to
 ##   zero and another to exactly 1, and one disintegration;
-## * `-d:bc22ScenarioAnnihilate` — walk soldiers onto the enemy's single archon
-##   until `ANNIHILATION` fires;
-## * `-d:bc22ScenarioTie` — mirror both sides so the ladder walks down to
-##   `MORE_LEAD_NET_WORTH` and, on one seed, to `WON_BY_DUBIOUS_REASONS`;
-## * `-d:bc22ScenarioFury` — stand every building up in TURRET mode through a
-##   scheduled FURY so divergence 7's early gold/lead ladder can fire.
+## * `-d:bc22ScenarioAnnihilate` — every soldier homes on the rotational mirror
+##   of its own square until it can see an enemy archon, then kills it, so
+##   `ANNIHILATION` fires and the 20 Au reclaim lands;
+## * `-d:bc22ScenarioTie` — nobody ever attacks, so the ladder walks all the way
+##   down past MORE_ARCHONS and MORE_GOLD_NET_WORTH;
+## * `-d:bc22ScenarioFury` — no transform anywhere, so every building stands in
+##   TURRET mode through every scheduled FURY.
 
 import ../anomaly as simAnomaly
 import ../world, ../economy, ../buildings
 
 export world
 
+const
+  ScenarioDirs = MoveDirs
+    ## `Direction.values()`'s first eight, in the enum's own order. The Java
+    ## twin declares the same eight literals rather than calling
+    ## `Direction.allDirections()`, so neither side depends on the other's
+    ## iteration order by accident.
+
+iterator visible(w: World, r: Robot, r2: int): Loc =
+  ## `rc.getAllLocationsWithinRadiusSquared(rc.getLocation(), r2)`, INCLUDING
+  ## its clamp to the type's vision radius.
+  let clamped = min(r2, RobotSpecs[r.kind].visionRadiusSquared)
+  for l in w.locationsWithinRadiusSquared(r.loc, clamped):
+    yield l
+
+proc nextScheduled(w: World, r: Robot):
+    tuple[has: bool, round: int, kind: AnomalyKind] =
+  ## `rc.getAnomalySchedule()` scanned for the first entry at or after this
+  ## round. A robot cannot see `LiveMap.nextAnomalyIndex`, so the bot may not
+  ## read `w.anomalyCursor`: it re-derives the head from the public schedule.
+  for e in w.map.anomalies:
+    if e.round >= w.currentRound:
+      return (true, e.round, e.kind)
+  (false, 0, anAbyss)
+
+proc buildFirst(w: World, r: Robot, kind: RobotType): bool =
+  for d in ScenarioDirs:
+    if w.canBuildRobot(r, kind, d):
+      w.doBuildRobot(r, kind, d)
+      return true
+  false
+
+proc moveFirst(w: World, r: Robot): bool =
+  for d in ScenarioDirs:
+    if w.canMove(r, d):
+      w.doMove(r, d)
+      return true
+  false
+
+proc seesFriendly(w: World, r: Robot, kind: RobotType): bool =
+  for l in w.visible(r, RobotSpecs[r.kind].actionRadiusSquared):
+    let b = w.getRobot(l)
+    if b != nil and b.team == r.team and b.kind == kind:
+      return true
+  false
+
+proc attackFirst(w: World, r: Robot): bool =
+  for l in w.visible(r, RobotSpecs[r.kind].actionRadiusSquared):
+    if w.canAttack(r, l):
+      w.doAttack(r, l)
+      return true
+  false
+
 proc scenarioArchon(w: World, r: Robot) =
   let round = w.currentRound
   ## Rounds 1-3: one miner each way, so there is an economy at all.
   if round <= 3:
-    for d in MoveDirs:
-      if w.canBuildRobot(r, rtMiner, d):
-        w.doBuildRobot(r, rtMiner, d)
-        return
-    return
-  ## Round 4: the builder, which is what unlocks every building path.
-  if round == 4:
-    for d in MoveDirs:
-      if w.canBuildRobot(r, rtBuilder, d):
-        w.doBuildRobot(r, rtBuilder, d)
-        return
+    discard w.buildFirst(r, rtMiner)
     return
   when defined(bc22ScenarioAnnihilate):
     ## Every soldier the lead allows, for the annihilation run.
-    for d in MoveDirs:
-      if w.canBuildRobot(r, rtSoldier, d):
-        w.doBuildRobot(r, rtSoldier, d)
-        return
+    discard w.buildFirst(r, rtSoldier)
     return
-  ## Rounds 5-40: soldiers, so the board is not empty.
+  ## Rounds 4-12: THE BUILDER, which is what unlocks every building path —
+  ## retried until one exists, not attempted once. Measured: on `maze`,
+  ## `turtle` and `vortex` the archon's square carries enough rubble that its
+  ## action cooldown lands on round 4, a single attempt missed, and those three
+  ## maps then ran 2000 rounds with no builder, no laboratory, no watchtower,
+  ## no gold and no sage — i.e. Tier A′ proving nothing on three of eight maps.
+  if round <= 12:
+    if not w.seesFriendly(r, rtBuilder):
+      if w.buildFirst(r, rtBuilder): return
+    discard w.buildFirst(r, rtSoldier)
+    return
+  ## Rounds 13-40: soldiers, so the board is not empty.
   if round <= 40:
-    for d in MoveDirs:
-      if w.canBuildRobot(r, rtSoldier, d):
-        w.doBuildRobot(r, rtSoldier, d)
-        return
+    discard w.buildFirst(r, rtSoldier)
     return
-  ## A sage the moment 20 gold exists — the only unit that can envision.
-  if w.teamGold(r.team) >= RobotSpecs[rtSage].buildCostGold:
-    for d in MoveDirs:
-      if w.canBuildRobot(r, rtSage, d):
-        w.doBuildRobot(r, rtSage, d)
-        return
-  ## Rounds 300-303: transform out to PORTABLE, move two squares, transform
-  ## back — proving exactly ONE counter is charged each time.
+  ## ONE PASS over the action radius, answering both questions this script
+  ## asks of it: is there already a sage, and what is the first damaged
+  ## friendly droid. Two scans of a radius-20 box cost the ARCHON 28-36 % of
+  ## its 20 000 bytecodes on the Java side — measured — and the whole point of
+  ## this bot is a 25 % ceiling.
+  var sageSeen = false
+  var damaged = loc(-1, -1)
+  for l in w.visible(r, RobotSpecs[rtArchon].actionRadiusSquared):
+    let b = w.getRobot(l)
+    if b == nil or b.team != r.team: continue
+    if b.kind == rtSage: sageSeen = true
+    if damaged.x < 0 and not b.kind.isBuilding() and
+       b.health < maxHealthOf(b.kind, b.level):
+      damaged = l
+  ## ONE sage, and only one — the only unit that can envision. The uncapped
+  ## form was measured to spend every gold the laboratory ever made: 1 722
+  ## sage-rounds on `chalice`, a team gold that never rose above 20 for long,
+  ## and therefore NO level-3 (gold) mutation anywhere in 32 whole games. A
+  ## sage costs 20 Au and a level-3 mutation costs gold too, and the scenario
+  ## has to fund both.
+  if not sageSeen and
+     w.teamGold(r.team) >= RobotSpecs[rtSage].buildCostGold:
+    if w.buildFirst(r, rtSage): return
+  ## Round 300: transform out to PORTABLE; rounds 301-319 move; round 320
+  ## onwards transform back — proving exactly ONE counter is charged each time.
+  ## THE RETURN WINDOW IS OPEN-ENDED ON PURPOSE. A three-round window (300 out,
+  ## 301-302 move, 303 back) was measured to leave the archon PORTABLE FOR EVER
+  ## on all eight maps: the transform cooldown is the type's movement cooldown
+  ## scaled by rubble, so `canTransform` was still false on round 303, the
+  ## archon never came back, never built again, and no sage — and therefore no
+  ## envision — existed in the whole run.
   when not defined(bc22ScenarioFury):
     if round == 300 and r.mode == rmTurret and w.canTransform(r):
       w.doTransform(r)
       return
-    if round in 301 .. 302 and r.mode == rmPortable:
-      for d in MoveDirs:
-        if w.canMove(r, d):
-          w.doMove(r, d)
-          return
+    if round in 301 .. 319 and r.mode == rmPortable:
+      discard w.moveFirst(r)
       return
-    if round == 303 and r.mode == rmPortable and w.canTransform(r):
-      w.doTransform(r)
+    if round >= 320 and r.mode == rmPortable:
+      if w.canTransform(r):
+        w.doTransform(r)
       return
-  ## Otherwise: repair the weakest friendly droid in range, and write the round
-  ## number to the shared array (free in this year, and legal with nothing
-  ## nearby — which is illegal in 2023).
+  ## Otherwise: write the round number to the shared array (free in this year,
+  ## and legal with nothing nearby — which is illegal in 2023), then repair the
+  ## first damaged friendly droid in range.
   discard w.writeSharedArray(r, 0, round mod (MaxSharedArrayValue + 1))
-  for l in w.locationsWithinRadiusSquared(
-      r.loc, RobotSpecs[rtArchon].actionRadiusSquared):
-    let b = w.getRobot(l)
-    if b != nil and b.team == r.team and not b.kind.isBuilding() and
-       b.health < b.maxHealth() and w.canRepair(r, l):
-      w.doRepair(r, l)
-      return
-  for d in MoveDirs:
-    if w.canBuildRobot(r, rtSoldier, d):
-      w.doBuildRobot(r, rtSoldier, d)
-      return
+  if damaged.x >= 0 and w.canRepair(r, damaged):
+    w.doRepair(r, damaged)
+    return
+  discard w.buildFirst(r, rtSoldier)
 
 proc scenarioBuilder(w: World, r: Robot) =
-  ## Finish anything unfinished FIRST — ten repairs for a laboratory, fifteen
-  ## for a watchtower — then mutate, then place the next building.
-  for l in w.locationsWithinRadiusSquared(
-      r.loc, RobotSpecs[rtBuilder].actionRadiusSquared):
-    let b = w.getRobot(l)
-    if b != nil and b.team == r.team and b.mode == rmPrototype and
-       w.canRepair(r, l):
-      w.doRepair(r, l)
-      return
-  for l in w.locationsWithinRadiusSquared(
-      r.loc, RobotSpecs[rtBuilder].actionRadiusSquared):
-    let b = w.getRobot(l)
-    if b != nil and b.team == r.team and b.kind.isBuilding() and
-       w.canMutate(r, l):
-      w.doMutate(r, l)
-      return
+  ## ONE PASS over the action radius, collecting the first square of each
+  ## category and the building census at the same time. The three-scan form
+  ## this replaces peaked at 58 % of the BUILDER's 7 500 bytecodes on the Java
+  ## side — measured — and the whole point of this bot is that it can never be
+  ## cut off mid-turn.
+  var proto = loc(-1, -1)
+  var mutable = loc(-1, -1)
+  var damaged = loc(-1, -1)
   var labs = 0
   var towers = 0
-  for _, b in w.robotsById:
-    if b.team != r.team: continue
+  for l in w.visible(r, RobotSpecs[rtBuilder].actionRadiusSquared):
+    let b = w.getRobot(l)
+    if b == nil or b.team != r.team: continue
     if b.kind == rtLaboratory: labs += 1
     elif b.kind == rtWatchtower: towers += 1
+    if proto.x < 0 and b.mode == rmPrototype: proto = l
+    if not b.kind.isBuilding(): continue
+    if mutable.x < 0 and w.canMutate(r, l): mutable = l
+    if damaged.x < 0 and b.health < maxHealthOf(b.kind, b.level): damaged = l
+  ## Finish anything unfinished FIRST — ten repairs for a laboratory, fifteen
+  ## for a watchtower — then mutate, then place the next one, then top up a
+  ## finished building.
+  if proto.x >= 0 and w.canRepair(r, proto):
+    w.doRepair(r, proto)
+    return
+  if mutable.x >= 0:
+    w.doMutate(r, mutable)
+    return
   if labs == 0:
-    for d in MoveDirs:
-      if w.canBuildRobot(r, rtLaboratory, d):
-        w.doBuildRobot(r, rtLaboratory, d)
-        return
+    if w.buildFirst(r, rtLaboratory): return
   elif towers < 2:
-    for d in MoveDirs:
-      if w.canBuildRobot(r, rtWatchtower, d):
-        w.doBuildRobot(r, rtWatchtower, d)
-        return
-  for l in w.locationsWithinRadiusSquared(
-      r.loc, RobotSpecs[rtBuilder].actionRadiusSquared):
-    let b = w.getRobot(l)
-    if b != nil and b.team == r.team and b.kind.isBuilding() and
-       b.health < b.maxHealth() and w.canRepair(r, l):
-      w.doRepair(r, l)
-      return
+    if w.buildFirst(r, rtWatchtower): return
+  if damaged.x >= 0 and w.canRepair(r, damaged):
+    w.doRepair(r, damaged)
 
 proc scenarioMiner(w: World, r: Robot) =
   ## One square is mined to ZERO and another to EXACTLY ONE, so the next
   ## multiple of twenty proves that only the second regenerates.
   var first = true
-  for l in w.locationsWithinRadiusSquared(r.loc, 2):
+  for l in w.visible(r, RobotSpecs[rtMiner].actionRadiusSquared):
     while w.canMineGold(r, l):
       w.doMineGold(r, l)
     let floorAt = if first: 0 else: 1
@@ -160,34 +228,28 @@ proc scenarioMiner(w: World, r: Robot) =
     while w.getLead(l) > floorAt and w.canMineLead(r, l):
       w.doMineLead(r, l)
   if r.canMoveCooldown():
-    for d in MoveDirs:
-      if w.canMove(r, d):
-        w.doMove(r, d)
-        return
+    discard w.moveFirst(r)
 
 proc scenarioSoldier(w: World, r: Robot) =
-  for l in w.locationsWithinRadiusSquared(
-      r.loc, RobotSpecs[rtSoldier].actionRadiusSquared):
-    if w.canAttack(r, l):
-      w.doAttack(r, l)
-      return
+  when defined(bc22ScenarioTie):
+    ## The tie run never attacks: the ladder has to walk all the way down.
+    if r.canMoveCooldown():
+      discard w.moveFirst(r)
+    return
+  if w.attackFirst(r): return
   when defined(bc22ScenarioAnnihilate):
-    ## Walk at the enemy's archon and keep hitting it.
-    var target = loc(-1, -1)
-    for _, b in w.robotsById:
-      if b.team != r.team and b.kind == rtArchon:
-        target = b.loc
-        break
-    if target.x >= 0 and r.canMoveCooldown():
-      let d = r.loc.directionTo(target)
+    ## Home on the ROTATIONAL MIRROR of this square. A robot does not know the
+    ## map's symmetry or its own spawn, but it does know `getMapWidth()` and
+    ## `getMapHeight()`, and `(W-1-x, H-1-y)` is always in the other half — so
+    ## soldiers cross the board, meet the enemy archon and kill it.
+    if r.canMoveCooldown():
+      let mirror = loc(w.width - 1 - r.loc.x, w.height - 1 - r.loc.y)
+      let d = r.loc.directionTo(mirror)
       if w.canMove(r, d):
         w.doMove(r, d)
         return
   if r.canMoveCooldown():
-    for d in MoveDirs:
-      if w.canMove(r, d):
-        w.doMove(r, d)
-        return
+    discard w.moveFirst(r)
 
 proc scenarioSage(w: World, r: Robot) =
   ## Envision each of ABYSS, CHARGE and FURY in turn, proving the three radii
@@ -200,37 +262,34 @@ proc scenarioSage(w: World, r: Robot) =
   if w.canEnvision(r, choice):
     w.doEnvision(r, choice)
     return
-  for l in w.locationsWithinRadiusSquared(
-      r.loc, RobotSpecs[rtSage].actionRadiusSquared):
-    if w.canAttack(r, l):
-      w.doAttack(r, l)
-      return
+  when not defined(bc22ScenarioTie):
+    if w.attackFirst(r): return
   if r.canMoveCooldown():
-    for d in MoveDirs:
-      if w.canMove(r, d):
-        w.doMove(r, d)
-        return
+    discard w.moveFirst(r)
 
 proc scenarioTurret(w: World, r: Robot) =
   ## A watchtower: one stands in TURRET mode through a scheduled FURY and one
   ## stands up to PORTABLE before it, so the pair proves 7 and 0.
   if r.mode == rmPrototype: return
   when not defined(bc22ScenarioFury):
-    let nxt = w.nextAnomaly()
-    if nxt.has and nxt.kind == anFury and nxt.round - w.currentRound == 11 and
-       r.id mod 2 == 0 and r.mode == rmTurret and w.canTransform(r):
+    let nxt = w.nextScheduled(r)
+    ## A FURY WITHIN ELEVEN ROUNDS, not exactly eleven rounds away. The exact
+    ## form was measured never to fire: a watchtower has to be alive, finished,
+    ## even-id and off cooldown on one specific round, and over 32 whole games
+    ## that never once coincided.
+    let furySoon = nxt.has and nxt.kind == anFury and
+                   nxt.round - w.currentRound <= 11
+    if furySoon and r.id mod 2 == 0 and r.mode == rmTurret and
+       w.canTransform(r):
       w.doTransform(r)
       return
-    if r.mode == rmPortable and (not nxt.has or nxt.kind != anFury):
+    if r.mode == rmPortable and not furySoon:
       if w.canTransform(r):
         w.doTransform(r)
       return
   if r.mode != rmTurret: return
-  for l in w.locationsWithinRadiusSquared(
-      r.loc, RobotSpecs[rtWatchtower].actionRadiusSquared):
-    if w.canAttack(r, l):
-      w.doAttack(r, l)
-      return
+  when not defined(bc22ScenarioTie):
+    discard w.attackFirst(r)
 
 proc scenarioLab(w: World, r: Robot) =
   if r.mode != rmTurret: return

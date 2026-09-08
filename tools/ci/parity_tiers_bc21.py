@@ -88,9 +88,15 @@ def main() -> int:
         if failures and failures[-1].startswith(name):
             continue
 
+        # `strip_bytecodes` ON BOTH SIDES. Stripping only the Java side
+        # compares a line against itself plus a suffix the moment the Nim
+        # emitter grows a `bc=` column of its own, and every pair then
+        # "diverges" at round 1 on otherwise-identical lines. It is a no-op on
+        # today's Nim traces and it is the fix bc22 asked for.
         java = [strip_bytecodes(l) for l in
                 java_path.read_text().splitlines()]
-        nim = nim_path.read_text().splitlines()
+        nim = [strip_bytecodes(l) for l in
+               nim_path.read_text().splitlines()]
         cutoff = int(cutoff_path.read_text().strip() or "-1")
 
         # --- Tier A ------------------------------------------------------
