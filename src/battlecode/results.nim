@@ -47,7 +47,7 @@ proc resultsJson*(
   reason: EpisodeReason,
   simSeconds, wallClockSeconds: float
 ): JsonNode =
-  let scores = scoresFor(games)
+  let scores = scoresFor(games, plan.year)
   var wins = [0, 0]
   var points = newJArray()
   for slot in 0 .. 1:
@@ -140,17 +140,41 @@ const Bc24GameKeys* = [
   ## type, one resource and a flag game. `setup_flag_teleports` and
   ## `rounds_with_any_carry` are the two scalars.
 
+const Bc25GameKeys* = [
+  "squares_painted", "coverage_permille", "peak_coverage_permille",
+  "tiles_painted", "tiles_mopped", "tiles_overpainted", "chips_end",
+  "chips_earned", "chips_spent", "paint_in_units_end", "paint_mined",
+  "paint_spent", "robots_built", "soldiers_built", "splashers_built",
+  "moppers_built", "robots_alive", "robots_lost", "robot_rounds_starved",
+  "towers_built", "towers_upgraded", "towers_alive", "towers_lost",
+  "money_towers_end", "paint_towers_end", "defense_towers_end",
+  "srp_completed", "srp_active_end", "srp_rounds_active", "splash_attacks",
+  "mop_swings", "tower_damage_dealt", "robot_damage_dealt", "messages_sent",
+  "markers_placed", "paintable_tiles", "area_without_walls", "tiles_to_win",
+  "ruins", "rounds_with_any_srp"
+]
+  ## bc25 shares NOTHING with the other years' optional siblings: a paint war
+  ## has no flags, no crumbs and no soup. `paintable_tiles`,
+  ## `area_without_walls`, `tiles_to_win`, `ruins` and `rounds_with_any_srp`
+  ## are the five scalars.
+
 const EndReasons* = [
   "kings_destroyed", "cats_cleared", "round_limit", "abandoned",
   "hq_destroyed", "quantity", "quality", "broadcasts", "highest_id",
   "coin_flip", "annihilated", "more_votes", "more_enlightenment_centers",
-  "more_influence", "capture", "more_flag_captures", "level_sum", "more_bread"
+  "more_influence", "capture", "more_flag_captures", "level_sum",
+  "more_bread", "paint_enough_area", "destroy_all_units",
+  "more_squares_painted", "more_towers_alive", "more_money",
+  "more_paint_in_units", "more_robots_alive"
 ]
-  ## The union of all FOUR years' `DominationFactor` renderings plus our own
+  ## The union of all FIVE years' `DominationFactor` renderings plus our own
   ## wall-clock `abandoned`. bc24's `MORE_FLAGS_PICKED` and `RESIGNATION` are
   ## deliberately absent: the first is unreachable in the engine's own
   ## `checkEndOfMatch` and the second has no action a doctrine can produce
-  ## (docs/RULES-BC24.md section Divergences item 5).
+  ## (docs/RULES-BC24.md section Divergences item 5). bc25's `RESIGNATION` is
+  ## absent for the same reason and is recorded as UNREACHABLE HERE rather
+  ## than ABSENT UPSTREAM (docs/RULES-BC25.md section Divergences item 6);
+  ## `coin_flip` is bc25's `WON_BY_DUBIOUS_REASONS` and already present.
 
 const ResultsKeys* = [
   "names", "aliases", "scores", "wins", "points", "games", "seed", "year",

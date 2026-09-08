@@ -11,7 +11,7 @@
 ## recorder's clock and re-derived from the viewer's clock is not the same
 ## match.
 
-import std/[json, monotimes, times]
+import std/[json, monotimes, strutils, times]
 import sim_types, sheet
 import years/dispatch
 
@@ -173,9 +173,11 @@ proc collectGameEvents(
       ## replay comes back carrying events of kind "move" and "spawn".
       ## bc20 and bc21 avoided it by calling their field `unit`; bc24 calls
       ## its field `action`.
+      let action =
+        if plan.year == "bc25": Bc25ActionNames[e.b] else: Bc24ActionNames[e.b]
       events.add(ev("first_action", game = gameIndex, round = e.c,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
-                    "action": Bc24ActionNames[e.b]}))
+                    "action": action}))
     of "flag_taken":
       events.add(ev("flag_taken", game = gameIndex, round = e.round,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
@@ -206,9 +208,56 @@ proc collectGameEvents(
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                     "skill": Bc24SkillNames[e.b], "level": e.c}))
     of "rout":
-      events.add(ev("rout", game = gameIndex, round = e.round,
+      ## bc24 spells the count `jailed` (its ducks go to jail); bc25 spells it
+      ## `lost` (its robots die). Both ride the same event kind and the year
+      ## on the replay header says which field to read.
+      if plan.year == "bc25":
+        events.add(ev("rout", game = gameIndex, round = e.round,
+          fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                      "lost": e.b}))
+      else:
+        events.add(ev("rout", game = gameIndex, round = e.round,
+          fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                      "jailed": e.b}))
+    of "tower_built":
+      events.add(ev("tower_built", game = gameIndex, round = e.round,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
-                    "jailed": e.b}))
+                    "tower": Bc25TowerNames[e.b],
+                    "x": e.c div 100, "y": e.c mod 100,
+                    "total": (try: parseInt(e.s) except CatchableError: 0)}))
+    of "tower_upgraded":
+      events.add(ev("tower_upgraded", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "tower": Bc25TowerNames[
+                      (try: parseInt(e.s) except CatchableError: 0)],
+                    "level": e.b,
+                    "x": e.c div 100, "y": e.c mod 100}))
+    of "tower_lost":
+      events.add(ev("tower_lost", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "tower": Bc25TowerNames[e.b],
+                    "x": e.c div 100, "y": e.c mod 100}))
+    of "srp_completed":
+      events.add(ev("srp_completed", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": e.b div 100, "y": e.b mod 100, "pending": e.c}))
+    of "srp_active":
+      events.add(ev("srp_active", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": e.b div 100, "y": e.b mod 100,
+                    "income_bonus": e.c}))
+    of "srp_broken":
+      events.add(ev("srp_broken", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": e.b div 100, "y": e.b mod 100, "age": e.c}))
+    of "coverage":
+      events.add(ev("coverage", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "permille": e.b, "tiles_from_win": e.c}))
+    of "starved":
+      events.add(ev("starved", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "robots": e.b}))
     of "drone_water_drop":
       ## A drone drops whatever it is holding, which may be its own unit or a
       ## neutral cow, so the victim's TEAM rides on the event (`e.s`) rather
@@ -299,11 +348,23 @@ proc playMatch*(config: GameConfig, plan: var MatchPlan,
       fields = endFields))
   (outcomes, reason)
 
-proc scoresFor*(games: seq[GameOutcome]): array[2, float] =
-  ## `100 * gamesWon + mean(gamePoints over games actually played)`.
-  ## Higher is better; the 100-per-game win bonus dominates, which is what
-  ## makes "lose your HQ, lose the game" true in the ranking as well as in the
-  ## rules.
+func winBonusFor*(year: string): float =
+  ## The per-game win bonus, PER YEAR. bc26, bc20, bc21 and bc24 pay 100 and
+  ## nothing about them changes.
+  ##
+  ## bc25 pays 200, and the difference is deliberate: `points` is a mean in
+  ## [0, 100], so a 100-per-game bonus makes a 2-1 result THEORETICALLY tie on
+  ## `scores` in the degenerate all-or-nothing case, while 200 makes the
+  ## ordering of `results.scores` PROVABLY agree with `results.wins`.
+  ## `tests/test_bc25_scoring.nim` asserts that agreement on 500 random
+  ## synthetic finals — with 100 it would be a `>=`; with 200 it is a `>`.
+  if yearIdOf(year) == yBc25: 200.0 else: 100.0
+
+proc scoresFor*(games: seq[GameOutcome],
+                year = "bc26"): array[2, float] =
+  ## `winBonus * gamesWon + mean(gamePoints over games actually played)`.
+  ## Higher is better; the win bonus dominates, which is what makes "lose the
+  ## map, lose the game" true in the ranking as well as in the rules.
   if games.len == 0:
     return [0.0, 0.0]
   var wins: array[2, int]
@@ -312,6 +373,7 @@ proc scoresFor*(games: seq[GameOutcome]): array[2, float] =
     if g.winnerSlot >= 0: wins[g.winnerSlot] += 1
     pointSum[0] += g.points[0]
     pointSum[1] += g.points[1]
+  let bonus = winBonusFor(year)
   for slot in 0 .. 1:
-    result[slot] = 100.0 * float(wins[slot]) +
+    result[slot] = bonus * float(wins[slot]) +
       float(pointSum[slot]) / float(games.len)

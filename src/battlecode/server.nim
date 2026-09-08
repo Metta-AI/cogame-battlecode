@@ -423,7 +423,7 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
     echo "::error::battlecode: could not write the replay: ", error.msg
 
   echo "battlecode: reason=", reason, " games=", games.len,
-    " scores=", scoresFor(games), " sim=", simSeconds, "s wall=", wallClock, "s"
+    " scores=", scoresFor(games, config.year), " sim=", simSeconds, "s wall=", wallClock, "s"
 
 proc heartbeat(interval: int) {.thread.} =
   ## A spectator that connects between phases still gets frames. Bounded by

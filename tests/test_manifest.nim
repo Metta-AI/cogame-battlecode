@@ -257,7 +257,8 @@ block:
   checkEq("docs.readme is an object", docs["readme"].kind, JObject)
   check("docs.readme has type and value",
     docs["readme"].hasKey("type") and docs["readme"].hasKey("value"))
-  checkEq("six doc pages ship — one rules page per year", docs["pages"].len, 6)
+  checkEq("seven doc pages ship — one rules page per year",
+    docs["pages"].len, 7)
   var ids: seq[string]
   for page in docs["pages"]:
     ids.add(page["id"].getStr())
@@ -272,6 +273,7 @@ block:
     check("the page's file exists: " & target, fileExists(target))
   checkEq("the pages are the ones the design note names", ids,
     @["rules.md", "rules-bc20.md", "rules-bc21.md", "rules-bc24.md",
+      "rules-bc25.md",
       "replay.md", "parity.md"])
 
 # --- the rest of the shape --------------------------------------------------

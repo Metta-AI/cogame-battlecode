@@ -25,6 +25,8 @@ type
     blExamplefuncsplayer21 = "examplefuncsplayer21"
     blGoneSharkin = "gone-sharkin"
     blExamplefuncsplayer24 = "examplefuncsplayer24"
+    blSpaark = "spaark"
+    blExamplefuncsplayer25 = "examplefuncsplayer25"
 
 proc defaultBaselineFor*(year: string): Baseline =
   ## A seat that says nothing useful plays the year's STRONG published
@@ -33,6 +35,7 @@ proc defaultBaselineFor*(year: string): Baseline =
   of yBc20: blBowlOfChowder
   of yBc21: blCaliforniaRoll
   of yBc24: blGoneSharkin
+  of yBc25: blSpaark
   of yBc26: blAwu
 
 proc baselineFor*(year, name: string): Baseline =
@@ -54,6 +57,11 @@ proc baselineFor*(year, name: string): Baseline =
     of "scaffold", "examplefuncsplayer", "examplefuncsplayer24", "example":
       blExamplefuncsplayer24
     else: blGoneSharkin
+  of yBc25:
+    case key
+    of "scaffold", "examplefuncsplayer", "examplefuncsplayer25", "example":
+      blExamplefuncsplayer25
+    else: blSpaark
   of yBc26:
     case key
     of "scaffold", "examplefuncsplayer", "example": blScaffold
@@ -86,6 +94,8 @@ proc baselineChassis*(kind: Baseline): ScriptedChassis =
   of blBowlOfChowder: scBowlOfChowder
   of blGoneSharkin: scGoneSharkin
   of blExamplefuncsplayer24: scExamplefuncsplayer24
+  of blSpaark: scSpaark
+  of blExamplefuncsplayer25: scExamplefuncsplayer25
   of blAwu: scAwu
 
 proc baselineReply*(kind: Baseline): string =
@@ -142,6 +152,20 @@ proc baselineReply*(kind: Baseline): string =
                  "retreat_hp":400,"flag_carry_escort":2},
         "notes":"default gone-sharkin doctrine",
         "motto":"Bread first, blood after."}"""
+  of blSpaark, blExamplefuncsplayer25:
+    ## The all-defaults bc25 sheet, which is ALSO the fallback sheet
+    ## §Decisions prints verbatim. `examplefuncsplayer25` reads no knob, so it
+    ## answers with the same sheet: the chassis, not the sheet, is what makes
+    ## it the weak floor (D1).
+    """{"sheet":{"opening":"balanced",
+                 "unit_mix":{"soldier":60,"mopper":25,"splasher":15},
+                 "srp_priority":35,
+                 "tower_type_order":["money","paint","defense"],
+                 "ruin_claim_radius":10,"defense_tower_chokes":"late",
+                 "paint_reserve_floor":30,"mop_enemy_paint":40,
+                 "splash_targets":"mixed","upgrade_policy":"money_first"},
+        "notes":"default spaark doctrine",
+        "motto":"Paint it and hold it."}"""
 
 proc baselineSheet*(year: string, kind: Baseline): Sheet =
   result = parseReply(baselineReply(kind), year)
