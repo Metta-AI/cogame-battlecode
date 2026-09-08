@@ -285,10 +285,12 @@ proc valuesArray*(m: TroveIntMap): seq[int] =
   for id in m.valuesDescending: result.add(id)
 
 func fnv1a64*(values: openArray[int]): uint64 =
-  ## The `H hashord=` fold the parity trace compares every round.
+  ## The fold every parity-trace checksum line uses, on both sides of the
+  ## oracle. ONE WHOLE INT PER ITERATION, masked to 32 bits — byte for byte
+  ## what `Bc22Trace.fnv` does in Java:
+  ##   h = (h ^ (values[i] & 0xFFFFFFFFL)) * 0x100000001B3L
+  ## It is deliberately NOT the canonical byte-wise FNV-1a: the value is
+  ## compared across the two implementations, so the fold is wire format.
   result = 0xcbf29ce484222325'u64
   for v in values:
-    var x = uint64(uint32(v))
-    for b in 0 .. 3:
-      result = result xor ((x shr (uint64(b) * 8)) and 0xFF'u64)
-      result = result * 0x100000001B3'u64
+    result = (result xor uint64(uint32(v))) * 0x100000001B3'u64

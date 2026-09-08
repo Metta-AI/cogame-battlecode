@@ -778,13 +778,9 @@ proc doDisintegrate*(w: World, r: Robot) =
 #  Checksums the hash chain and the parity trace fold
 # ---------------------------------------------------------------------------
 
-func fnvArray*(values: openArray[int]): uint64 =
-  result = 0xcbf29ce484222325'u64
-  for v in values:
-    let x = uint64(uint32(v))
-    for b in 0 .. 3:
-      result = result xor ((x shr (uint64(b) * 8)) and 0xFF'u64)
-      result = result * 0x100000001B3'u64
+func fnvArray*(values: openArray[int]): uint64 = fnv1a64(values)
+  ## `trove.fnv1a64` under the name the checksum lines below read with. The
+  ## fold lives in `trove.nim` so there is exactly one copy of it.
 
 func rubbleChecksum*(w: World): uint64 =
   ## y ascending outer, x ascending inner — i.e. the array's own index order,
