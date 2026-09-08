@@ -3038,6 +3038,171 @@ html[data-year="bc24"] .beat-marker.rout { background: #e0523a; width: 3px; }
   #bc24-flags .lbl, #bc24-flags .towin { display: none; }
   #bc24-doctrines { max-width: 62%; }
 }
+/* ========================================================================
+   BC25 additions to the inherited cogame-battlecode chrome
+   ------------------------------------------------------------------------
+   The game block for the `bc25` year. Everything above this banner is the
+   page as it shipped for `bc26`, `bc20`, `bc21` and `bc24`. NOTHING is
+   removed and no existing id is reused for a different purpose: every id
+   below is new and `#bc25-` prefixed, and the five blocks are switched by ONE
+   attribute — `document.documentElement.dataset.year`, set from the replay
+   header — plus the rules right here. `#viewpanel` is KEPT: the `bc25` pool
+   tops out at 50x30 and the reserved large pool at 60x60, so the native
+   16 px-per-tile render is 480–960 px wide against a 360 px featured-match
+   frame.
+   ======================================================================== */
+html[data-year="bc25"] #coopchip,
+html[data-year="bc25"] #bars,
+html[data-year="bc25"] #econ,
+html[data-year="bc25"] #doctrines,
+html[data-year="bc25"] #bc20-flood,
+html[data-year="bc25"] #bc20-soup,
+html[data-year="bc25"] #bc20-units,
+html[data-year="bc25"] #bc20-doctrines,
+html[data-year="bc25"] #bc20-doctrines-toggle,
+html[data-year="bc25"] #bc20-chain,
+html[data-year="bc25"] #bc21-votes,
+html[data-year="bc25"] #bc21-influence,
+html[data-year="bc25"] #bc21-units,
+html[data-year="bc25"] #bc21-doctrines,
+html[data-year="bc25"] #bc21-doctrines-toggle,
+html[data-year="bc25"] #bc21-bids,
+html[data-year="bc25"] #bc24-flags,
+html[data-year="bc25"] #bc24-crumbs,
+html[data-year="bc25"] #bc24-levels,
+html[data-year="bc25"] #bc24-doctrines,
+html[data-year="bc25"] #bc24-doctrines-toggle,
+html[data-year="bc25"] #bc24-traps { display: none !important; }
+
+html:not([data-year="bc25"]) #bc25-coverage,
+html:not([data-year="bc25"]) #bc25-towers,
+html:not([data-year="bc25"]) #bc25-econ,
+html:not([data-year="bc25"]) #bc25-doctrines,
+html:not([data-year="bc25"]) #bc25-doctrines-toggle,
+html:not([data-year="bc25"]) #bc25-srp { display: none !important; }
+
+/* THE HEADLINE READOUT AND THE YEAR'S WHOLE STORY, in the same top-centre
+   pill slot bc20 uses for its flood gauge and bc24 for its flag pips: a
+   two-sided bar with a 70 % tick on each side, the tile counts, and the bare
+   remainder. It flashes when either side crosses a decile. */
+#bc25-coverage {
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 8px; align-items: center;
+  padding: 3px 10px; border-radius: 999px;
+  background: rgba(18, 14, 12, .82); border: 1px solid #6a5a4a;
+  font: 600 11px/1.1 ui-monospace, Menlo, Consolas, monospace;
+  color: #efe6d8; letter-spacing: .04em; z-index: 6;
+  max-width: 92vw; white-space: nowrap; overflow: hidden;
+}
+#bc25-coverage.flash { animation: bc25flash .9s ease-out 1; }
+@keyframes bc25flash {
+  0% { border-color: #f0d070; box-shadow: 0 0 10px rgba(240, 208, 112, .7); }
+  100% { border-color: #6a5a4a; box-shadow: none; }
+}
+#bc25-coverage .ash { color: #cdcdcc; }
+#bc25-coverage .basil { color: #fee493; }
+#bc25-coverage .bar {
+  position: relative; width: 128px; height: 9px; border-radius: 5px;
+  overflow: hidden; background: #4c301e; flex: 0 0 auto;
+}
+#bc25-coverage .bar .a { position: absolute; left: 0; top: 0; bottom: 0;
+  background: #666666; }
+#bc25-coverage .bar .b { position: absolute; right: 0; top: 0; bottom: 0;
+  background: #b28b52; }
+#bc25-coverage .bar .tick {
+  position: absolute; top: -2px; bottom: -2px; width: 1px;
+  background: rgba(240, 208, 112, .9);
+}
+#bc25-coverage .towin { color: #b6a892; }
+
+/* The two stat boxes. Both are in relayout()'s --statrail set, so #killfeed
+   is lifted clear of them at every width and zoom. Neither is ever overlaid
+   inside the transport band. */
+#bc25-towers, #bc25-econ {
+  position: absolute; left: 8px; z-index: 5;
+  padding: 4px 8px; border-radius: 8px;
+  background: rgba(18, 14, 12, .78); border: 1px solid #57493c;
+  font: 500 10px/1.35 ui-monospace, Menlo, Consolas, monospace;
+  color: #e3d8c6; max-width: 44vw; pointer-events: none;
+}
+#bc25-towers { bottom: calc(var(--band, 0px) + 76px); }
+#bc25-econ { bottom: calc(var(--band, 0px) + 8px); }
+#bc25-towers .row, #bc25-econ .row {
+  display: flex; gap: 6px; align-items: baseline; white-space: nowrap;
+}
+#bc25-towers .who, #bc25-econ .who { min-width: 4.4em; color: #b6a892; }
+#bc25-towers .pip { letter-spacing: .1em; }
+#bc25-towers .money { color: #f0d070; }
+#bc25-towers .paint { color: #9fd0ff; }
+#bc25-towers .defense { color: #e0523a; }
+#bc25-econ .srp { color: #8fd48f; }
+#bc25-econ .pending { color: #b6a892; }
+
+/* The doctrine overlay (D3): dismissible, with a close control, an Escape
+   binding, self-dismissal on the first advance, and a re-open chip in the
+   scorebug. It sits ABOVE the board area and NEVER inside the transport
+   band. */
+#bc25-doctrines {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(var(--topband, 0px) + 10px);
+  bottom: auto; max-height: 46vh; overflow: auto;
+  padding: 8px 12px; border-radius: 10px;
+  background: rgba(16, 12, 10, .90); border: 1px solid #6a5a4a;
+  font: 500 11px/1.45 ui-monospace, Menlo, Consolas, monospace;
+  color: #e9dfd0; max-width: 74%; z-index: 8;
+}
+#bc25-doctrines.dismissed { display: none !important; }
+#bc25-doctrines-close {
+  position: absolute; top: 4px; right: 6px;
+  background: none; border: none; color: #b6a892; cursor: pointer;
+  font: 700 13px/1 ui-monospace, Menlo, Consolas, monospace;
+}
+#bc25-doctrines-close:hover { color: #fff; }
+#bc25-doctrines .clan { margin: 2px 0 6px; }
+#bc25-doctrines .clan b { color: #f0d070; }
+#bc25-doctrines .fallback { color: #e0523a; }
+#bc25-doctrines-toggle {
+  background: rgba(18, 14, 12, .8); border: 1px solid #57493c;
+  border-radius: 999px; color: #e3d8c6; cursor: pointer;
+  font: 600 9px/1 ui-monospace, Menlo, Consolas, monospace;
+  padding: 3px 7px; margin-left: 6px;
+}
+
+/* The endcard war panel. The endcard itself stops at var(--band) and every
+   seek dismisses it -- both inherited, both unchanged. */
+#bc25-srp {
+  margin-top: 6px; display: grid; gap: 2px;
+  font: 500 10px/1.35 ui-monospace, Menlo, Consolas, monospace;
+  color: #d9cdb8; max-height: 30vh; overflow: auto;
+}
+#bc25-srp .clan b { color: #f0d070; }
+
+/* Beat markers, EVERY ONE scoped to html[data-year="bc25"] so none of them
+   can restyle another year's marker of the same name (`build`, `upgrade` and
+   `end` already exist for other years). Eleven kinds, one per emitted beat. */
+html[data-year="bc25"] .beat-marker.doctrine { background: #9a8ad0; }
+html[data-year="bc25"] .beat-marker.game     { background: #b6a892; }
+html[data-year="bc25"] .beat-marker.build    { background: #7fb2e5; }
+html[data-year="bc25"] .beat-marker.tower    { background: #f0d070; }
+html[data-year="bc25"] .beat-marker.upgrade  { background: #ffb347; }
+html[data-year="bc25"] .beat-marker.siege    { background: #e0523a; }
+html[data-year="bc25"] .beat-marker.srp      { background: #8fd48f; }
+html[data-year="bc25"] .beat-marker.coverage { background: #cdcdcc; }
+html[data-year="bc25"] .beat-marker.starve   { background: #7a6a58; }
+html[data-year="bc25"] .beat-marker.rout     { background: #c0392b; }
+html[data-year="bc25"] .beat-marker.end      { background: #ffffff; }
+
+@media (max-width: 640px) {
+  /* 360 px is the featured-match iframe width and the width this page is
+     checked at. The boxes drop their word labels to glyphs. */
+  #bc25-coverage { font-size: 10px; gap: 5px; }
+  #bc25-coverage .bar { width: 74px; }
+  #bc25-coverage .towin, #bc25-coverage .lbl { display: none; }
+  #bc25-towers, #bc25-econ { font-size: 9px; max-width: 58vw; }
+  #bc25-towers .who, #bc25-econ .who { min-width: 2.6em; }
+  #bc25-towers { bottom: calc(var(--band, 0px) + 66px); }
+  #bc25-doctrines { max-width: 88%; font-size: 10px; }
+}
 </style>
 </head>
 <body>
@@ -3079,6 +3244,8 @@ html[data-year="bc24"] .beat-marker.rout { background: #e0523a; width: 3px; }
           <button type="button" id="bc21-doctrines-toggle" hidden
                   aria-label="Show doctrines">doctrines</button>
           <!-- BC24: re-opens #bc24-doctrines after it has been dismissed. -->
+          <button type="button" id="bc25-doctrines-toggle" hidden
+                  title="Show the doctrines">doctrines</button>
           <button type="button" id="bc24-doctrines-toggle" hidden
                   title="Show doctrines">doctrines</button>
         </div>
@@ -3154,6 +3321,17 @@ html[data-year="bc24"] .beat-marker.rout { background: #e0523a; width: 3px; }
       <div id="bc21-doctrines-body"></div>
     </div>
 
+    <!-- BC25 additions to the inherited cogame-battlecode chrome -->
+    <div id="bc25-coverage"></div>
+    <div id="bc25-towers"></div>
+    <div id="bc25-econ"></div>
+    <div id="bc25-doctrines" role="region" aria-label="Doctrines">
+      <button type="button" id="bc25-doctrines-close"
+              aria-label="Dismiss doctrines" title="Dismiss doctrines"
+              >&times;</button>
+      <div id="bc25-doctrines-body"></div>
+    </div>
+
     <!-- BC24 additions to the inherited cogame-battlecode chrome -->
     <div id="bc24-flags"></div>
     <div id="bc24-levels"></div>
@@ -3212,6 +3390,8 @@ html[data-year="bc24"] .beat-marker.rout { background: #e0523a; width: 3px; }
       <!-- BC24: the war panel. Nothing about traps, water or levels is
            stored in the replay -- the wasm sim re-derives every round. -->
       <div id="bc24-traps"></div>
+      <!-- BC25 additions to the inherited cogame-battlecode chrome -->
+      <div id="bc25-srp"></div>
       <div class="ec-replay" id="ec-replay"></div>
     </div>
   </div>
@@ -4170,6 +4350,294 @@ html[data-year="bc24"] .beat-marker.rout { background: #e0523a; width: 3px; }
 })();
 </script>
 
+<!-- ======================================================================
+     BC25 additions to the inherited cogame-battlecode chrome
+     ----------------------------------------------------------------------
+     The game block for the `bc25` year. It registers itself on
+     `window.Bc25Block` BEFORE the inherited block runs, and the inherited
+     block calls into it: two lines there, everything else here. No function
+     name in this file collides with `chrome_common.js`, with the bc26 block
+     or with the bc20, bc21 and bc24 ones -- the beat builder is
+     `buildBc25BeatButtons`, never `markBeat` (the tandem 2026-08-23 hoisting
+     collision), never `buildBeatButtons` (bc26), and never
+     `buildBc20BeatButtons`, `buildBc21BeatButtons` or
+     `buildBc24BeatButtons`.
+     ====================================================================== -->
+<script>
+(function () {
+  'use strict';
+
+  var api = null;                    // {C, send, seek, dismissEndcard}
+  var beatsBuilt = false;
+  var beatEls = [];
+  var dismissed = false;
+  var pinned = false;                // the viewer opened it themselves
+  var lastFrame = -1;
+  var lastDecile = [-1, -1];
+  var feedShown = {};
+
+  function $(id) { return document.getElementById(id); }
+  function esc(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  function pct(permille) { return Math.round(permille / 10) + '%'; }
+
+  // ---- the dismissible doctrine overlay (D3) ---------------------------
+  function setDoctrinesOpen(open) {
+    dismissed = !open;
+    var panel = $('bc25-doctrines');
+    var chip = $('bc25-doctrines-toggle');
+    if (panel) panel.classList.toggle('dismissed', dismissed);
+    if (chip) chip.hidden = !dismissed;
+  }
+
+  function wireDoctrines() {
+    var close = $('bc25-doctrines-close');
+    if (close) {
+      close.addEventListener('click', function (event) {
+        event.stopPropagation();
+        pinned = false;
+        setDoctrinesOpen(false);
+      });
+    }
+    var chip = $('bc25-doctrines-toggle');
+    if (chip) {
+      chip.addEventListener('click', function (event) {
+        event.stopPropagation();
+        // A panel the viewer opened by hand STAYS open -- that is their
+        // choice, not a lid the page left on the board.
+        pinned = true;
+        setDoctrinesOpen(true);
+      });
+    }
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape' && event.key !== 'Esc') return;
+      if (document.documentElement.getAttribute('data-year') !== 'bc25') return;
+      pinned = false;
+      setDoctrinesOpen(false);
+    });
+    // The viewer who never presses play still gets the board back.
+    setTimeout(function () {
+      if (!pinned) setDoctrinesOpen(false);
+    }, 6000);
+  }
+
+  // ---- beats ------------------------------------------------------------
+  function buildBc25BeatButtons(s) {
+    if (beatsBuilt || !s.beats || !s.beats.length) return;
+    beatsBuilt = true;
+    var scrub = $('scrub');
+    var span = Math.max(1, (s.mx || 1) - (s.st || 0));
+    s.beats.forEach(function (b) {
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'beat-marker ' + (b.k || 'game');
+      el.style.left =
+        (Math.min(1, Math.max(0, (b.t - (s.st || 0)) / span)) * 100) + '%';
+      el.setAttribute('aria-label', b.label || b.k);
+      el.title = b.label || b.k;
+      el.__tick = b.t;
+      el.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (api) api.seek(b.t / span);
+      });
+      if (scrub && scrub.parentNode) scrub.parentNode.appendChild(el);
+      beatEls.push(el);
+    });
+  }
+
+  function applyBc25BeatSpoilers(s) {
+    if (!beatEls.length) return;
+    var show = !!s.sp0 || s.ph === 'gameover';
+    beatEls.forEach(function (el) {
+      el.style.visibility = (show || el.__tick <= s.t) ? 'visible' : 'hidden';
+    });
+  }
+
+  // ---- the coverage pill -------------------------------------------------
+  function renderCoverage(s) {
+    var box = $('bc25-coverage');
+    var cov = s.bc25_coverage;
+    if (!box || !cov) return;
+    var a = cov.clans[0];
+    var b = cov.clans[1];
+    var area = Math.max(1, cov.area_without_walls);
+    var aw = Math.max(0, Math.min(100, a.tiles * 100 / area));
+    var bw = Math.max(0, Math.min(100, b.tiles * 100 / area));
+    var tick = (cov.win_permille || 700) / 10;
+    box.innerHTML =
+      '<span class="ash">ASH ' + pct(a.permille) + '</span>' +
+      '<span class="bar">' +
+        '<span class="a" style="width:' + aw.toFixed(1) + '%"></span>' +
+        '<span class="b" style="width:' + bw.toFixed(1) + '%"></span>' +
+        '<span class="tick" style="left:' + tick.toFixed(1) + '%"></span>' +
+        '<span class="tick" style="left:' + (100 - tick).toFixed(1) +
+          '%"></span>' +
+      '</span>' +
+      '<span class="basil">' + pct(b.permille) + ' BASIL</span>' +
+      '<span class="towin">' + a.tiles + ' / ' + cov.tiles_to_win +
+        ' to win \u00b7 ' + cov.bare + ' bare</span>';
+    // It flashes when either side crosses a decile.
+    var flash = false;
+    [a, b].forEach(function (clan, i) {
+      var decile = Math.floor(clan.permille / 100);
+      if (lastDecile[i] >= 0 && decile > lastDecile[i]) flash = true;
+      lastDecile[i] = decile;
+    });
+    if (flash) {
+      box.classList.remove('flash');
+      void box.offsetWidth;
+      box.classList.add('flash');
+    }
+  }
+
+  // ---- the two stat boxes ------------------------------------------------
+  function pips(n, glyph) {
+    var out = '';
+    for (var i = 0; i < Math.min(n, 9); i++) out += glyph;
+    return out || '\u00b7';
+  }
+
+  function renderTowers(s) {
+    var box = $('bc25-towers');
+    var rows = s.bc25_towers;
+    if (!box || !rows) return;
+    var html = '';
+    rows.forEach(function (clan) {
+      html += '<div class="row"><span class="who">' + esc(clan.alias) +
+        '</span>' +
+        '<span class="money">' + pips(clan.money, '\u26c1') + '</span>' +
+        '<span class="paint">' + pips(clan.paint, '\u2b22') + '</span>' +
+        '<span class="defense">' + pips(clan.defense, '\u271a') + '</span>' +
+        '<span class="lbl">' + clan.alive + '/' + clan.cap +
+        ' \u00b7 lost ' + clan.lost + ' \u00b7 +' + clan.damage_buff +
+        '</span></div>';
+    });
+    box.innerHTML = html;
+  }
+
+  function renderEcon(s) {
+    var box = $('bc25-econ');
+    var rows = s.bc25_econ;
+    if (!box || !rows) return;
+    var html = '';
+    rows.forEach(function (clan) {
+      var pending = '';
+      (clan.srp_pending || []).forEach(function (p) {
+        pending += ' \u23f1' + p.rounds_left;
+      });
+      html += '<div class="row"><span class="who">' + esc(clan.alias) +
+        '</span>' +
+        '<span>\u25c8' + clan.chips + ' (+' + clan.chips_per_round + ')</span>' +
+        '<span>\u25cf' + clan.paint_in_units + ' (+' +
+          clan.paint_per_round + ')</span>' +
+        '<span class="srp">SRP \u00d7' + clan.srp_active + ' \u2192 +' +
+          clan.srp_bonus + '/tower</span>' +
+        '<span class="pending">' + pending + '</span>' +
+        '<span class="lbl">' + clan.robots + ' bots</span></div>';
+    });
+    box.innerHTML = html;
+  }
+
+  // ---- the doctrines, in plain words -------------------------------------
+  function renderDoctrines(s) {
+    var body = $('bc25-doctrines-body');
+    if (!body || !s.doctrines) return;
+    var html = '';
+    s.doctrines.forEach(function (seat, i) {
+      html += '<div class="clan"><b>' + esc(seat.alias) + '</b> \u2014 ' +
+        esc(seat.name || '') +
+        (seat.fallback ? ' <span class="fallback">[fallback: ' +
+          esc(seat.fallback) + ']</span>' : '') +
+        '<br>' + esc((seat.words || []).join(' \u00b7 ')) +
+        (seat.notes ? '<br><i>' + esc(seat.notes) + '</i>' : '') +
+        '</div>';
+    });
+    body.innerHTML = html;
+  }
+
+  // ---- the killfeed ------------------------------------------------------
+  function renderFeed(s) {
+    var feed = $('killfeed');
+    if (!feed || !s.beats) return;
+    var show = !!s.sp0 || s.ph === 'gameover';
+    var lines = [];
+    s.beats.forEach(function (b) {
+      if (!show && b.t > s.t) return;
+      lines.push('<div class="kf ' + (b.k || 'game') + '">' +
+        esc(b.label || b.k) + '</div>');
+    });
+    var html = lines.slice(-8).join('');
+    if (feedShown.html !== html) {
+      feedShown.html = html;
+      feed.innerHTML = html;
+    }
+  }
+
+  // ---- the endcard war panel ---------------------------------------------
+  function renderEndcardExtras(s) {
+    var panel = $('bc25-srp');
+    var war = s.bc25_war;
+    if (!panel || !war) return;
+    var html = '';
+    war.clans.forEach(function (clan) {
+      html += '<div class="clan"><b>' + esc(clan.alias) + '</b> \u2014 ' +
+        'painted ' + clan.tiles_painted +
+        ', mopped ' + clan.tiles_mopped +
+        ', overpainted ' + clan.tiles_overpainted +
+        ' \u00b7 peak ' + pct(clan.peak_permille) +
+        ', final ' + pct(clan.final_permille) +
+        '<br>towers ' + clan.towers_built + ' built / ' +
+        clan.towers_upgraded + ' upgraded / ' + clan.towers_lost + ' lost' +
+        ' (\u26c1' + clan.money_towers + ' \u2b22' + clan.paint_towers +
+        ' \u271a' + clan.defense_towers + ')' +
+        '<br>chips ' + clan.chips_earned + ' earned / ' + clan.chips_spent +
+        ' spent \u00b7 paint ' + clan.paint_mined + ' mined / ' +
+        clan.paint_spent + ' spent' +
+        '<br>robots ' + clan.robots_built + ' built (' +
+        clan.soldiers_built + '/' + clan.splashers_built + '/' +
+        clan.moppers_built + '), ' + clan.robots_lost + ' lost, ' +
+        clan.robot_rounds_starved + ' robot-rounds at zero paint' +
+        '<br>SRP ' + clan.srp_completed + ' completed / ' + clan.srp_active +
+        ' active / ' + clan.srp_broken + ' broken, ' +
+        clan.srp_rounds_active + ' rounds live' +
+        '</div>';
+    });
+    panel.innerHTML = html;
+  }
+
+  window.Bc25Block = {
+    attach: function (host) {
+      api = host;
+      wireDoctrines();
+    },
+    // True while a bc25 replay is on screen; the inherited block asks before
+    // it draws its own year's readouts.
+    active: function (s) { return s && s.year === 'bc25'; },
+    onFrame: function (s) {
+      if (s.year !== 'bc25') return;
+      buildBc25BeatButtons(s);
+      // THE BOARD IS THE PICTURE -- and in this year the board literally IS
+      // the score -- so the first frame that advances the playhead closes the
+      // panel, unless the viewer opened it by hand.
+      if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {
+        setDoctrinesOpen(false);
+      }
+      lastFrame = s.t;
+      renderCoverage(s);
+      renderTowers(s);
+      renderEcon(s);
+      renderDoctrines(s);
+      renderFeed(s);
+      applyBc25BeatSpoilers(s);
+      renderEndcardExtras(s);
+    }
+  };
+})();
+</script>
+
 <script>
 (function () {
   'use strict';
@@ -4232,6 +4700,16 @@ html[data-year="bc24"] .beat-marker.rout { background: #e0523a; width: 3px; }
   // BC24 HOOK (1 of 2): the same two lines for the fourth year.
   if (window.Bc24Block) {
     window.Bc24Block.attach({
+      C: C,
+      send: send,
+      seek: function (frac) { seek(frac); },
+      dismissEndcard: function () { dismissEndcard(); }
+    });
+  }
+
+  // BC25 HOOK (1 of 2): the same two lines for the fifth year.
+  if (window.Bc25Block) {
+    window.Bc25Block.attach({
       C: C,
       send: send,
       seek: function (frac) { seek(frac); },
@@ -4533,7 +5011,7 @@ html[data-year="bc24"] .beat-marker.rout { background: #e0523a; width: 3px; }
       var railTop = Infinity;
       var railBottom = -Infinity;
       ['econ', 'bc20-soup', 'bc20-units', 'bc21-influence', 'bc21-units',
-       'bc24-crumbs', 'bc24-levels']
+       'bc24-crumbs', 'bc24-levels', 'bc25-towers', 'bc25-econ']
         .forEach(function (id) {
           var el = document.getElementById(id);
           if (!el || !el.offsetParent) return;
@@ -4662,12 +5140,15 @@ html[data-year="bc24"] .beat-marker.rout { background: #e0523a; width: 3px; }
     var isBc20 = !!(window.Bc20Block && window.Bc20Block.active(s));
     var isBc21 = !!(window.Bc21Block && window.Bc21Block.active(s));
     var isBc24 = !!(window.Bc24Block && window.Bc24Block.active(s));
+    var isBc25 = !!(window.Bc25Block && window.Bc25Block.active(s));
     if (window.Bc20Block) window.Bc20Block.onFrame(s);
     // BC21 HOOK (2 of 2).
     if (window.Bc21Block) window.Bc21Block.onFrame(s);
     // BC24 HOOK (2 of 2).
     if (window.Bc24Block) window.Bc24Block.onFrame(s);
-    if (!isBc20 && !isBc21 && !isBc24) {
+    // BC25 HOOK (2 of 2).
+    if (window.Bc25Block) window.Bc25Block.onFrame(s);
+    if (!isBc20 && !isBc21 && !isBc24 && !isBc25) {
       buildBeatButtons(s);
       renderCoop(s);
       renderEcon(s);
@@ -4678,7 +5159,7 @@ html[data-year="bc24"] .beat-marker.rout { background: #e0523a; width: 3px; }
     renderGameChips(s);
     C.renderClock(s);
     C.renderTransport(s);
-    if (!isBc20 && !isBc21 && !isBc24) applyBeatSpoilers(s);
+    if (!isBc20 && !isBc21 && !isBc24 && !isBc25) applyBeatSpoilers(s);
     $('clock-caption').textContent = s.ph === 'gameover'
       ? 'Match over'
       : 'game ' + s.game + ' of ' + s.games + ' — ' + s.map;

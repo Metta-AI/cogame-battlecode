@@ -145,6 +145,12 @@ type
     towersUpgraded*: array[2, int]
     towersLost*: array[2, int]
     defenseTowersBuilt*: array[2, int]
+    defenseBuffRounds*: array[2, int]
+      ## The clan's tower-damage ledger SUMMED OVER ROUNDS -- i.e. how much
+      ## extra single-target damage every allied tower actually carried, and
+      ## for how long. It is the quantity `defense_tower_chokes` literally
+      ## buys (+5 a level-one defense tower, +7 at level two, +9 at level
+      ## three) and it is never read by a rule.
     paintTowersAt1000*: array[2, int]
     claimDistanceSum*: array[2, int]
     claimDistanceCount*: array[2, int]

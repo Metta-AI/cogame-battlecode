@@ -59,6 +59,39 @@ func claimRadiusSquared*(side: Side, round: int): int =
 #  What a tower builds next
 # ---------------------------------------------------------------------------
 
+proc buildReserve*(side: Side, round: int): int =
+  ## The chips a tower will NOT spend on a robot, so that `opening` decides
+  ## how much of the early economy goes to robots and how much is banked for
+  ## `completeTowerPattern`. `tower_rush` banks 70 %, `paint_eco` 30 %, and
+  ## after round 400 every opening converges on the balanced split — which is
+  ## exactly what makes `opening` an OPENING and not a whole doctrine.
+  plan(side, round).towerShare * 10
+
+proc deficitOrder*(w: World, side: Side): array[3, UnitType] =
+  ## The three robot types sorted by how far BELOW its share of the census
+  ## each one is. This is the whole of `unit_mix`'s teeth: the type furthest
+  ## behind is built first, and when it is unaffordable the NEXT most starved
+  ## type is tried rather than a fixed soldier-first fallback.
+  refreshCensus(w, side)
+  let total = max(1, side.soldiers + side.moppers + side.splashers)
+  let mix = side.mix
+  var scored = [
+    (deficit: mix.soldier * total div 100 - side.soldiers, kind: utSoldier),
+    (deficit: mix.mopper * total div 100 - side.moppers, kind: utMopper),
+    (deficit: mix.splasher * total div 100 - side.splashers,
+     kind: utSplasher)]
+  for i in 1 .. 2:
+    var j = i
+    while j > 0 and scored[j - 1].deficit < scored[j].deficit:
+      swap(scored[j - 1], scored[j])
+      dec j
+  for i in 0 .. 2: result[i] = scored[i].kind
+
+proc affordable(w: World, side: Side, tower: Robot, kind: UnitType,
+                reserve: int): bool =
+  tower.paint >= UnitSpecs[kind].paintCost and
+    w.getMoney(side.team) - UnitSpecs[kind].moneyCost >= reserve
+
 proc nextBuild*(w: World, side: Side, tower: Robot): UnitType =
   ## The target census a tower builds toward, from `unit_mix` — with the
   ## floor stated in the design note held independently of every knob: at
@@ -67,39 +100,37 @@ proc nextBuild*(w: World, side: Side, tower: Robot): UnitType =
   ## Returns `utSoldier` when nothing is affordable; the caller checks
   ## `canBuildRobot` and simply does not build.
   refreshCensus(w, side)
-  let total = max(1, side.soldiers + side.moppers + side.splashers)
-  let mix = side.mix
   let chips = w.getMoney(side.team)
+  let reserve = buildReserve(side, w.currentRound)
 
   ## The anti-inert floor first, and only once the economy can carry it.
   if chips >= UnitSpecs[utMopper].moneyCost + 200 and side.moppers < 2 and
-      side.soldiers >= 2:
+      side.soldiers >= 2 and tower.paint >= UnitSpecs[utMopper].paintCost:
     return utMopper
   if chips >= UnitSpecs[utSplasher].moneyCost + 400 and
-      side.splashers < 1 and side.soldiers >= 3:
+      side.splashers < 1 and side.soldiers >= 3 and
+      tower.paint >= UnitSpecs[utSplasher].paintCost:
     return utSplasher
 
-  ## Otherwise: whichever type is furthest below its share of the census.
-  let wantSoldier = mix.soldier * total div 100
-  let wantMopper = mix.mopper * total div 100
-  let wantSplasher = mix.splasher * total div 100
-  var best = utSoldier
-  var worst = side.soldiers - wantSoldier
-  if side.moppers - wantMopper < worst:
-    worst = side.moppers - wantMopper
-    best = utMopper
-  if side.splashers - wantSplasher < worst:
-    worst = side.splashers - wantSplasher
-    best = utSplasher
-  ## A tower that cannot pay for the ideal type builds the cheapest thing it
-  ## can, because an idle tower is the one thing no knob may produce.
-  if tower.paint < UnitSpecs[best].paintCost or
-      chips < UnitSpecs[best].moneyCost:
-    for fallback in [utSoldier, utMopper, utSplasher]:
-      if tower.paint >= UnitSpecs[fallback].paintCost and
-          chips >= UnitSpecs[fallback].moneyCost:
-        return fallback
-  best
+  let order = deficitOrder(w, side)
+  for kind in order:
+    if affordable(w, side, tower, kind, reserve):
+      return kind
+  ## Nothing the census wants is affordable. A tower whose most-wanted type is
+  ## within one round's mining of being affordable SAVES for it rather than
+  ## spending the stash on something cheaper — which is what lets a
+  ## splasher-heavy `unit_mix` ever produce a splasher, since a splasher costs
+  ## 300 paint and a tower that bought a soldier the moment it held 200 would
+  ## never reach it. The wait is structurally bounded: paint accrues every
+  ## round and the reserve only ever shrinks.
+  let wanted = order[0]
+  if tower.paint >= UnitSpecs[wanted].paintCost - 150 and
+      w.getMoney(side.team) - UnitSpecs[wanted].moneyCost >= reserve:
+    return wanted
+  for kind in [utSoldier, utMopper, utSplasher]:
+    if affordable(w, side, tower, kind, reserve):
+      return kind
+  order[0]
 
 # ---------------------------------------------------------------------------
 #  Towers

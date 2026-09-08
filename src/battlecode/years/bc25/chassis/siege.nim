@@ -85,14 +85,28 @@ proc chokePlan*(w: World, side: Side, r: Robot): Loc =
   result = loc(-1, -1)
   if not chokesOpen(side, w.currentRound): return
   if side.chokes.len == 0: return
+  ## THREE defense towers is the plan, not a wall of them: each one buffs
+  ## every other tower the clan owns, and the fourth buys much less than the
+  ## money or paint tower those 1000 chips would otherwise be.
+  if w.towerCountByKind(side.team, tkDefense) >= 3: return
+  ## THE REMEMBERED RUIN LIST, not a sense sweep: a choke is a place the clan
+  ## walks to on purpose, and a chassis that only ever noticed a choke ruin it
+  ## happened to be standing next to would give `defense_tower_chokes` no
+  ## teeth at all.
   var best = high(int)
-  for l in w.locationsWithinRadiusSquared(r.loc, VisionRadiusSquared):
+  for l in side.knownRuins:
     if not r.spend(1): break
-    if not w.hasRuin(l): continue
     if w.hasTower(l): continue
     if side.claims.hasKey(w.idx(l)): continue
+    if not w.isValidPatternCenter(l, true): continue
+    if overlapsProtected(side, l, 4): continue
     let c = nearestChoke(w, side, l)
     if c.x < 0: continue
+    ## The soldier still has to be able to reach it: `ruin_claim_radius`
+    ## bounds how far the clan spreads, on this branch as on every other.
+    if l.distanceSquaredTo(r.loc) >
+        claimRadiusSquared(side, w.currentRound): continue
+    ## Among the ruins it CAN reach, the one nearest a measured choke.
     let d = c.distanceSquaredTo(l)
     if d < best:
       best = d

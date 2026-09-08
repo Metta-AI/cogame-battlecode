@@ -288,6 +288,8 @@ proc runRound*(w: World, sides: array[2, Side],
       discard w.beat(BeatStarved, "starved", t, w.starvedThisRound[t])
     if w.lostThisRound[t] >= 5:
       discard w.beat(BeatRout, "rout", t, w.lostThisRound[t])
+  for t in 0 .. 1:
+    w.stats.defenseBuffRounds[t] += w.damageIncrease[t]
   if w.currentRound == 1000:
     for t in 0 .. 1:
       w.stats.chipsAt1000[t] = w.stats.money[t]

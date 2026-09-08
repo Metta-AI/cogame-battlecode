@@ -297,6 +297,22 @@ block:
       foreign24.hashChain, strong24.hashChain)
     checkEq("and the bc24 chassis strings round-trip",
       $parseScriptedChassis("examplefuncsplayer24"), "examplefuncsplayer24")
+  block:
+    ## And one year on again: a foreign chassis name on a bc25 game plays
+    ## `spaark` rather than nothing.
+    let s25 = [baselineSheet("bc25", blSpaark), baselineSheet("bc25", blSpaark)]
+    let strong25 = playGameFor("bc25", "Filter", s25,
+      [scSpaark, scSpaark], 0, 0, 220, 0)[0]
+    let foreign25 = playGameFor("bc25", "Filter", s25,
+      [scGoneSharkin, scAwu], 0, 0, 220, 0)[0]
+    checkEq("a foreign chassis name on a bc25 game plays spaark",
+      foreign25.hashChain, strong25.hashChain)
+    checkEq("and the bc25 chassis strings round-trip",
+      $parseScriptedChassis("examplefuncsplayer25"), "examplefuncsplayer25")
+    checkEq("as does the strong one", $parseScriptedChassis("spaark"),
+      "spaark")
+  checkEq("for bc25 the strong chassis is spaark", $strongChassisFor("bc25"),
+    "spaark")
   checkEq("a recorded chassis string round-trips",
     $parseScriptedChassis("examplefuncsplayer21"), "examplefuncsplayer21")
   checkEq("and an unknown one is not a crash", $parseScriptedChassis("nope"),

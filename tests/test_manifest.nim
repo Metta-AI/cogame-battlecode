@@ -110,8 +110,8 @@ block:
   var yearEnum: seq[string]
   for v in game["config_schema"]["properties"]["year"]["enum"]:
     yearEnum.add(v.getStr())
-  checkEq("config_schema.year.enum names all four years", yearEnum,
-    @["bc26", "bc20", "bc21", "bc24"])
+  checkEq("config_schema.year.enum names all five years", yearEnum,
+    @["bc26", "bc20", "bc21", "bc24", "bc25"])
   ## bc24 plays to 2000 rounds, which is EXACTLY the existing ceiling, so no
   ## schema change was needed -- and this is the assertion that says so.
   let rounds = game["config_schema"]["properties"]["maxRounds"]
@@ -129,11 +129,11 @@ block:
 # --- num_agents -------------------------------------------------------------
 block:
   ## ONE VARIANT PER BATTLECODE YEAR.
-  checkEq("one variant per registered year", variants.len, 4)
+  checkEq("one variant per registered year", variants.len, 5)
   var variantIds: seq[string]
   for variant in variants: variantIds.add(variant["id"].getStr())
   checkEq("and they are the registered years", variantIds,
-    @["bc26", "bc20", "bc21", "bc24"])
+    @["bc26", "bc20", "bc21", "bc24", "bc25"])
   for variant in variants:
     check("variant " & variant["id"].getStr() & " is a registered year",
       isRegisteredYear(variant["game_config"]["year"].getStr()))
