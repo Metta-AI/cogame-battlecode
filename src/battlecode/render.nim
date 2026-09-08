@@ -31,6 +31,9 @@ from years/bc25/units as u25 import nil
 from years/bc23/world as w23 import nil
 from years/bc23/constants as c23 import nil
 from years/bc23/units as u23 import nil
+from years/bc22/world as w22 import nil
+from years/bc22/constants as c22 import nil
+from years/bc22/units as u22 import nil
 
 const
   TileSize* = 16
@@ -120,6 +123,22 @@ const
   Bc23WellAdColor = rgba(0x7a, 0x5a, 0x2e, 255)
   Bc23WellMnColor = rgba(0x2e, 0x5a, 0x7a, 255)
   Bc23WellExColor = rgba(0x6a, 0x33, 0x7a, 255)
+
+  ## bc22's board is RUBBLE, and a spectator who cannot see it cannot
+  ## understand why a soldier is standing still: every cooldown a robot pays is
+  ## multiplied by `1 + rubble/10`, so rubble 60 is SEVEN TIMES the cost of
+  ## bare ground. The ramp is five steps from bare ground to near-black, and it
+  ## is drawn FIRST, under everything. The tones are this repository's own
+  ## paintbot-derived palette, because the 2022 client draws its terrain from
+  ## photographic tiles that do not survive a 16 px cut.
+  Bc22Rubble0 = rgba(0x3b, 0x42, 0x38, 255)
+  Bc22Rubble1 = rgba(0x33, 0x38, 0x30, 255)
+  Bc22Rubble2 = rgba(0x2a, 0x2d, 0x28, 255)
+  Bc22Rubble3 = rgba(0x1f, 0x21, 0x1e, 255)
+  Bc22Rubble4 = rgba(0x14, 0x15, 0x13, 255)
+  Bc22LeadColor = rgba(0x6d, 0x7f, 0x8c, 255)
+  Bc22GoldColor = rgba(0xc9, 0xa2, 0x3a, 255)
+  Bc22DeadSquareColor = rgba(0x4a, 0x2c, 0x2c, 255)
 
 type
   Atlas = ref object
@@ -947,6 +966,133 @@ proc buildBc23Packet(r: Renderer, w: w23.World, gameIndex, sideAslot: int,
   packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
   packet
 
+# ---------------------------------------------------------------------------
+#  bc22 -- the rubble heat layer, lead and gold, and seven unit types at three
+#          modes and three levels
+# ---------------------------------------------------------------------------
+
+proc bc22UnitSprite(unit: w22.Robot): string =
+  ## Palette follows the CLIENT's own two team colours, blue = side A and
+  ## red = side B. Sides alternate every game, so the scorebug plate keeps the
+  ## ALIAS constant and recolours its swatch per game.
+  ##
+  ## A BUILDING HAS THREE ORTHOGONAL DISPLAY STATES the rules make real, and
+  ## the 2022 client ships a sprite for each: its LEVEL (1/2/3), its PROTOTYPE
+  ## state (which can neither act nor move) and its PORTABLE state (which moves,
+  ## cannot act, and takes NOTHING from a fury).
+  let tint = if unit.team == u22.teamA: "blue_" else: "red_"
+  let base =
+    case unit.kind
+    of c22.rtArchon: "archon"
+    of c22.rtLaboratory: "lab"
+    of c22.rtWatchtower: "watchtower"
+    of c22.rtMiner: return tint & "miner"
+    of c22.rtBuilder: return tint & "builder"
+    of c22.rtSoldier: return tint & "soldier"
+    of c22.rtSage: return tint & "sage"
+  let level = max(1, min(3, unit.level))
+  case unit.mode
+  of u22.rmPrototype: tint & base & "_prototype"
+  of u22.rmPortable: tint & base & "_portable_level" & $level
+  else: tint & base & "_level" & $level
+
+proc bc22TerrainStage(w: w22.World): int =
+  ## The rubble layer changes ONLY on a VORTEX, and the lead layer changes
+  ## every time a miner acts, so the terrain sprite is re-cut on a fixed
+  ## cadence: eight rounds is often enough that a square going dry is visible
+  ## as it happens and rare enough that a 60x60 board is not re-rasterised
+  ## twenty-four times a second. The anomaly cursor is folded in so a VORTEX
+  ## forces an immediate re-cut — it is the most spectacular single frame in
+  ## any Battlecode year this repo ships.
+  w.currentRound div 8 + w.anomalyCursor * 100000
+
+proc bc22RubbleColour(rubble: int): ColorRGBA =
+  if rubble <= 0: Bc22Rubble0
+  elif rubble <= 15: Bc22Rubble1
+  elif rubble <= 35: Bc22Rubble2
+  elif rubble <= 65: Bc22Rubble3
+  else: Bc22Rubble4
+
+proc renderBc22Terrain(r: Renderer, w: w22.World): Image =
+  result = newImage(w.width * TileSize, w.height * TileSize)
+  result.fill(Bc22Rubble0)
+  let ctx = newContext(result)
+  for y in 0 ..< w.height:
+    for x in 0 ..< w.width:
+      let px = x * TileSize
+      ## The board's y axis grows NORTH; the canvas grows down.
+      let py = (w.height - 1 - y) * TileSize
+      let l = u22.loc(x, y)
+      let i = w22.idx(w, l)
+      ctx.fillStyle = bc22RubbleColour(w.rubble[i])
+      ctx.fillRect(rect(float32(px), float32(py),
+                        float32(TileSize), float32(TileSize)))
+      ## Lead: a filled pip sized by amount, and a HOLLOW RING the moment a
+      ## square hits zero — which is how a spectator sees a `mine_floor: 0`
+      ## faction eating its own map.
+      let lead = w.leadAt[i]
+      let gold = w.goldAt[i]
+      let cx = float32(px + TileSize div 2)
+      let cy = float32(py + TileSize div 2)
+      if lead > 0:
+        let size = float32(3 + min(5, lead div 12))
+        ctx.fillStyle = Bc22LeadColor
+        ctx.fillRect(rect(cx - size / 2, cy - size / 2, size, size))
+      elif w.map.lead[i] > 0:
+        ## A deposit that STARTED here and is gone: the map will never put lead
+        ## back on it, and that is the cheapest mistake in this year.
+        ctx.fillStyle = Bc22DeadSquareColor
+        ctx.fillRect(rect(cx - 2.5, cy - 2.5, 5.0, 1.5))
+        ctx.fillRect(rect(cx - 2.5, cy + 1.0, 5.0, 1.5))
+      if gold > 0:
+        ctx.fillStyle = Bc22GoldColor
+        ctx.fillRect(rect(cx - 2.0, cy - 2.0, 4.0, 4.0))
+
+proc buildBc22Packet(r: Renderer, w: w22.World, gameIndex, sideAslot: int,
+                     chrome: string): seq[uint8] =
+  var packet: seq[uint8]
+  let newGame = r.terrainGame != gameIndex
+  let stage = bc22TerrainStage(w)
+
+  if newGame:
+    r.terrainGame = gameIndex
+    r.terrainStage = -1
+    r.liveObjects.clear()
+    r.prevRobotSprite.clear()
+    packet.addClearObjects()
+    packet.addLayer(MapLayerId, MapLayerKind, ZoomableFlag)
+    packet.addViewport(MapLayerId, w.width * TileSize, w.height * TileSize)
+
+  if r.terrainStage != stage:
+    r.terrainStage = stage
+    let terrain = r.renderBc22Terrain(w)
+    packet.addSprite(TerrainSpriteId, terrain.width, terrain.height,
+      straightPixels(terrain), "terrain")
+    packet.addObject(1, 0, 0, -32768, MapLayerId, TerrainSpriteId)
+
+  ## Every live robot. Object ids are stable for a robot's whole life, so the
+  ## client's motion interpolation glides it between rounds instead of
+  ## teleporting it. An ARCHON draws above everything else, because it is the
+  ## only unit whose death ends the game.
+  var seen = initHashSet[int]()
+  for id in w.execOrder:
+    let unit = w22.robotById(w, id)
+    if unit == nil: continue
+    let objectId = RobotObjectBase + (id mod 20000)
+    seen.incl(objectId)
+    let sprite = r.spriteId(packet, bc22UnitSprite(unit))
+    r.addObj(packet, objectId, unit.loc.x * TileSize,
+      (w.height - 1 - unit.loc.y) * TileSize,
+      (if unit.kind == c22.rtArchon: 6
+       elif u22.isBuilding(unit.kind): 4
+       else: 5), sprite)
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= RobotObjectBase and objectId notin seen:
+      r.dropObj(packet, objectId)
+
+  packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
+  packet
+
 proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   ## The ONE place the renderer branches on the year. `Session` is an object
   ## variant, so the compiler checks that a new year gets an arm here.
@@ -957,3 +1103,4 @@ proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   of yBc24: r.buildBc24Packet(s.w24, s.gameIndex, s.sideAslot, chrome)
   of yBc25: r.buildBc25Packet(s.w25, s.gameIndex, s.sideAslot, chrome)
   of yBc23: r.buildBc23Packet(s.w23, s.gameIndex, s.sideAslot, chrome)
+  of yBc22: r.buildBc22Packet(s.w22, s.gameIndex, s.sideAslot, chrome)

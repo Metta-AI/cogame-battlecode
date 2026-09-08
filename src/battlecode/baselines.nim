@@ -29,6 +29,8 @@ type
     blExamplefuncsplayer25 = "examplefuncsplayer25"
     blLemonade = "lemonade"
     blExamplefuncsplayer23 = "examplefuncsplayer23"
+    blWololo = "wololo"
+    blExamplefuncsplayer22 = "examplefuncsplayer22"
 
 proc defaultBaselineFor*(year: string): Baseline =
   ## A seat that says nothing useful plays the year's STRONG published
@@ -39,6 +41,7 @@ proc defaultBaselineFor*(year: string): Baseline =
   of yBc24: blGoneSharkin
   of yBc25: blSpaark
   of yBc23: blLemonade
+  of yBc22: blWololo
   of yBc26: blAwu
 
 proc baselineFor*(year, name: string): Baseline =
@@ -70,6 +73,11 @@ proc baselineFor*(year, name: string): Baseline =
     of "scaffold", "examplefuncsplayer", "examplefuncsplayer23", "example":
       blExamplefuncsplayer23
     else: blLemonade
+  of yBc22:
+    case key
+    of "scaffold", "examplefuncsplayer", "examplefuncsplayer22", "example":
+      blExamplefuncsplayer22
+    else: blWololo
   of yBc26:
     case key
     of "scaffold", "examplefuncsplayer", "example": blScaffold
@@ -106,6 +114,8 @@ proc baselineChassis*(kind: Baseline): ScriptedChassis =
   of blExamplefuncsplayer25: scExamplefuncsplayer25
   of blLemonade: scLemonade
   of blExamplefuncsplayer23: scExamplefuncsplayer23
+  of blWololo: scWololo
+  of blExamplefuncsplayer22: scExamplefuncsplayer22
   of blAwu: scAwu
 
 proc baselineReply*(kind: Baseline): string =
@@ -189,6 +199,17 @@ proc baselineReply*(kind: Baseline): string =
                  "destabilizer_use":"defend",
                  "retreat_on_launcher_loss":"regroup","carrier_throw":25},
         "notes":"default lemonade doctrine","motto":"Anchor the sky."}"""
+  of blWololo, blExamplefuncsplayer22:
+    ## The all-defaults bc22 sheet, which is ALSO the fallback sheet
+    ## §Decisions prints verbatim. `examplefuncsplayer22` reads no knob, so it
+    ## answers with the same sheet: the chassis, not the sheet, is what makes
+    ## it the weak floor (D1).
+    """{"sheet":{"opening":"miner_eco","miner_count_curve":"steady",
+                 "mine_floor":1,"soldier_sage_ratio":65,"lab_round":300,
+                 "lab_solitude":12,"gold_use":"sages",
+                 "watchtower_policy":"home","anomaly_play":"time_pushes",
+                 "archon_relocate":"safety","retreat_hp":40},
+        "notes":"default wololo doctrine","motto":"Leave one lead behind."}"""
 
 proc baselineSheet*(year: string, kind: Baseline): Sheet =
   result = parseReply(baselineReply(kind), year)

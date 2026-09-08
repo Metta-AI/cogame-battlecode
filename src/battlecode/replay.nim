@@ -72,6 +72,7 @@ proc seatJson(seat: SeatReport, slot: int): JsonNode =
     "chassis": seat.chassis,
     "sheet": seat.sheet.toJson(),
     "sheet_submitted": seat.sheet.submitted,
+    "sheet_envelope": seat.sheet.envelope,
     "sheet_defaults_applied": applied,
     "sheet_unknown_fields": unknown,
     "notes": seat.sheet.notes,
@@ -185,6 +186,7 @@ proc parseSeat(node: JsonNode, year: string): SeatReport =
   result.sheet.notes = node{"notes"}.getStr()
   result.sheet.motto = node{"motto"}.getStr()
   result.sheet.submitted = node{"sheet_submitted"}.getStr("{}")
+  result.sheet.envelope = node{"sheet_envelope"}.getStr("")
 
 proc parseReplay*(text: string): ReplayDoc =
   let doc = parseJson(text)

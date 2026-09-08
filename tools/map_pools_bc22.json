@@ -1,0 +1,9 @@
+{
+  "small": ["chalice", "maze", "nottestsmall", "snowflake_redux", "rugged",
+            "charge"],
+  "mixed": ["equals", "monument", "island_hopping", "progress",
+            "collaboration", "standoff", "intersection", "pyramid_raiders",
+            "defenseless", "fisherman"],
+  "large": ["turtle", "flowers", "despair", "chessboard", "colosseum",
+            "vortex"]
+}

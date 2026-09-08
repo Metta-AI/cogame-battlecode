@@ -64,6 +64,12 @@ proc resultsJson*(
   var policyKind = newJArray()
   var names = newJArray()
   var aliases = newJArray()
+  ## `sheet_envelope` is NEW, OPTIONAL and YEAR-NEUTRAL (LEARNINGS
+  ## 2026-09-08): which envelope rule `sheet.validate` had to apply to find
+  ## each seat's knobs, or `""` when the payload itself was the sheet. It makes
+  ## the finding machine-visible in the results document as well as on the
+  ## doctrine card.
+  var envelopes = newJArray()
   for slot in 0 .. 1:
     var applied = newJArray()
     for field in seats[slot].sheet.defaultsApplied:
@@ -74,6 +80,7 @@ proc resultsJson*(
     policyKind.add(%seats[slot].policyKind)
     names.add(%seats[slot].name)
     aliases.add(%seats[slot].alias)
+    envelopes.add(%seats[slot].sheet.envelope)
 
   %*{
     "names": names,
@@ -86,6 +93,7 @@ proc resultsJson*(
     "year": plan.year,
     "policy_kind": policyKind,
     "sheet_defaults_applied": defaultsApplied,
+    "sheet_envelope": envelopes,
     "fallbacks": fallbacks,
     "decision_ms": decisionMs,
     "sim_seconds": simSeconds,
@@ -180,6 +188,30 @@ const Bc23GameKeys* = [
   ## its own. `islands_on_map`, `islands_to_win`, `headquarters_per_side`,
   ## `cloud_tiles`, `current_tiles` and `wells_total` are the six scalars.
 
+const Bc22GameKeys* = [
+  "archons_start", "archons_end", "archons_lost", "archon_relocations",
+  "lead_mined", "gold_mined", "lead_end", "gold_end", "lead_net_worth_end",
+  "gold_net_worth_end", "lead_reclaimed", "gold_reclaimed",
+  "squares_mined_dry", "miners_built", "builders_built", "soldiers_built",
+  "sages_built", "labs_built", "labs_finished", "watchtowers_built",
+  "watchtowers_finished", "mutations_l2", "mutations_l3", "transmutes",
+  "gold_transmuted", "lead_spent_transmuting", "repairs", "hp_repaired",
+  "envisions", "sage_damage", "soldier_damage", "watchtower_damage",
+  "array_writes", "transforms", "rounds_with_a_lab",
+  "anomaly_losses_charge", "anomaly_losses_fury_hp",
+  "anomaly_losses_abyss_lead", "anomalies_dodged",
+  "archons_per_side", "lead_on_map_start", "lead_on_map_end",
+  "lead_squares_start", "rubble_mean", "anomalies_scheduled",
+  "vortexes_scheduled", "singularity_round"
+]
+  ## bc22's own optional siblings. It REUSES `units_built`, `damage_dealt`,
+  ## `robots_alive` and `robots_lost` from bc20/bc23/bc24/bc25 rather than
+  ## duplicating them -- same meaning, same type -- and everything else is its
+  ## own. `archons_per_side`, `lead_on_map_start`, `lead_on_map_end`,
+  ## `lead_squares_start`, `rubble_mean` (IN TENTHS, so the document carries an
+  ## integer), `anomalies_scheduled`, `vortexes_scheduled` and
+  ## `singularity_round` are the eight scalars.
+
 const EndReasons* = [
   "kings_destroyed", "cats_cleared", "round_limit", "abandoned",
   "hq_destroyed", "quantity", "quality", "broadcasts", "highest_id",
@@ -190,7 +222,8 @@ const EndReasons* = [
   "more_paint_in_units", "more_robots_alive",
   "conquest", "more_sky_islands", "more_reality_anchors",
   "more_elixir_net_worth", "more_mana_net_worth",
-  "more_adamantium_net_worth"
+  "more_adamantium_net_worth",
+  "more_archons", "more_gold_net_worth", "more_lead_net_worth"
 ]
   ## The union of all SIX years' `DominationFactor` renderings plus our own
   ## wall-clock `abandoned`. bc24's `MORE_FLAGS_PICKED` and `RESIGNATION` are
@@ -207,8 +240,8 @@ const EndReasons* = [
 
 const ResultsKeys* = [
   "names", "aliases", "scores", "wins", "points", "games", "seed", "year",
-  "policy_kind", "sheet_defaults_applied", "fallbacks", "decision_ms",
-  "sim_seconds", "reason", "wall_clock_seconds", "game_version"
+  "policy_kind", "sheet_defaults_applied", "sheet_envelope", "fallbacks",
+  "decision_ms", "sim_seconds", "reason", "wall_clock_seconds", "game_version"
 ]
   ## The closed key set. `tests/test_manifest.nim` asserts this equals the
   ## manifest's `results_schema.required` and the list `docker_smoke.sh`

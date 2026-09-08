@@ -33,6 +33,12 @@ from years/bc23/units as u23 import nil
 from years/bc23/islands as i23 import nil
 from years/bc23/constants as c23 import nil
 from years/bc23/rules as r23 import nil
+from years/bc22/world as w22 import nil
+from years/bc22/units as u22 import nil
+from years/bc22/anomaly as a22 import nil
+from years/bc22/economy as e22 import nil
+from years/bc22/constants as c22 import nil
+from years/bc22/rules as r22 import nil
 
 const
   PlaybackSpeeds* = [1, 2, 3, 4, 8, 16]
@@ -141,6 +147,7 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
   ## year.
   let isBc25 = doc.year == "bc25"
   let isBc23 = doc.year == "bc23"
+  let isBc22 = doc.year == "bc22"
   ## The bc23-only kinds below (`anchor_built`, `island_captured`,
   ## `island_lost`, `conquest_progress`, `well_transformed`, `well_upgraded`,
   ## `first_elixir_unit`, `boost_field`, `destabilize_hit`, `duel`) need no
@@ -169,14 +176,14 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       of "drone_water_drop": "drop"
       of "hq_buried": "bury"
       of "hq_drowned": "drown"
-      of "first_action": (if isBc25 or isBc23: "build" else: "")
+      of "first_action": (if isBc25 or isBc23 or isBc22: "build" else: "")
       of "tower_built": "tower"
       of "tower_upgraded": "upgrade"
       of "tower_lost": "siege"
       of "srp_completed", "srp_active", "srp_broken": "srp"
       of "coverage": "coverage"
       of "starved": "starve"
-      of "rout": (if isBc25 or isBc23: "rout" else: "")
+      of "rout": (if isBc25 or isBc23 or isBc22: "rout" else: "")
       of "anchor_built": "anchor"
       of "island_captured", "island_lost": "island"
       of "conquest_progress": "conquest"
@@ -184,6 +191,15 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       of "boost_field": "boost"
       of "destabilize_hit": "destabilize"
       of "duel": "duel"
+      of "lab_built": "lab"
+      of "first_sage": "sage"
+      of "watchtower_built": "tower"
+      of "mutation": "mutate"
+      of "gold_milestone": "gold"
+      of "anomaly_struck": "anomaly"
+      of "anomaly_dodged": "dodge"
+      of "archon_lost", "archon_relocated": "archon"
+      of "singularity": "end"
       of "doctrine_received", "doctrine_fallback": "doctrine"
       else: ""
     if kind.len == 0: continue
@@ -314,9 +330,69 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
         " for " & $e.fields{"damage"}.getInt() & ", game " &
         $(e.game + 1) & ", round " & $e.round
     of "duel":
-      label = "LAUNCHER DUEL — " & $e.fields{"lost"}[0].getInt() & " lost to " &
-        $e.fields{"lost"}[1].getInt() & ", game " & $(e.game + 1) &
+      ## bc22 spells `duel` with the SAME field name and a different meaning —
+      ## attackers lost, not launchers — so the label switch tests the year.
+      if isBc22:
+        label = "TRADE — " & $e.fields{"lost"}[0].getInt() &
+          " attackers lost to " & $e.fields{"lost"}[1].getInt() & ", game " &
+          $(e.game + 1) & ", round " & $e.round
+      else:
+        label = "LAUNCHER DUEL — " & $e.fields{"lost"}[0].getInt() &
+          " lost to " & $e.fields{"lost"}[1].getInt() & ", game " &
+          $(e.game + 1) & ", round " & $e.round
+    of "lab_built":
+      label = e.fields{"alias"}.getStr() &
+        (if e.fields{"finished"}.getBool(): " finishes" else: " places") &
+        " a laboratory at " & $e.fields{"x"}.getInt() & "," &
+        $e.fields{"y"}.getInt() & " — " & $e.fields{"rate"}.getInt() &
+        " lead per gold, game " & $(e.game + 1) & ", round " & $e.round
+    of "first_sage":
+      label = e.fields{"alias"}.getStr() & " fields its first sage after " &
+        $e.fields{"gold_spent_total"}.getInt() & " gold — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "watchtower_built":
+      label = e.fields{"alias"}.getStr() &
+        (if e.fields{"finished"}.getBool(): " finishes" else: " places") &
+        " a watchtower at " & $e.fields{"x"}.getInt() & "," &
+        $e.fields{"y"}.getInt() & " — game " & $(e.game + 1) &
         ", round " & $e.round
+    of "mutation":
+      label = e.fields{"alias"}.getStr() & " mutates a " &
+        e.fields{"target"}.getStr() & " to level " &
+        $e.fields{"level"}.getInt() & " — game " & $(e.game + 1) &
+        ", round " & $e.round
+    of "gold_milestone":
+      label = e.fields{"alias"}.getStr() & " reaches " &
+        $e.fields{"gold_total"}.getInt() & " gold at " &
+        $e.fields{"rate"}.getInt() & " lead apiece — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "anomaly_struck":
+      let lost = e.fields{"droids_lost"}
+      let a = (if lost != nil and lost.len > 1: lost[0].getInt() else: 0)
+      let b = (if lost != nil and lost.len > 1: lost[1].getInt() else: 0)
+      label = e.fields{"type"}.getStr().toUpperAscii() &
+        (if a + b > 0: " — " & $(a + b) & " droids gone: " & $a & " " &
+                       AliasA & ", " & $b & " " & AliasB
+         else: " strikes") &
+        ", game " & $(e.game + 1) & ", round " & $e.round
+    of "anomaly_dodged":
+      label = e.fields{"alias"}.getStr() & " dodges the " &
+        e.fields{"type"}.getStr().toUpperAscii() & " — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "archon_lost":
+      label = "ARCHON DOWN — " & e.fields{"alias"}.getStr() & " has " &
+        $e.fields{"archons_left"}.getInt() & " left, and " &
+        $e.fields{"gold_dropped"}.getInt() & " gold is on the ground"
+    of "archon_relocated":
+      label = e.fields{"alias"}.getStr() & " walks an archon from " &
+        $e.fields{"from_x"}.getInt() & "," & $e.fields{"from_y"}.getInt() &
+        " to " & $e.fields{"to_x"}.getInt() & "," &
+        $e.fields{"to_y"}.getInt() & " — game " & $(e.game + 1) &
+        ", round " & $e.round
+    of "singularity":
+      label = "SINGULARITY — round " & $e.round & ", decided on " &
+        e.fields{"rung"}.getStr().replace("_", " ") & ", game " &
+        $(e.game + 1)
     of "rout":
       label = "ROUT — " & e.fields{"alias"}.getStr() & " loses " &
         $e.fields{"lost"}.getInt() & " robots, game " &
@@ -1210,6 +1286,206 @@ proc bc23ChromeJson*(
   }
   $node
 
+proc bc22Archons(w: w22.World, sideAslot: int): JsonNode =
+  ## `#bc22-archons`: THE HEADLINE READOUT AND THE YEAR'S WHOLE STORY. Both
+  ## factions' archon tally with a health pip per archon that drains as it is
+  ## shot, a level dot, and a PORTABLE outline on any archon currently walking.
+  ## Lose your last archon and you lose the game immediately, so this is the
+  ## only readout that can end the match.
+  var factions = newJArray()
+  for slot in 0 .. 1:
+    let team = u22.Team(if slot == sideAslot: 0 else: 1)
+    var pips = newJArray()
+    for id in w.execOrder:
+      let r = w22.robotById(w, id)
+      if r == nil or r.team != team or r.kind != c22.rtArchon: continue
+      pips.add(%*{"id": r.id, "x": r.loc.x, "y": r.loc.y,
+                  "health": r.health, "max": u22.maxHealthOf(r.kind, r.level),
+                  "level": r.level, "mode": $r.mode,
+                  "portable": r.mode == u22.rmPortable})
+    factions.add(%*{
+      "alias": aliasFor(slot),
+      "alive": w22.robotCountByType(w, team, c22.rtArchon),
+      "start": w.stats.archonsStart[ord(team)],
+      "lost": w.stats.archonsLost[ord(team)],
+      "relocations": w.stats.archonRelocations[ord(team)],
+      "pips": pips
+    })
+  %*{"factions": factions}
+
+proc bc22Anomaly(w: w22.World): JsonNode =
+  ## `#bc22-anomaly`: THE YEAR'S SIGNATURE READOUT, AND THE ONE NO OTHER YEAR
+  ## HAS. The next scheduled anomaly and how many rounds away, the whole
+  ## remaining schedule as a mini-timeline, and the Singularity countdown.
+  let nxt = a22.nextAnomaly(w)
+  var schedule = newJArray()
+  for i in 0 ..< w.map.anomalies.len:
+    let e = w.map.anomalies[i]
+    schedule.add(%*{"round": e.round,
+                    "type": ($e.kind).toLowerAscii(),
+                    "past": i < w.anomalyCursor})
+  %*{
+    "next": (if nxt.has: ($nxt.kind).toLowerAscii() else: ""),
+    "next_round": (if nxt.has: nxt.round else: -1),
+    "in_rounds": (if nxt.has: max(0, nxt.round - w.currentRound) else: -1),
+    "schedule": schedule,
+    "scheduled": w.map.anomalies.len,
+    "consumed": w.anomalyCursor,
+    "singularity_round": w.maxRounds,
+    "singularity_in": max(0, w.maxRounds - w.currentRound)
+  }
+
+proc bc22Econ(w: w22.World, sideAslot: int): JsonNode =
+  ## `#bc22-econ`: lead and gold banked, lead still on the map and how many
+  ## squares have been mined dry (the `mine_floor` story, made visible),
+  ## laboratories standing with their current transmute rate, and gold spent.
+  var factions = newJArray()
+  for slot in 0 .. 1:
+    let team = u22.Team(if slot == sideAslot: 0 else: 1)
+    let t = ord(team)
+    var labs = newJArray()
+    for id in w.execOrder:
+      let r = w22.robotById(w, id)
+      if r == nil or r.team != team or r.kind != c22.rtLaboratory: continue
+      labs.add(%*{"x": r.loc.x, "y": r.loc.y, "level": r.level,
+                  "mode": $r.mode,
+                  "rate": (if r.mode == u22.rmPrototype: 0
+                           else: e22.peekTransmutationRate(w, r))})
+    factions.add(%*{
+      "alias": aliasFor(slot),
+      "lead": w.stats.lead[t],
+      "gold": w.stats.gold[t],
+      "lead_mined": w.stats.leadMined[t],
+      "gold_transmuted": w.stats.goldTransmuted[t],
+      "lead_spent_transmuting": w.stats.leadSpentTransmuting[t],
+      "squares_mined_dry": w.stats.squaresMinedDry[t],
+      "lead_net_worth": w22.leadNetWorth(w, team),
+      "gold_net_worth": w22.goldNetWorth(w, team),
+      "labs": labs
+    })
+  %*{
+    "factions": factions,
+    "lead_on_map": w22.leadOnMap(w),
+    "lead_squares": w22.leadSquares(w)
+  }
+
+proc bc22Units(w: w22.World, sideAslot: int): JsonNode =
+  ## `#bc22-units`: the seven-type census with SOLDIERS EMPHASISED (this is the
+  ## year of the soldier), prototypes shown separately from finished buildings,
+  ## and robots lost.
+  result = newJArray()
+  for slot in 0 .. 1:
+    let team = u22.Team(if slot == sideAslot: 0 else: 1)
+    let t = ord(team)
+    result.add(%*{
+      "alias": aliasFor(slot),
+      "archons": w22.robotCountByType(w, team, c22.rtArchon),
+      "miners": w22.robotCountByType(w, team, c22.rtMiner),
+      "builders": w22.robotCountByType(w, team, c22.rtBuilder),
+      "soldiers": w22.robotCountByType(w, team, c22.rtSoldier),
+      "sages": w22.robotCountByType(w, team, c22.rtSage),
+      "laboratories": w22.robotCountByType(w, team, c22.rtLaboratory),
+      "watchtowers": w22.robotCountByType(w, team, c22.rtWatchtower),
+      "prototypes": w22.modeCount(w, team, u22.rmPrototype),
+      "portable": w22.modeCount(w, team, u22.rmPortable),
+      "built": w.stats.unitsBuilt[t],
+      "lost": w.stats.robotsLost[t]
+    })
+
+proc bc22War(w: w22.World, sideAslot: int): JsonNode =
+  ## `#bc22-mutation`: the ENDCARD war panel.
+  result = newJArray()
+  for slot in 0 .. 1:
+    let team = u22.Team(if slot == sideAslot: 0 else: 1)
+    let t = ord(team)
+    result.add(%*{
+      "alias": aliasFor(slot),
+      "archons_start": w.stats.archonsStart[t],
+      "archons_end": w22.robotCountByType(w, team, c22.rtArchon),
+      "archons_lost": w.stats.archonsLost[t],
+      "archon_relocations": w.stats.archonRelocations[t],
+      "lead_mined": w.stats.leadMined[t],
+      "gold_mined": w.stats.goldMined[t],
+      "lead_reclaimed": w.stats.leadReclaimed[t],
+      "gold_reclaimed": w.stats.goldReclaimed[t],
+      "squares_mined_dry": w.stats.squaresMinedDry[t],
+      "miners_built": w.stats.minersBuilt[t],
+      "builders_built": w.stats.buildersBuilt[t],
+      "soldiers_built": w.stats.soldiersBuilt[t],
+      "sages_built": w.stats.sagesBuilt[t],
+      "labs_built": w.stats.labsBuilt[t],
+      "labs_finished": w.stats.labsFinished[t],
+      "watchtowers_built": w.stats.watchtowersBuilt[t],
+      "watchtowers_finished": w.stats.watchtowersFinished[t],
+      "mutations_l2": w.stats.mutationsL2[t],
+      "mutations_l3": w.stats.mutationsL3[t],
+      "transmutes": w.stats.transmutes[t],
+      "gold_transmuted": w.stats.goldTransmuted[t],
+      "lead_spent_transmuting": w.stats.leadSpentTransmuting[t],
+      "repairs": w.stats.repairs[t],
+      "hp_repaired": w.stats.hpRepaired[t],
+      "envisions": w.stats.envisions[t],
+      "damage": {"soldier": w.stats.soldierDamage[t],
+                 "sage": w.stats.sageDamage[t],
+                 "watchtower": w.stats.watchtowerDamage[t]},
+      "array_writes": w.stats.arrayWrites[t],
+      "transforms": w.stats.transforms[t],
+      "anomaly_losses": {"charge": w.stats.anomalyLossesCharge[t],
+                         "fury_hp": w.stats.anomalyLossesFuryHp[t],
+                         "abyss_lead": w.stats.anomalyLossesAbyssLead[t]},
+      "anomalies_dodged": w.stats.anomaliesDodged[t]
+    })
+
+proc bc22ChromeJson*(
+  doc: ReplayDoc, w: w22.World, view: ViewerState,
+  frame, totalFrames, gameIndex, sideAslot: int,
+  beats: JsonNode, gameChips: JsonNode, ended: bool
+): string =
+  ## One frame of bc22 chrome. `t` / `st` / `mx` / `mt` are the GENERIC
+  ## timeline keys `chrome_common.js` reads, unchanged, so the clock, the
+  ## transport and the scrubber are driven by the starter's own code; the
+  ## `bc22_*` keys are what the APPENDED bc22 game block draws.
+  let phase = if ended: "gameover" else: "playing"
+  let points = r22.gamePoints(w)
+  var node = %*{
+    "t": frame,
+    "st": 0,
+    "mx": max(1, totalFrames - 1),
+    "mt": 0,
+    "sp": view.speed,
+    "pl": view.playing,
+    "lp": view.loop,
+    "sk": view.skipLulls,
+    "ff": false,
+    "en": true,
+    "ph": phase,
+    "lob": 0,
+    "pov": -1,
+    "nim": GameVersion,
+    "year": "bc22",
+    "beats": beats,
+    "game": gameIndex + 1,
+    "games": doc.games.len,
+    "map": doc.plan.maps[min(gameIndex, doc.plan.maps.high)],
+    "round": w.currentRound,
+    "rounds": doc.plan.maxRounds,
+    "aliases": [AliasA, AliasB],
+    "names": [doc.names[0], doc.names[1]],
+    "sides": [(if sideAslot == 0: "A" else: "B"),
+              (if sideAslot == 0: "B" else: "A")],
+    "points": [points[(if sideAslot == 0: 0 else: 1)],
+               points[(if sideAslot == 0: 1 else: 0)]],
+    "bc22_archons": bc22Archons(w, sideAslot),
+    "bc22_anomaly": bc22Anomaly(w),
+    "bc22_econ": bc22Econ(w, sideAslot),
+    "bc22_units": bc22Units(w, sideAslot),
+    "bc22_war": bc22War(w, sideAslot),
+    "gamechips": gameChips,
+    "doctrines": doctrineWords(doc),
+    "result": doc.result
+  }
+  $node
+
 proc bc20ChromeJson*(
   doc: ReplayDoc, w: w20.World, view: ViewerState,
   frame, totalFrames, gameIndex, sideAslot: int,
@@ -1282,4 +1558,7 @@ proc sessionChromeJson*(
       beats, gameChips, ended)
   of yBc23:
     bc23ChromeJson(doc, s.w23, view, frame, totalFrames, gameIndex, sideAslot,
+      beats, gameChips, ended)
+  of yBc22:
+    bc22ChromeJson(doc, s.w22, view, frame, totalFrames, gameIndex, sideAslot,
       beats, gameChips, ended)
