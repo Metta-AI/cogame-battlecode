@@ -31,7 +31,7 @@
 ## `upgradePick`), `chassis/tower.nim`, `chassis/soldier.nim`,
 ## `chassis/splasher.nim`, `chassis/mopper.nim`, `chassis/siege.nim`,
 ## `chassis/comms.nim`, `chassis/spaark.nim` (the turn dispatcher),
-## `chassis/scaffold25.nim` and `chassis/scenario25.nim`. All thirteen exist;
+## `chassis/scaffold25.nim` and `chassis/scenario25.nim`. All eleven exist;
 ## `NOTICE` and `docs/RULES-BC25.md` name the same paths.
 
 import std/[json, strutils, tables]
