@@ -279,6 +279,17 @@ proc mixHash*(w: World, v: int) =
   w.hashChain = (w.hashChain xor uint64(v and 0xFFFFFFFF)) *
     0x100000001B3'u64
 
+proc mixHashU*(w: World, v: uint64) =
+  ## The same step for a value that is ALREADY a 64-bit hash. It exists
+  ## because `mixHash(int(h and 0xFFFFFFFF'u64))` is a 64-bit-only
+  ## expression: `int` is 32 bits under wasm32, the masked value runs to
+  ## 4294967295, and the conversion raises RangeDefect the moment the browser
+  ## re-derives round 1 -- while the native test suite, on amd64, is green.
+  ## Folding the mask in here keeps the mixed value bit-identical on both
+  ## widths, so no committed hash chain moves.
+  w.hashChain = (w.hashChain xor (v and 0xFFFFFFFF'u64)) *
+    0x100000001B3'u64
+
 # ---------------------------------------------------------------------------
 #  Geometry
 # ---------------------------------------------------------------------------

@@ -331,8 +331,8 @@ proc runRound*(w: World, sides: array[2, Side],
         lifetimes += int(w.srpLifetimes[w.idx(centre)])
     w.mixHash(lifetimes)
   w.mixHash(w.currentRound)
-  w.mixHash(int(colourHash and 0xFFFFFFFF'u64))
-  w.mixHash(int(markerHash and 0xFFFFFFFF'u64))
+  w.mixHashU(colourHash)
+  w.mixHashU(markerHash)
   w.mixHash(hpSum)
   w.mixHash(w.execOrder.len)
 
