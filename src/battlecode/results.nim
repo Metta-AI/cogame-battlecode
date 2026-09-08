@@ -193,10 +193,6 @@ const EndReasons* = [
   "more_adamantium_net_worth"
 ]
   ## The union of all SIX years' `DominationFactor` renderings plus our own
-  ## wall-clock `abandoned`. bc23's six are the last row: `resignation` is
-  ## absent (unreachable from a JSON doctrine) and bc23 contributes no
-  ## `destroy_all_units`, because THERE IS NO ELIMINATION CONDITION in the
-  ## 2023 rule set at all (docs/RULES-BC23.md section Divergences item 7).
   ## wall-clock `abandoned`. bc24's `MORE_FLAGS_PICKED` and `RESIGNATION` are
   ## deliberately absent: the first is unreachable in the engine's own
   ## `checkEndOfMatch` and the second has no action a doctrine can produce
@@ -204,6 +200,10 @@ const EndReasons* = [
   ## absent for the same reason and is recorded as UNREACHABLE HERE rather
   ## than ABSENT UPSTREAM (docs/RULES-BC25.md section Divergences item 6);
   ## `coin_flip` is bc25's `WON_BY_DUBIOUS_REASONS` and already present.
+  ## bc23's six are the last row: `resignation` is absent (unreachable from a
+  ## JSON doctrine) and bc23 contributes no `destroy_all_units`, because THERE
+  ## IS NO ELIMINATION CONDITION in the 2023 rule set at all
+  ## (docs/RULES-BC23.md section Divergences item 7).
 
 const ResultsKeys* = [
   "names", "aliases", "scores", "wins", "points", "games", "seed", "year",

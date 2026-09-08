@@ -394,7 +394,7 @@ block:
 block:
   let fixture = readFile("tools/ci/renderer_fixture.html")
   check("the fixture has a row per year",
-    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25'];" in fixture)
+    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23'];" in fixture)
   check("and fills bc21's own readouts",
     "bc21-influence" in fixture and "bc21-votes" in fixture and
     "bc21-doctrines-body" in fixture)
@@ -404,6 +404,19 @@ block:
   check("and bc25's",
     "bc25-coverage" in fixture and "bc25-towers" in fixture and
     "bc25-econ" in fixture and "bc25-doctrines-body" in fixture)
+  ## bc23's row is the one this coworld's LLM text lands in: the 280-rune
+  ## `notes` is drawn ONLY into `#bc23-doctrines-body`, under bc23-only CSS,
+  ## and no gate rendered it at a full cap until this row existed (r1-F18).
+  check("and bc23's",
+    "bc23-islands" in fixture and "bc23-econ" in fixture and
+    "bc23-units" in fixture and "bc23-doctrines-body" in fixture)
+  check("with the full-cap notes on BOTH bc23 seats, not just the first",
+    "bc23Doctrines += '<div class=\"dline\"><span class=\"dname\">'" in
+      fixture and
+    "'<br>' + BC23_WORDS[m23] + '<br><i>' + notes + '</i></div>'" in fixture)
+  check("and the fixture refuses to pass on a shortened string",
+    "the notes on seat ' + d + ' were shortened" in fixture and
+    "the motto on seat ' + s + ' was shortened" in fixture)
   ## The fixture's "the notes were shortened before they were measured"
   ## check reads `#<year>-doctrines .dline i`, so a year whose doctrine rows
   ## carry any other class name passes that check VACUOUSLY -- bc25 shipped
@@ -866,9 +879,16 @@ block:
     "if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {"
   check("self-dismissal on the first advance", SelfDismiss in page)
   const BandBound =
-    "max-height: calc(100% - var(--topband, 0px) - var(--band, 0px) - 46px)"
-  check("and it is bounded ABOVE the transport band, never inside it",
+    "max-height: min(46vh,\n    calc(100% - var(--topband, 0px) - " &
+    "var(--band, 0px) - 46px));"
+  check("and it is bounded ABOVE the transport band, never inside it, and " &
+    "never over half the featured-match frame",
     BandBound in page)
+
+  ## The stat boxes size to their own content: a fixed box and a
+  ## `white-space: nowrap` row is a readout that reads short (r1-F18).
+  check("#bc23-econ and #bc23-units size to their content",
+    "width: max-content; max-width: calc(100% - 16px);" in page)
 
   ## The two stat boxes sit above the band and are in the --statrail set.
   check("#bc23-units is lifted above var(--band)",
@@ -879,16 +899,54 @@ block:
     "'bc23-econ', 'bc23-units']" in page)
 
   ## Every #bc23-* rule is scoped to the year, one way or the other.
+  ## THE WHOLE <style> BLOCK, not a line scan: a line scan reads the script's
+  ## own `s.year === 'bc23'` as a selector, and it never sees a one-line rule
+  ## whose `{` is not at the end of the line (r1-F24). Comments are stripped
+  ## first so the banner's prose is not mistaken for a rule.
+  let cssOpen = page.find("<style>")
+  let cssClose = page.find("</style>")
+  check("the page has exactly one <style> block",
+    cssOpen >= 0 and cssClose > cssOpen and
+    page.find("<style>", cssOpen + 1) < 0)
+  var css = page[cssOpen + len("<style>") ..< cssClose]
+  while true:
+    let a = css.find("/*")
+    if a < 0: break
+    let b = css.find("*/", a)
+    if b < 0: break
+    css = css[0 ..< a] & " " & css[b + 2 .. ^1]
   var unscoped: seq[string]
-  for line in page.splitLines():
-    let t = line.strip()
-    if not t.startsWith("#bc23-"): continue
-    if "display: none" in t: continue
-    ## A bare `#bc23-x { ... }` rule is fine: the element only EXISTS on a
-    ## bc23 replay because `html:not([data-year="bc23"])` hides it. What is
-    ## forbidden is a rule that could restyle ANOTHER year's element, i.e. a
-    ## selector that does not begin with the `#bc23-` prefix.
-    if not t.startsWith("#bc23-"): unscoped.add(t)
+  var scanned = 0
+  var sel = ""
+  for ch in css:
+    if ch notin {'{', '}', ';'}:
+      sel.add(ch)
+      continue
+    if ch == '{' and "bc23" in sel:
+      for part in sel.split(','):
+        let s = part.splitWhitespace().join(" ")
+        if "bc23" notin s: continue
+        ## `@keyframes bc23flash` names an animation, not an element.
+        if s.startsWith("@"): continue
+        inc scanned
+        ## A bare `#bc23-x { ... }` rule is fine: the element only EXISTS on
+        ## a bc23 replay because `html:not([data-year="bc23"])` hides it.
+        ## What is forbidden is a rule that could restyle ANOTHER year's
+        ## element, i.e. a selector that is neither `#bc23-` prefixed nor
+        ## `data-year` scoped.
+        if s.startsWith("#bc23-") or
+           s.startsWith("html[data-year=\"bc23\"] ") or
+           s.startsWith("html:not([data-year=\"bc23\"]) "):
+          continue
+        unscoped.add(s)
+    sel = ""
+  ## The scan must have REACHED the rules: an empty `unscoped` proves nothing
+  ## if the loop never looked at a bc23 selector. 87 selector parts name the
+  ## year at this landing; the floor is well below that so removing a rule is
+  ## not a failure while deleting the block is.
+  check("the bc23 selector scan is not vacuous", scanned >= 60)
+  checkEq("no bc23 CSS rule can reach another year's element",
+    unscoped.len, 0)
   checkEq("no bc23 CSS rule can reach another year's element",
     unscoped.len, 0)
   check("and the year switch hides the bc23 elements everywhere else",

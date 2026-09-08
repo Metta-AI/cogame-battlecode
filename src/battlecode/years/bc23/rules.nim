@@ -85,6 +85,9 @@ type
     boostersBuilt*: array[2, int]
     robotsAlive*: array[2, int]
     robotsLost*: array[2, int]
+    launchersLost*: array[2, int]
+      ## Surfaced for `retreat_on_launcher_loss`'s own tooth: the knob is
+      ## named after this statistic and nothing recorded it (r1-F23).
     damageDealt*: array[2, int]
     throwDamage*: array[2, int]
     destabilizeDamage*: array[2, int]
@@ -463,6 +466,7 @@ proc harvest(w: World, outcome: var GameOutcome23) =
     outcome.unitsBuilt[slot] = w.stats.unitsBuilt[t]
     outcome.carriersBuilt[slot] = w.stats.carriersBuilt[t]
     outcome.launchersBuilt[slot] = w.stats.launchersBuilt[t]
+    outcome.launchersLost[slot] = w.stats.launchersLost[t]
     outcome.amplifiersBuilt[slot] = w.stats.amplifiersBuilt[t]
     outcome.destabilizersBuilt[slot] = w.stats.destabilizersBuilt[t]
     outcome.boostersBuilt[slot] = w.stats.boostersBuilt[t]

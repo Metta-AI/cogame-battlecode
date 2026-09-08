@@ -17,20 +17,22 @@ enforces:
                       DOES NOT ASSUME THAT: it reads the `bc=` column and
                       FAILS if any unit on any round exceeds the headroom
                       bound, naming the round and the unit.
-  Tier A' (NOT SHIPPED IN THIS LANDING) the scenario packages. Tier A's own
+  Tier A' (BLOCKING)  the SCENARIO PACKAGE, `bc23scenario`, on the same six
+                      maps and the same whole 2000-round window. Tier A's own
                       measurement showed exactly what it cannot cover -- over
                       six full games the example bot never took an anchor,
                       never placed one, never captured an island, never built
                       an amplifier, a destabilizer or a booster, never
                       transferred a resource to a headquarters, never
                       upgraded or transformed a well and never wrote the
-                      shared array -- and the Nim half of the answer is
-                      committed (`chassis/scenario23.nim`, behind
-                      `-d:bc23Scenario`). Its bit-exact Java twin is a
-                      phase-30 item and `docs/PARITY.md` section bc23 says so
-                      in those words. This script compares whatever `--bots`
-                      it is given, so adding the twin is a one-line change to
-                      the workflow.
+                      shared array. `tools/oracle/bc23/bc23scenario/
+                      RobotPlayer.java` and `chassis/scenario23.nim` (behind
+                      `-d:bc23Scenario`) are the two halves of the twin,
+                      written line for line against each other, RNG-free and
+                      scripted by round number. Measured peak bytecode
+                      28-43 % of the limit, so this bot too is never cut off
+                      mid-turn. What it still does not reach is listed in
+                      `docs/PARITY.md` section "What is NOT compared".
   Tier C  (BLOCKING)  the first divergent round of every pair, compared
                       against `tools/ci/parity_ledger_bc23.json`. It FAILS if
                       (a) a pair diverges and has no ledger entry, (b) a pair
@@ -61,6 +63,7 @@ regression is caught by the `test` job too.
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import pathlib
 import re
@@ -110,27 +113,28 @@ def first_divergence(java_path: pathlib.Path, nim_path: pathlib.Path):
     counter to report. Stripping only one side compares a line against itself
     plus a suffix and fails on the first robot record of round 1.
 
+    `zip_longest`, NOT `zip`. `zip` pulls from `jf` first and DISCARDS the
+    line it already holds when `nf` runs out, so a Java trace exactly ONE
+    line longer than the Nim one read as bit-exact: the tail check then read
+    the line AFTER the discarded one and found nothing (r1-F26). Lengths are
+    now compared by the walk itself -- a missing line is a divergence at the
+    line number where it is missing.
+
     Streamed: a 2000-round trace is 3-4 MB a side and eighteen pairs would be
     seventy megabytes held at once otherwise.
     """
+    ended = "<the trace ends here>"
     with java_path.open() as jf, nim_path.open() as nf:
-        for lineno, (jl, nl) in enumerate(zip(jf, nf), start=1):
-            j = strip_bc(jl.rstrip("\n"))
-            n = strip_bc(nl.rstrip("\n"))
+        for lineno, (jl, nl) in enumerate(
+                itertools.zip_longest(jf, nf), start=1):
+            j = ended if jl is None else strip_bc(jl.rstrip("\n"))
+            n = ended if nl is None else strip_bc(nl.rstrip("\n"))
             if j != n:
                 round_no = -1
-                m = re.match(r"^R (\d+) ", j)
+                m = re.match(r"^R (\d+) ", j) or re.match(r"^R (\d+) ", n)
                 if m:
                     round_no = int(m.group(1))
                 return (round_no, lineno, j, n)
-        # One file may still be longer than the other.
-        jrest = jf.readline()
-        nrest = nf.readline()
-        if jrest or nrest:
-            j = strip_bc(jrest.rstrip("\n"))
-            n = strip_bc(nrest.rstrip("\n"))
-            m = re.match(r"^R (\d+) ", j or n)
-            return (int(m.group(1)) if m else -1, -1, j, n)
     return None
 
 
@@ -166,15 +170,64 @@ def check_ledger_schema(entries) -> list[str]:
     return problems
 
 
+def selftest() -> int:
+    """Prove `first_divergence` can see a length mismatch in either direction.
+
+    The r1-F26 case is the one this exists for: a Java trace exactly ONE line
+    longer than the Nim trace. The old `zip`-based walk reported `None` for
+    it, i.e. "bit-exact", which is the worst possible way for a parity gate to
+    be wrong. A gate that cannot fail is not a gate.
+    """
+    import tempfile
+    same = ["R 1 id=1 t=HEADQUARTERS x=1 y=1 hp=1",
+            "R 2 id=1 t=HEADQUARTERS x=1 y=2 hp=1",
+            "R 3 id=1 t=HEADQUARTERS x=1 y=3 hp=1"]
+    tail = "R 4 id=1 t=HEADQUARTERS x=1 y=4 hp=1"
+    cases = [
+        ("equal traces", same, same, None),
+        ("java one line longer", same + [tail], same, 4),
+        ("nim one line longer", same, same + [tail], 4),
+        ("a mid-trace difference", same,
+         [same[0], "R 2 id=1 t=HEADQUARTERS x=9 y=2 hp=1", same[2]], 2),
+    ]
+    bad = []
+    with tempfile.TemporaryDirectory() as tmp:
+        d = pathlib.Path(tmp)
+        for name, java, nim, want in cases:
+            # `bc=` on the Java side only, as the real traces carry it.
+            (d / "j").write_text("".join(f"{l} bc=100\n" for l in java))
+            (d / "n").write_text("".join(f"{l} bc=0\n" for l in nim))
+            got = first_divergence(d / "j", d / "n")
+            round_no = None if got is None else got[0]
+            if round_no != want:
+                bad.append(f"{name}: first_divergence reported {got!r}, "
+                           f"expected first divergent round {want!r}")
+    for b in bad:
+        print(f"::error::{b}")
+    if bad:
+        return 1
+    print(f"parity_tiers_bc23 selftest: {len(cases)} cases, "
+          f"length mismatches detected on both sides")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", required=True, type=pathlib.Path)
-    ap.add_argument("--maps", nargs="+", required=True)
-    ap.add_argument("--bots", nargs="+", required=True)
-    ap.add_argument("--ledger", required=True, type=pathlib.Path)
+    ap.add_argument("--selftest", action="store_true",
+                    help="check first_divergence against known trace pairs "
+                         "and exit; takes no other argument")
+    ap.add_argument("--dir", type=pathlib.Path)
+    ap.add_argument("--maps", nargs="+")
+    ap.add_argument("--bots", nargs="+")
+    ap.add_argument("--ledger", type=pathlib.Path)
     ap.add_argument("--summary", type=pathlib.Path)
     args = ap.parse_args()
 
+    if args.selftest:
+        return selftest()
+    for name in ("dir", "maps", "bots", "ledger"):
+        if getattr(args, name) is None:
+            ap.error(f"--{name} is required unless --selftest is given")
     ledger = json.loads(args.ledger.read_text())
     entries = ledger if isinstance(ledger, list) else ledger.get("entries", [])
     problems = check_ledger_schema(entries)
@@ -255,8 +308,7 @@ def main() -> int:
     lines.append("")
     lines.append(f"Ledger: {len(entries)} accepted divergence(s). "
                  f"The phase-30 exit condition is Tiers A, A' and B passing "
-                 f"with an EMPTY ledger; Tier A' is not shipped in this "
-                 f"landing (see docs/PARITY.md section bc23).")
+                 f"with an EMPTY ledger (see docs/PARITY.md section bc23).")
     table = "\n".join(lines)
     print(table)
     if args.summary:

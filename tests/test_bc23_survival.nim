@@ -37,6 +37,7 @@
 ## (wells transformed 0 -> 4 and elixir mined 33 -> 3354 over six paired
 ## games) are gated in `tests/test_bc23_knobs.nim`.
 
+import std/[os, osproc, strutils]
 import harness
 import bc23_fixture
 
@@ -71,12 +72,15 @@ proc gate(): tuple[games, passed, elixirGames, changedHands: int] =
         if o.anchorsPlaced[seat] < MinAnchorsPlaced: ok = false
         if o.longestHoldStreak[seat] < MinHoldStreak: ok = false
         if o.robotsAlive[seat] < MinAliveAtEnd: ok = false
+      ## EVERY `do*` re-checked its own `can*`. This clause sat AFTER the
+      ## `result.passed` increment below and could not affect the verdict
+      ## (r1-F20); it is part of `ok` now, which is where it was meant to be.
+      if w.refusedActions != 0: ok = false
       if ok: result.passed += 1
       if o.wellsTransformed[0] + o.wellsTransformed[1] >= 1:
         result.elixirGames += 1
       if o.islandsLost[0] + o.islandsLost[1] >= 1:
         result.changedHands += 1
-      if w.refusedActions != 0: ok = false
 
 let g = gate()
 checkEq("the gate plays 3 seeds x 2 small maps", g.games, 6)
@@ -88,8 +92,9 @@ when defined(bc23BrokenChassis):
   ## A gate that cannot fail is not a gate.
   checkEq("THE BROKEN CHASSIS MUST COME BACK RED — no game may pass",
     g.passed, 0)
-  echo "test_bc23_survival: the -d:bc23BrokenChassis control failed the " &
-    "gate in all 6 games, as it must"
+  if g.passed == 0:
+    echo "test_bc23_survival: the -d:bc23BrokenChassis control failed the " &
+      "gate in all 6 games, as it must"
   finish("test_bc23_survival (negative control)")
 else:
   checkEq("EVERY ONE of the six games meets the competence floor",
@@ -100,4 +105,37 @@ else:
     "(the default `elixir_tech: mid` opens after round 500; see the header " &
     "for why the note's four-of-six is not reachable)",
     g.elixirGames >= MinElixirGames)
+
+  block:
+    ## THE INVERTED CONTROL, RUN. The `when defined(bc23BrokenChassis)` arm
+    ## above is dead code unless something compiles it, and until r1-F20
+    ## nothing did: no CI step and no `-d:` anywhere in `.github/workflows`.
+    ## A gate that cannot fail is not a gate, so this re-runs THIS FILE as a
+    ## subprocess with the define. The child's own arm asserts the broken
+    ## chassis passes NO game, so the child exits 0 exactly when the gate
+    ## really failed the broken chassis — an inverted control, the same shape
+    ## `tests/test_bc25_survival.nim` uses.
+    ##
+    ## Always `-d:release`: the child plays six more 2000-round games and the
+    ## debug build of those takes twenty seconds against the release build's
+    ## six, and the property under test (does the gate reject a chassis whose
+    ## carriers never deposit?) is not a codegen property.
+    let nimExe = findExe("nim")
+    if nimExe.len == 0:
+      ## The wasm and container builds have no compiler on PATH and never run
+      ## tests; the `test` job always does.
+      echo "test_bc23_survival: no `nim` on PATH; the inverted control is " &
+        "skipped"
+    else:
+      let cmd = quoteShell(nimExe) & " r --hints:off -d:release " &
+        "-d:bc23BrokenChassis --path:src " & quoteShell(currentSourcePath())
+      echo "test_bc23_survival: running the inverted control: ", cmd
+      let (output, code) = execCmdEx(cmd, options = {poUsePath})
+      checkEq("the SAME gate against the -d:bc23BrokenChassis chassis " &
+        "reports NO passing game", code, 0)
+      check("and it ran the gate rather than failing to compile",
+        "test_bc23_survival (negative control)" in output)
+      if code != 0:
+        echo output
+
   finish("test_bc23_survival")
