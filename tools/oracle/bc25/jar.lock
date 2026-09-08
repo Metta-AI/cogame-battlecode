@@ -1,0 +1,9 @@
+{
+  "url": "https://releases.battlecode.org/maven/org/battlecode/battlecode25-java/3.1.0/battlecode25-java-3.1.0.jar",
+  "version": "3.1.0",
+  "bytes": 9223721,
+  "sha256": "d0cc775610d5221fc17b23d818bc881bb3e882076a809696d15f8d380b09520b",
+  "engine_commit": "28975a487c1a30ed2b5bed644fe6ecd2c3dd1482",
+  "spec_version": "1",
+  "note": "GameConstants.SPEC_VERSION in the 2025 sources is the literal string 1, which is useless as a version pin, so THE SHA256 IS THE VERSION PIN and Tier B cross-checks every constant against the jar's own classes instead (docs/RULES-BC25.md Divergences item 12). The jar is SELF-CONTAINED: 6413 entries, all 182 battlecode classes, every bundled dependency (net.sf.jsi, gnu.trove, org.apache.commons.lang3) and all 75 .map25 map resources, so this job needs no Gradle, no jsi shim, no Maven download list and no deps.lock."
+}

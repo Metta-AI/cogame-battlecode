@@ -9,7 +9,7 @@
   "episode_timeout_minutes": 20,
   "game": {
     "name": "battlecode",
-    "description": "Battlecode, played by doctrine. Two cogs each write one sealed JSON strategy sheet and a deterministic Nim port of an official Battlecode rule set plays the whole match from those two sheets. Variant `bc26` is 2026 \"Uneasy Alliances\" — rat clans allied against NPC cats until one of them betrays. Variant `bc20` is 2020 \"Soup\" — the water rises every round, and a team either terraforms its way above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt. Variant `bc21` is 2021 \"Campaign\" — Enlightenment Centers bid influence for votes and spend it on politicians, slanderers and muckrakers, and the election is decided at round 1500. Variant `bc24` is 2024 \"Breadwars\" — 50 identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off.",
+    "description": "Battlecode, played by doctrine. Two cogs each write one sealed JSON strategy sheet and a deterministic Nim port of an official Battlecode rule set plays the whole match from those two sheets. Variant `bc26` is 2026 \"Uneasy Alliances\" — rat clans allied against NPC cats until one of them betrays. Variant `bc20` is 2020 \"Soup\" — the water rises every round, and a team either terraforms its way above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt. Variant `bc21` is 2021 \"Campaign\" — Enlightenment Centers bid influence for votes and spend it on politicians, slanderers and muckrakers, and the election is decided at round 1500. Variant `bc24` is 2024 \"Breadwars\" — 50 identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off. Variant `bc25` is 2025 “Chromatic Conflict” — paint robots colour a grid, build money, paint and defense towers by painting exact patterns onto ruins, and win by owning 70 % of the map.",
     "owner": "daveey@gmail.com",
     "replay_viewer": {
       "bundle": "static-replay-viewer"
@@ -63,6 +63,14 @@
           }
         },
         {
+          "id": "rules-bc25.md",
+          "title": "Battlecode 2025 “Chromatic Conflict”: rules, knobs and divergences",
+          "content": {
+            "type": "uri",
+            "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/RULES-BC25.md"
+          }
+        },
+        {
           "id": "replay.md",
           "title": "Replay format",
           "content": {
@@ -104,7 +112,8 @@
             "bc26",
             "bc20",
             "bc21",
-            "bc24"
+            "bc24",
+            "bc25"
           ]
         },
         "pool": {
@@ -306,7 +315,14 @@
                   "capture",
                   "more_flag_captures",
                   "level_sum",
-                  "more_bread"
+                  "more_bread",
+                  "paint_enough_area",
+                  "destroy_all_units",
+                  "more_squares_painted",
+                  "more_towers_alive",
+                  "more_money",
+                  "more_paint_in_units",
+                  "more_robots_alive"
                 ]
               },
               "cooperation_at_end": {
@@ -986,6 +1002,293 @@
               },
               "rounds_with_any_carry": {
                 "type": "integer"
+              },
+              "squares_painted": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "coverage_permille": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "peak_coverage_permille": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "tiles_painted": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "tiles_mopped": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "tiles_overpainted": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "chips_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "chips_earned": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "chips_spent": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "paint_in_units_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "paint_mined": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "paint_spent": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "robots_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "soldiers_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "splashers_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "moppers_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "robots_alive": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "robot_rounds_starved": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "towers_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "towers_upgraded": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "towers_alive": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "towers_lost": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "money_towers_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "paint_towers_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "defense_towers_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "srp_completed": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "srp_active_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "srp_rounds_active": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "splash_attacks": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "mop_swings": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "tower_damage_dealt": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "robot_damage_dealt": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "messages_sent": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "markers_placed": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "paintable_tiles": {
+                "type": "integer"
+              },
+              "area_without_walls": {
+                "type": "integer"
+              },
+              "tiles_to_win": {
+                "type": "integer"
+              },
+              "ruins": {
+                "type": "integer"
+              },
+              "rounds_with_any_srp": {
+                "type": "integer"
               }
             }
           }
@@ -1077,7 +1380,7 @@
       "id": "awu",
       "name": "awu",
       "type": "player",
-      "description": "the strong published baseline of whichever year the variant selects — distilled-awubot on bc26, Bowl of Chowder on bc20, California Roll on bc21, Gone Sharkin' on bc24",
+      "description": "the strong published baseline of whichever year the variant selects — distilled-awubot on bc26, Bowl of Chowder on bc20, California Roll on bc21, Gone Sharkin' on bc24, SPAARK on bc25",
       "image": "{{PLAYER_IMAGE}}",
       "run": [
         "/bin/battlecode-player"
@@ -1100,7 +1403,7 @@
       "id": "scaffold",
       "name": "scaffold",
       "type": "player",
-      "description": "the weak scaffold baseline of whichever year the variant selects — the ported example bot (examplefuncsplayer on bc20, examplefuncsplayer21 on bc21), examplefuncsplayer24 on bc24",
+      "description": "the weak scaffold baseline of whichever year the variant selects — the ported example bot (examplefuncsplayer on bc20, examplefuncsplayer21 on bc21), examplefuncsplayer24 on bc24, examplefuncsplayer25 on bc25",
       "image": "{{PLAYER_IMAGE}}",
       "run": [
         "/bin/battlecode-player"
@@ -1208,6 +1511,33 @@
       "description": "Best of three on the mixed pool. Fifty identical ducks a side and three flags each. A dam splits the map for 200 rounds while both flocks dig, fill, hide traps and choose where their flags will stand; then it falls, and the only way to end the game early is to carry all three enemy flags home. Ducks level up by attacking, healing or building — 2 000 rounds decide it.",
       "game_config": {
         "year": "bc24",
+        "pool": "mixed",
+        "gamesPerMatch": 3,
+        "seed": 0,
+        "maxRounds": 2000,
+        "num_agents": 2,
+        "attempt1Ms": 20000,
+        "retryMs": 12000,
+        "doctrineBudgetMs": 45000,
+        "perGameBudgetSeconds": 110,
+        "matchBudgetSeconds": 340,
+        "connectTimeoutMs": 25000,
+        "players": [
+          {
+            "name": "Clan Ash"
+          },
+          {
+            "name": "Clan Basil"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc25",
+      "name": "Battlecode 2025 — Chromatic Conflict (2 seats)",
+      "description": "Best of three on the mixed pool. Two clans of paint robots colour a grid. Soldiers paint one tile at a time, splashers repaint a blast radius including the enemy's ground, and moppers wipe it back to bare. Towers are built by painting an exact 5×5 pattern onto a ruin, and a Special Resource Pattern pays every mining tower you own — if it survives fifty rounds. Paint 70 % of the map, destroy everything they have, or be ahead on colour at round 2 000.",
+      "game_config": {
+        "year": "bc25",
         "pool": "mixed",
         "gamesPerMatch": 3,
         "seed": 0,

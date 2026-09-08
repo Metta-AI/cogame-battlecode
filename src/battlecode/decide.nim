@@ -15,6 +15,8 @@ import std/[json, monotimes, strutils, times]
 import curly
 import sim_types, sheet, baselines, llm, match
 import years/dispatch
+from years/bc25/patterns as pat25 import
+  patternRows, pkMoneyTower, pkPaintTower, pkDefenseTower, pkResource
 
 type
   SeatPolicy* = object
@@ -58,7 +60,7 @@ proc chassisForSeat*(year: string, seat: SeatPolicy): ScriptedChassis =
 
 proc chassisNameFor*(year: string, seat: SeatPolicy, sheet: Sheet): string =
   case yearIdOf(year)
-  of yBc20, yBc21, yBc24:
+  of yBc20, yBc21, yBc24, yBc25:
     (if seat.isLlm: $strongChassisFor(year)
      else: baselineName(baselineForSeat(year, seat)))
   of yBc26: $sheet.doctrine.chassis
@@ -340,11 +342,106 @@ chassis. That is not yours to choose: there is no `chassis` knob, and a reply
 that sends one has it ignored.
 """
 
+const Bc25Preamble* = """
+You command a clan of steampunk robot bunnies in Battlecode 2025 "Chromatic
+Conflict": a two-clan paint war on a symmetric grid between 20x20 and 60x60,
+2000 rounds a game, best of three.
+
+You do not move a single robot. Before the war you write ONE DOCTRINE - a JSON
+sheet of ten named knobs - and a deterministic simulation then plays the whole
+match from it while you watch.
+
+THE SCORE IS THE COLOUR OF THE MAP
+Every tile is your colour, their colour, or bare. Paint 70% of
+(width*height - walls) and you WIN ON THE SPOT. Destroy every enemy robot AND
+tower and you win on the spot. Otherwise round 2000 decides it, and the FIRST
+rung that is not tied wins: more squares painted, more towers alive, more
+chips, more paint summed over all units, more robots alive, coin flip.
+
+PAINT IS ALSO THE FUEL
+Every robot carries a stash. Below 50% full every cooldown grows by
+(100 - 2*percent) percent. At ZERO it cannot move, cannot act, and loses 20 HP
+every single turn. Ending a turn costs 1 paint on bare ground and 2 on enemy
+ground (DOUBLED for a mopper), plus 1 for every allied unit within radius^2 2 -
+TOWERS COUNT - doubled again on enemy ground. Standing on your own colour is
+free. So the whole economy is a loop: paint tiles, build towers on ruins,
+towers mine paint, robots refill, paint more tiles.
+
+THE THREE ROBOTS
+  SOLDIER   250 HP, 200 paint cap, 250 chips + 200 tower-paint to build.
+            Paints ONE tile within radius^2 9 for 5 paint, or hits an enemy
+            TOWER for 50. Can never paint over enemy paint.
+  SPLASHER  150 HP, 300 cap, 400 chips + 300 paint. Throws a 50-paint bomb up
+            to radius^2 4 away: repaints everything within radius^2 4 of the
+            centre and, inside radius^2 2, paints OVER ENEMY PAINT - the only
+            way to take ground back at scale - and deals 100 to every enemy
+            tower in the blast.
+  MOPPER    50 HP, 100 cap, 300 chips + 100 paint. Erases one enemy tile and
+            steals 10 paint from a robot standing on it; a mop swing takes 5
+            paint from up to SIX enemies in a cardinal direction; and it is the
+            ONLY unit that can hand paint to an ally.
+
+TOWERS ARE THE MAP
+You start with a money tower and a paint tower, both already LEVEL 2. Every
+other tower must be PAINTED INTO EXISTENCE: a robot paints an exact 5x5
+two-colour pattern around a ruin and completes it for 1000 chips, and the
+pattern decides whether a MONEY, PAINT or DEFENSE tower rises. Towers spawn
+robots, mine, and shoot ONE single-target shot AND one area shot every turn for
+free. Upgrades cost 2500 then 5000. Nobody may hold more than 25.
+  money   +20/30/40 chips a turn
+  paint   +5/10/15 paint a turn INTO ITS OWN STASH (capped at 1000)
+  defense +5/+7/+9 to the single-target damage of EVERY tower you own, and
+          20/30/40 chips every time one of its shots connects
+
+THE SPECIAL RESOURCE PATTERN
+A different 5x5 shape, painted anywhere, paid for with 200 chips, that must
+survive FIFTY ROUNDS UNDISTURBED and then gives +3 per turn to EVERY MINING
+TOWER YOU OWN. One pattern with eight mining towers is +24 a turn forever; one
+mopper walking through it at round 49 is 200 chips in the bin.
+
+  points = int(55*area share + 20*tower share + 10*chip share
+               + 10*paint share + 5*robot share)
+Winning a game is worth 200 and points are worth at most 100, so the game bonus
+dominates: own the colour or lose.
+
+YOUR REPLY
+Reply with ONE JSON object and NOTHING else. Your reply must begin with '{'.
+{"sheet": {...knobs...}, "notes": "<=280 chars", "motto": "<=48 chars"}
+
+THE KNOBS (unknown key, wrong type or out-of-range value = that field's
+default; you cannot forfeit by answering badly, only by answering weakly):
+  opening              "paint_eco" | "tower_rush" | "balanced"
+                                                       default "balanced"
+  unit_mix             {"soldier":0..100,"mopper":0..100,"splasher":0..100}
+                       clamped to soldier>=30, mopper>=10, splasher>=10 and
+                       normalised to 100      default {60,25,15}
+  srp_priority         0..100 (% of chip income for resource patterns)
+                                                       default 35
+  tower_type_order     3 distinct of "money" | "paint" | "defense"
+                                       default ["money","paint","defense"]
+  ruin_claim_radius    4..20                            default 10
+  defense_tower_chokes "never" | "late" | "early"       default "late"
+  paint_reserve_floor  10..70 (% of capacity)           default 30
+  mop_enemy_paint      0..100 (% of mopper turns)       default 40
+  splash_targets       "towers" | "territory" | "mixed" default "mixed"
+  upgrade_policy       "never" | "paint_first" | "money_first" | "defense_first"
+                                                  default "money_first"
+
+No setting of any knob makes your clan idle: it always builds robots whenever a
+tower can pay for one, always paints the ground under a soldier that is not
+already yours, always refills below paint_reserve_floor, always claims the
+nearest ruin it can reach, and always keeps at least two moppers and one
+splasher once the income allows it. Your clan is driven by the `spaark`
+chassis. That is not yours to choose: there is no `chassis` knob, and a reply
+that sends one has it ignored.
+"""
+
 proc preambleFor*(year: string): string =
   case yearIdOf(year)
   of yBc20: Bc20Preamble
   of yBc21: Bc21Preamble
   of yBc24: Bc24Preamble
+  of yBc25: Bc25Preamble
   of yBc26: SystemPreamble
 
 proc briefFor*(
@@ -442,6 +539,77 @@ proc briefFor*(
     payload["scoring"] = %*{
       "weights": {"flag_share": 60, "level_share": 25, "crumb_share": 15},
       "win_bonus_per_game": 100,
+      "games": plan.maps.len,
+      "note": "shares are float32; points truncate to an integer"
+    }
+  of yBc25:
+    payload["economy"] = %*{
+      "start_chips": 2500, "tower_costs": [1000, 2500, 5000],
+      "money_tower_per_turn": [20, 30, 40],
+      "paint_tower_per_turn": [5, 10, 15],
+      "defense_tower_chips_per_hit": [20, 30, 40],
+      "srp": {"chip_cost": 200, "paint_cost_to_mark": 25, "tiles": 25,
+              "rounds_undisturbed_to_activate": 50,
+              "bonus": "+3 per turn to EVERY mining tower you own"},
+      "max_towers": 25
+    }
+    payload["units"] = %*{
+      "soldier": {"hp": 250, "paint_cap": 200, "paint_cost": 200,
+                  "chip_cost": 250, "attack_paint": 5, "attack_r2": 9,
+                  "cooldown": 10,
+                  "does": "paints one tile, or 50 damage to an enemy tower"},
+      "splasher": {"hp": 150, "paint_cap": 300, "paint_cost": 300,
+                   "chip_cost": 400, "attack_paint": 50, "attack_r2": 4,
+                   "cooldown": 50,
+                   "does": "paints everything within r2<=4 of the centre, " &
+                           "over ENEMY paint within r2<=2, and 100 damage " &
+                           "to every enemy tower in the blast"},
+      "mopper": {"hp": 50, "paint_cap": 100, "paint_cost": 100,
+                 "chip_cost": 300, "attack_paint": 0, "attack_r2": 2,
+                 "cooldown": 30,
+                 "does": "erases one enemy tile and steals 10 paint from a " &
+                         "robot on it; mop swing (cooldown 20) takes 5 " &
+                         "paint from up to SIX enemies in a cardinal " &
+                         "direction; the only unit that can give paint to " &
+                         "an ally"}
+    }
+    payload["paint_rules"] = %*{
+      "vision_r2": 20,
+      "end_turn_cost": "1 paint on bare ground, 2 on enemy ground, 0 on " &
+                       "your own; DOUBLED for moppers; plus 1 per adjacent " &
+                       "allied unit (towers count), doubled on enemy ground",
+      "low_paint": "below 50% of capacity every cooldown grows by " &
+                   "(100 - 2*percent)%",
+      "zero_paint": "cannot move, cannot act, loses 20 HP every turn"
+    }
+    payload["towers"] = %*{
+      "how_built": "paint an exact 5x5 two-colour pattern around a ruin, " &
+                   "then complete it for 1000 chips",
+      "patterns": {
+        "money": pat25.patternRows(pat25.pkMoneyTower),
+        "paint": pat25.patternRows(pat25.pkPaintTower),
+        "defense": pat25.patternRows(pat25.pkDefenseTower),
+        "srp": pat25.patternRows(pat25.pkResource),
+        "legend": "P = your primary colour, S = your secondary; both count " &
+                  "as yours for territory"},
+      "hp": {"money": [1000, 1500, 2000], "paint": [1000, 1500, 2000],
+             "defense": [2000, 2500, 3000]},
+      "attacks": "one single-target shot AND one area shot per turn, no " &
+                 "cooldown; defense towers add +5/+7/+9 to every allied " &
+                 "tower's single shot"
+    }
+    payload["win"] = %*{
+      "instant": "paint 70% of (width*height - walls), or destroy every " &
+                 "enemy robot AND tower",
+      "at_round_2000": ["more squares painted", "more towers alive",
+                        "more chips", "more paint in units",
+                        "more robots alive", "coin flip"]
+    }
+    payload["sheet_schema"] = bc25SheetSchema()
+    payload["scoring"] = %*{
+      "weights": {"area_share": 55, "tower_share": 20, "chip_share": 10,
+                  "paint_share": 10, "robot_share": 5},
+      "win_bonus_per_game": 200,
       "games": plan.maps.len,
       "note": "shares are float32; points truncate to an integer"
     }

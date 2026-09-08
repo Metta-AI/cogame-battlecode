@@ -383,9 +383,10 @@ check("and at both FIT and 2x zoom", "[[\"fit\", 0], [\"2x\", 91]]" in
   readFile("tools/ci/viewer_smoke.mjs"))
 block:
   let ci = readFile(".github/workflows/ci.yml")
-  check("on all four years' replays", "dist/smoke/replay-bc21.json" in ci and
+  check("on all five years' replays", "dist/smoke/replay-bc21.json" in ci and
     "dist/smoke/replay-bc20.json" in ci and "dist/smoke/replay.json" in ci and
-    "dist/smoke/replay-bc24.json" in ci)
+    "dist/smoke/replay-bc24.json" in ci and
+    "dist/smoke/replay-bc25.json" in ci)
   check("and bc24's viewer smoke gets the longer settle its round cost needs",
     "--timeout 120 --soak 15" in ci)
 
@@ -393,13 +394,25 @@ block:
 block:
   let fixture = readFile("tools/ci/renderer_fixture.html")
   check("the fixture has a row per year",
-    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24'];" in fixture)
+    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25'];" in fixture)
   check("and fills bc21's own readouts",
     "bc21-influence" in fixture and "bc21-votes" in fixture and
     "bc21-doctrines-body" in fixture)
   check("and bc24's",
     "bc24-crumbs" in fixture and "bc24-flags" in fixture and
     "bc24-levels" in fixture and "bc24-doctrines-body" in fixture)
+  check("and bc25's",
+    "bc25-coverage" in fixture and "bc25-towers" in fixture and
+    "bc25-econ" in fixture and "bc25-doctrines-body" in fixture)
+  ## The fixture's "the notes were shortened before they were measured"
+  ## check reads `#<year>-doctrines .dline i`, so a year whose doctrine rows
+  ## carry any other class name passes that check VACUOUSLY -- bc25 shipped
+  ## `.clan`/`<b>` first and the fixture found nothing to measure. Both the
+  ## page and the fixture use the four years' own class names now.
+  check("the bc25 doctrine rows are .dline/.dname like every other year's",
+    "<div class=\"dline\"><span class=\"dname\">' + esc(seat.alias)" in page and
+    "#bc25-doctrines .dline {" in page and
+    "#bc25-doctrines .dname {" in page)
 
 ## Transport rules from the design note.
 check("relayout sets --hudscale", "--hudscale" in page)
@@ -765,6 +778,94 @@ block:
     later.len < first.len)
   check("but still carries something to draw", later.len > 16)
   checkEq("(the crossing counter is unused scaffolding)", crossing, 0)
+
+# --- the appended bc25 game block -------------------------------------------
+block:
+  ## The page is the STARTER'S page with a bc25 block APPENDED under a banner
+  ## comment. Nothing is removed, no id is reused, and the block registers
+  ## itself on its own global.
+  let page = readFile("client/replay_broadcast.html")
+  check("the bc25 CSS block carries its banner",
+    "BC25 additions to the inherited cogame-battlecode chrome" in page)
+  for id in ["bc25-coverage", "bc25-towers", "bc25-econ", "bc25-doctrines",
+             "bc25-doctrines-close", "bc25-doctrines-toggle",
+             "bc25-doctrines-body", "bc25-srp"]:
+    check("the page carries #" & id, "\"" & id & "\"" in page)
+  ## NOTHING the four earlier years own is removed.
+  for id in ["coopchip", "bars", "gamechips", "econ", "doctrines",
+             "bc20-flood", "bc20-soup", "bc20-units", "bc20-doctrines",
+             "bc20-chain", "bc21-votes", "bc21-influence", "bc21-units",
+             "bc21-doctrines", "bc21-bids", "bc24-flags", "bc24-crumbs",
+             "bc24-levels", "bc24-doctrines", "bc24-traps"]:
+    check("the earlier years still own #" & id, "\"" & id & "\"" in page)
+  ## `#viewpanel` is KEPT: the bc25 pool tops out at 50x30 and the reserved
+  ## large pool at 60x60, both wider than a 360 px frame at 16 px a tile.
+  check("#viewpanel is kept", "\"viewpanel\"" in page)
+  ## The beat builder has its OWN name (the tandem hoisting collision).
+  check("the beat builder is buildBc25BeatButtons",
+    "buildBc25BeatButtons" in page)
+  for taken in ["function buildBeatButtons", "function buildBc20BeatButtons",
+                "function buildBc21BeatButtons",
+                "function buildBc24BeatButtons"]:
+    checkEq("and it does not redefine " & taken, page.count(taken), 1)
+  checkEq("the bc25 builder is defined exactly once",
+    page.count("function buildBc25BeatButtons"), 1)
+  check("the block registers on window.Bc25Block",
+    "window.Bc25Block = {" in page)
+  check("and the shared onText calls it",
+    "if (window.Bc25Block) window.Bc25Block.onFrame(s);" in page)
+  check("and the bc26 branch is guarded off for bc25",
+    "if (!isBc20 && !isBc21 && !isBc24 && !isBc25) {" in page)
+
+block:
+  ## EVERY emitted bc25 beat kind has CSS, and every one is scoped to
+  ## `html[data-year="bc25"]` so it cannot restyle another year's marker of
+  ## the same name.
+  let page = readFile("client/replay_broadcast.html")
+  for kind in ["doctrine", "game", "build", "tower", "upgrade", "siege",
+               "srp", "coverage", "starve", "rout", "end"]:
+    let rule = "html[data-year=\"bc25\"] .beat-marker." & kind
+    check("the page carries CSS for the bc25 `" & kind & "` beat, scoped",
+      rule in page)
+
+block:
+  ## D3: the doctrine overlay is dismissible and sits OUTSIDE the transport
+  ## band; the endcard stops at var(--band) and every seek dismisses it (both
+  ## inherited and unchanged).
+  let page = readFile("client/replay_broadcast.html")
+  check("#bc25-doctrines has a close control with an aria-label",
+    "aria-label=\"Dismiss doctrines\"" in page)
+  check("an Escape binding scoped to bc25",
+    "data-year') !== 'bc25') return;" in page)
+  check("a re-open chip", "id=\"bc25-doctrines-toggle\"" in page)
+  check("and self-dismissal on the first advance",
+    "if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {" in
+      page)
+  ## It is positioned from the TOP band, never from the bottom one.
+  check("#bc25-doctrines is anchored to the top band, not the transport",
+    "top: calc(var(--topband, 0px) + 10px);" in page)
+
+block:
+  ## `relayout()`'s `--statrail` measurement set names both bc25 stat boxes,
+  ## which is what keeps #killfeed clear of them at every width and zoom.
+  let page = readFile("client/replay_broadcast.html")
+  check("--statrail measures bc25-towers and bc25-econ",
+    "'bc24-crumbs', 'bc24-levels', 'bc25-towers', 'bc25-econ'" in page)
+  check("and #killfeed is still lifted above the rail",
+    "calc(var(--band, 0px) + var(--statrail, 0px) + 8px)" in page)
+
+# --- the bc25 sprite atlas --------------------------------------------------
+block:
+  check("the bc25 atlas image is committed", fileExists("data/atlas_bc25.png"))
+  check("with its index", fileExists("data/atlas_bc25.json"))
+  let atlas = readFile("data/atlas_bc25.json")
+  for name in ["soldier_silver", "splasher_silver", "mopper_silver",
+               "paint_tower_silver", "money_tower_silver",
+               "defense_tower_silver", "soldier_gold", "splasher_gold",
+               "mopper_gold", "paint_tower_gold", "money_tower_gold",
+               "defense_tower_gold", "ruin", "dirty", "chip_silver",
+               "chip_gold", "paint_silver", "paint_gold"]:
+    check("the bc25 atlas carries " & name, "\"" & name & "\"" in atlas)
 
 # --- the bc24 sprite atlas --------------------------------------------------
 block:

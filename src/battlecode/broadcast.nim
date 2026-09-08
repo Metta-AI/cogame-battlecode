@@ -23,6 +23,11 @@ from years/bc21/rules as r21 import nil
 from years/bc24/world as w24 import nil
 from years/bc24/constants as c24 import nil
 from years/bc24/rules as r24 import nil
+from years/bc25/world as w25 import nil
+from years/bc25/towers as t25 import nil
+from years/bc25/units as u25 import nil
+from years/bc25/constants as c25 import nil
+from years/bc25/rules as r25 import nil
 
 const
   PlaybackSpeeds* = [1, 2, 3, 4, 8, 16]
@@ -675,6 +680,220 @@ proc bc24ChromeJson*(
   }
   $node
 
+# ---------------------------------------------------------------------------
+#  bc25 -- coverage, towers, the paint economy and the war panel
+# ---------------------------------------------------------------------------
+
+proc bc25Coverage(w: w25.World, sideAslot: int): JsonNode =
+  ## `#bc25-coverage`: THE HEADLINE READOUT AND THE YEAR'S WHOLE STORY. Both
+  ## clans' share of the map, the 70 % tick, the tiles still needed, and the
+  ## bare remainder.
+  ##
+  ## `area_without_walls` is the engine's OWN denominator and it counts ruin
+  ## and tower tiles that can never be painted; `truly_paintable` is beside it
+  ## so a spectator can see the gap that divergence creates
+  ## (docs/RULES-BC25.md section Divergences item 5).
+  let area = max(1, w.areaWithoutWalls)
+  let toWin = u25.tilesToWin(w.areaWithoutWalls)
+  var clans = newJArray()
+  var bare = area
+  for slot in 0 .. 1:
+    let t = if slot == sideAslot: 0 else: 1
+    bare -= w.stats.livePainted[t]
+    clans.add(%*{
+      "alias": aliasFor(slot),
+      "tiles": w.stats.livePainted[t],
+      "permille": u25.coveragePermille(w.stats.livePainted[t],
+                                       w.areaWithoutWalls),
+      "peak_permille": w.stats.peakCoverage[t],
+      "to_win": max(0, toWin - w.stats.livePainted[t])
+    })
+  %*{
+    "clans": clans,
+    "area_without_walls": w.areaWithoutWalls,
+    "truly_paintable": w.trulyPaintable,
+    "tiles_to_win": toWin,
+    "win_permille": c25.PaintPercentToWin * 10,
+    "bare": max(0, bare)
+  }
+
+proc bc25Towers(w: w25.World, sideAslot: int): JsonNode =
+  ## `#bc25-towers`: per clan, money / paint / defense counts with level pips,
+  ## towers alive out of the 25 cap, and towers lost.
+  result = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: u25.teamA else: u25.teamB)
+    let t = ord(team)
+    var levels = newJArray()
+    var money, paint, defense = 0
+    for id in w.execOrder:
+      let unit = w.robotsById[id]
+      if unit.team != team or not u25.isTowerType(unit.kind): continue
+      case u25.towerKindOf(unit.kind)
+      of u25.tkMoney: money += 1
+      of u25.tkPaint: paint += 1
+      of u25.tkDefense: defense += 1
+      if levels.len < 25:
+        levels.add(%*{"kind": $u25.towerKindOf(unit.kind),
+                      "level": u25.levelOf(unit.kind),
+                      "x": unit.loc.x, "y": unit.loc.y,
+                      "hp": unit.health,
+                      "max_hp": c25.UnitSpecs[unit.kind].health})
+    result.add(%*{
+      "alias": aliasFor(slot),
+      "alive": w.stats.towers[t],
+      "cap": c25.MaxNumberOfTowers,
+      "money": money, "paint": paint, "defense": defense,
+      "built": w.stats.towersBuilt[t],
+      "upgraded": w.stats.towersUpgraded[t],
+      "lost": w.stats.towersLost[t],
+      "damage_buff": w.damageIncrease[t],
+      "towers": levels
+    })
+
+proc bc25Econ(w: w25.World, sideAslot: int): JsonNode =
+  ## `#bc25-econ`: per clan, chips banked, chips a round, paint held across
+  ## all units, active SRPs and the income they add, and pending SRPs with
+  ## their countdown to fifty.
+  result = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: u25.teamA else: u25.teamB)
+    let t = ord(team)
+    var income = 0
+    var paintIncome = 0
+    let bonus = w25.extraResourcesFromPatterns(w, team)
+    for id in w.execOrder:
+      let unit = w.robotsById[id]
+      if unit.team != team: continue
+      if c25.UnitSpecs[unit.kind].moneyPerTurn != 0:
+        income += c25.UnitSpecs[unit.kind].moneyPerTurn + bonus
+      if c25.UnitSpecs[unit.kind].paintPerTurn != 0:
+        paintIncome += c25.UnitSpecs[unit.kind].paintPerTurn + bonus
+    var pending = newJArray()
+    for centre in w.srpCentres:
+      let i = w25.idx(w, centre)
+      if int(w.srpTeamByLoc[i]) != t + 1: continue
+      let life = int(w.srpLifetimes[i])
+      if life >= c25.ResourcePatternActiveDelay: continue
+      if pending.len >= 8: break
+      pending.add(%*{"x": centre.x, "y": centre.y,
+                     "rounds_left": c25.ResourcePatternActiveDelay - life})
+    result.add(%*{
+      "alias": aliasFor(slot),
+      "chips": w.stats.money[t],
+      "chips_per_round": income,
+      "paint_per_round": paintIncome,
+      "paint_in_units": w25.paintInUnits(w, team),
+      "chips_earned": w.stats.chipsEarned[t],
+      "chips_spent": w.stats.chipsSpent[t],
+      "paint_mined": w.stats.paintMined[t],
+      "paint_spent": w.stats.paintSpent[t],
+      "srp_active": w25.numActiveResourcePatterns(w, team),
+      "srp_bonus": bonus,
+      "srp_pending": pending,
+      "robots": t25.robotsAlive(w, team),
+      "soldiers": t25.robotCountByKind(w, team, c25.utSoldier),
+      "splashers": t25.robotCountByKind(w, team, c25.utSplasher),
+      "moppers": t25.robotCountByKind(w, team, c25.utMopper)
+    })
+
+proc bc25War(w: w25.World, sideAslot: int): JsonNode =
+  ## `#bc25-srp`, the endcard's WAR PANEL. NOTHING about paint, towers or
+  ## resource patterns is stored in the replay: the wasm sim re-derives every
+  ## round and this reads the re-derived totals.
+  var clans = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: u25.teamA else: u25.teamB)
+    let t = ord(team)
+    clans.add(%*{
+      "alias": aliasFor(slot),
+      "tiles_painted": w.stats.tilesPainted[t],
+      "tiles_mopped": w.stats.tilesMopped[t],
+      "tiles_overpainted": w.stats.tilesOverpainted[t],
+      "peak_permille": w.stats.peakCoverage[t],
+      "final_permille": u25.coveragePermille(w.stats.livePainted[t],
+                                             w.areaWithoutWalls),
+      "towers_built": w.stats.towersBuilt[t],
+      "towers_upgraded": w.stats.towersUpgraded[t],
+      "towers_lost": w.stats.towersLost[t],
+      "money_towers": t25.towerCountByKind(w, team, u25.tkMoney),
+      "paint_towers": t25.towerCountByKind(w, team, u25.tkPaint),
+      "defense_towers": t25.towerCountByKind(w, team, u25.tkDefense),
+      "chips_earned": w.stats.chipsEarned[t],
+      "chips_spent": w.stats.chipsSpent[t],
+      "paint_mined": w.stats.paintMined[t],
+      "paint_spent": w.stats.paintSpent[t],
+      "robots_built": w.stats.robotsBuilt[t],
+      "soldiers_built": w.stats.soldiersBuilt[t],
+      "splashers_built": w.stats.splashersBuilt[t],
+      "moppers_built": w.stats.moppersBuilt[t],
+      "robots_lost": w.stats.robotsLost[t],
+      "robot_rounds_starved": w.stats.robotRoundsStarved[t],
+      "srp_completed": w.stats.srpCompleted[t],
+      "srp_active": w25.numActiveResourcePatterns(w, team),
+      "srp_broken": w.stats.srpBroken[t],
+      "srp_rounds_active": w.stats.srpRoundsActive[t],
+      "splash_attacks": w.stats.splashAttacks[t],
+      "mop_swings": w.stats.mopSwings[t],
+      "tower_damage": w.stats.towerDamageDealt[t],
+      "robot_damage": w.stats.robotDamageDealt[t],
+      "messages": w.stats.messagesSent[t]
+    })
+  %*{
+    "clans": clans,
+    "rounds_with_any_srp": w.stats.roundsWithAnySrp,
+    "ruins": w.allRuins.len
+  }
+
+proc bc25ChromeJson*(
+  doc: ReplayDoc, w: w25.World, view: ViewerState,
+  frame, totalFrames, gameIndex, sideAslot: int,
+  beats: JsonNode, gameChips: JsonNode, ended: bool
+): string =
+  ## One frame of bc25 chrome. `t` / `st` / `mx` / `mt` are the GENERIC
+  ## timeline keys `chrome_common.js` reads, unchanged, so the clock, the
+  ## transport and the scrubber are driven by the starter's own code; the
+  ## `bc25_*` keys are what the APPENDED bc25 game block draws.
+  let phase = if ended: "gameover" else: "playing"
+  let points = r25.gamePoints(w)
+  var node = %*{
+    "t": frame,
+    "st": 0,
+    "mx": max(1, totalFrames - 1),
+    "mt": 0,
+    "sp": view.speed,
+    "pl": view.playing,
+    "lp": view.loop,
+    "sk": view.skipLulls,
+    "ff": false,
+    "en": true,
+    "ph": phase,
+    "lob": 0,
+    "pov": -1,
+    "nim": GameVersion,
+    "year": "bc25",
+    "beats": beats,
+    "game": gameIndex + 1,
+    "games": doc.games.len,
+    "map": doc.plan.maps[min(gameIndex, doc.plan.maps.high)],
+    "round": w.currentRound,
+    "rounds": doc.plan.maxRounds,
+    "aliases": [AliasA, AliasB],
+    "names": [doc.names[0], doc.names[1]],
+    "sides": [(if sideAslot == 0: "A" else: "B"),
+              (if sideAslot == 0: "B" else: "A")],
+    "points": [points[(if sideAslot == 0: 0 else: 1)],
+               points[(if sideAslot == 0: 1 else: 0)]],
+    "bc25_coverage": bc25Coverage(w, sideAslot),
+    "bc25_towers": bc25Towers(w, sideAslot),
+    "bc25_econ": bc25Econ(w, sideAslot),
+    "bc25_war": bc25War(w, sideAslot),
+    "gamechips": gameChips,
+    "doctrines": doctrineWords(doc),
+    "result": doc.result
+  }
+  $node
+
 proc bc20ChromeJson*(
   doc: ReplayDoc, w: w20.World, view: ViewerState,
   frame, totalFrames, gameIndex, sideAslot: int,
@@ -741,4 +960,7 @@ proc sessionChromeJson*(
       beats, gameChips, ended)
   of yBc24:
     bc24ChromeJson(doc, s.w24, view, frame, totalFrames, gameIndex, sideAslot,
+      beats, gameChips, ended)
+  of yBc25:
+    bc25ChromeJson(doc, s.w25, view, frame, totalFrames, gameIndex, sideAslot,
       beats, gameChips, ended)

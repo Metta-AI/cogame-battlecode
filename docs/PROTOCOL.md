@@ -358,3 +358,73 @@ rune boundary), ≤ 32 sheet keys, 280 runes of `notes`, 48 runes of `motto`,
 `upgrade_order` must be exactly three DISTINCT strings from the enum; any
 malformation takes the whole default array and is recorded ONCE. A submitted
 `chassis` is recorded as an unknown field and never honoured (D1).
+
+## bc25
+
+The wire shape is identical — same protocol id, same registration blob, same
+one-shot sealed doctrine. Only the year-dependent *payload* differs.
+
+### The bc25 observation
+
+`year: "bc25"`, the three map cards, and these year blocks:
+
+```jsonc
+"economy": {"start_chips": 2500, "tower_costs": [1000, 2500, 5000],
+            "money_tower_per_turn": [20, 30, 40],
+            "paint_tower_per_turn": [5, 10, 15],
+            "defense_tower_chips_per_hit": [20, 30, 40],
+            "srp": {"chip_cost": 200, "paint_cost_to_mark": 25, "tiles": 25,
+                    "rounds_undisturbed_to_activate": 50,
+                    "bonus": "+3 per turn to EVERY mining tower you own"},
+            "max_towers": 25},
+"units": {"soldier": {...}, "splasher": {...}, "mopper": {...}},
+"paint_rules": {"vision_r2": 20, "end_turn_cost": "...", "low_paint": "...",
+                "zero_paint": "cannot move, cannot act, loses 20 HP a turn"},
+"towers": {"how_built": "...", "patterns": {"money": [...], "paint": [...],
+           "defense": [...], "srp": [...], "legend": "..."},
+           "hp": {...}, "attacks": "..."},
+"win": {"instant": "paint 70% of (width*height - walls), or destroy every "
+                   "enemy robot AND tower",
+        "at_round_2000": ["more squares painted", "more towers alive",
+                          "more chips", "more paint in units",
+                          "more robots alive", "coin flip"]},
+"sheet_schema": { ...all ten knobs, their values, ranges and defaults... },
+"scoring": {"weights": {"area_share": 55, "tower_share": 20, "chip_share": 10,
+                        "paint_share": 10, "robot_share": 5},
+            "win_bonus_per_game": 200, "games": 3,
+            "note": "shares are float32; points truncate to an integer"}
+```
+
+Each map card carries `your_start_towers` and `enemy_start_towers` — they are
+**public**: every map is symmetric and the engine's own map file puts them
+there — plus `terrain.area_without_walls` (the engine's own 70 % denominator),
+`terrain.truly_paintable` beside it so the cog can see the gap that divergence
+creates, `terrain.tiles_to_win`, `terrain.ruins`, `terrain.pre_painted` and
+`chokes`.
+
+**Hidden**, as in every year: the opponent's doctrine, sheet, notes, motto and
+real player name; every in-match state (a cog receives **no** per-round
+observation — one sealed doctrine, then the war); the other seat's fallback
+status. Inside a match the fog is the robots': vision r² ≤ 20, and the enemy's
+**markers** are never sensible.
+
+### The bc25 reply
+
+```json
+{"sheet":{"opening":"tower_rush",
+          "unit_mix":{"soldier":40,"mopper":20,"splasher":40},
+          "srp_priority":10,"tower_type_order":["money","defense","paint"],
+          "ruin_claim_radius":6,"defense_tower_chokes":"early",
+          "paint_reserve_floor":20,"mop_enemy_paint":15,
+          "splash_targets":"towers","upgrade_policy":"defense_first"},
+ "notes":"Their money tower at (26,9) is 6 tiles from the middle choke; three splashers break it before round 600.",
+ "motto":"Two colours, one map."}
+```
+
+Caps are the year-neutral ones: 16 KB of BYTES on the whole reply (cut on a
+rune boundary), ≤ 32 sheet keys, 280 runes of `notes`, 48 runes of `motto`,
+≤ 16 unknown keys at ≤ 40 runes each, 200 runes of provider error text.
+`unit_mix` must be an object of exactly the three integer keys and
+`tower_type_order` exactly three DISTINCT strings from the enum; any
+malformation takes the whole default and is recorded ONCE. A submitted
+`chassis` is recorded as an unknown field and never honoured (D1).

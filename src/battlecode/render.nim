@@ -25,6 +25,9 @@ from years/bc21/world as w21 import nil
 from years/bc21/constants as c21 import nil
 from years/bc24/world as w24 import nil
 from years/bc24/constants as c24 import nil
+from years/bc25/world as w25 import nil
+from years/bc25/constants as c25 import nil
+from years/bc25/units as u25 import nil
 
 const
   TileSize* = 16
@@ -82,6 +85,21 @@ const
   Bc24DamColor = rgba(148, 120, 72, 255)
   Bc24SpawnAColor = rgba(96, 70, 44, 255)
   Bc24SpawnBColor = rgba(120, 116, 108, 255)
+
+  ## bc25's board IS the picture: a flat colour per tile, and the score is the
+  ## colour count. These six are the 2025 client's OWN `DEFAULT_GLOBAL_COLORS`
+  ## (`client/src/colors.ts`), so the replay looks like the official client
+  ## because it uses the official client's palette. Primary and secondary of
+  ## the same clan differ only slightly in value while the two clans differ
+  ## strongly in hue, which is exactly what makes coverage readable at a
+  ## glance and at 360 px.
+  Bc25TileColor = rgba(0x4c, 0x30, 0x1e, 255)
+  Bc25WallColor = rgba(0x54, 0x7f, 0x31, 255)
+  Bc25APrimary = rgba(0x66, 0x66, 0x66, 255)
+  Bc25ASecondary = rgba(0x56, 0x56, 0x56, 255)
+  Bc25BPrimary = rgba(0xb2, 0x8b, 0x52, 255)
+  Bc25BSecondary = rgba(0x99, 0x77, 0x46, 255)
+  Bc25RuinColor = rgba(0x2e, 0x23, 0x23, 255)
 
 type
   Atlas = ref object
@@ -641,6 +659,116 @@ proc buildBc24Packet(r: Renderer, w: w24.World, gameIndex, sideAslot: int,
   packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
   packet
 
+# ---------------------------------------------------------------------------
+#  bc25 -- a paint layer, walls, ruins and six unit types
+# ---------------------------------------------------------------------------
+
+proc bc25UnitSprite(unit: w25.Robot): string =
+  ## Palette follows the CLIENT's own two team names,
+  ## `TEAM_COLOR_NAMES = [Silver, Gold]`, so silver = side A and gold = side
+  ## B. Sides alternate every game, so the scorebug plate keeps the ALIAS
+  ## constant and recolours its swatch per game.
+  let tint = if unit.team == u25.teamA: "_silver" else: "_gold"
+  case unit.kind
+  of c25.utSoldier: "soldier" & tint
+  of c25.utSplasher: "splasher" & tint
+  of c25.utMopper: "mopper" & tint
+  of c25.utLevelOnePaintTower, c25.utLevelTwoPaintTower,
+     c25.utLevelThreePaintTower: "paint_tower" & tint
+  of c25.utLevelOneMoneyTower, c25.utLevelTwoMoneyTower,
+     c25.utLevelThreeMoneyTower: "money_tower" & tint
+  else: "defense_tower" & tint
+
+proc bc25TerrainStage(w: w25.World): int =
+  ## THE PAINT LAYER IS THE TERRAIN. It changes every round, so the sprite is
+  ## re-cut on a fixed cadence rather than per round: four rounds is often
+  ## enough that a splash is visible as it happens and rare enough that a
+  ## 60x60 board is not re-rasterised twenty-four times a second.
+  w.currentRound div 4
+
+proc renderBc25Terrain(r: Renderer, w: w25.World): Image =
+  result = newImage(w.width * TileSize, w.height * TileSize)
+  result.fill(Bc25TileColor)
+  let ctx = newContext(result)
+  for y in 0 ..< w.height:
+    for x in 0 ..< w.width:
+      let px = x * TileSize
+      ## The board's y axis grows NORTH; the canvas grows down.
+      let py = (w.height - 1 - y) * TileSize
+      let i = x + y * w.width
+      var colour = Bc25TileColor
+      if w.walls[i]: colour = Bc25WallColor
+      elif w.ruinAt[i]: colour = Bc25RuinColor
+      else:
+        case int(w.colours[i])
+        of 1: colour = Bc25APrimary
+        of 2: colour = Bc25ASecondary
+        of 3: colour = Bc25BPrimary
+        of 4: colour = Bc25BSecondary
+        else: colour = Bc25TileColor
+      ctx.fillStyle = colour
+      ctx.fillRect(rect(float32(px), float32(py),
+                        float32(TileSize), float32(TileSize)))
+
+proc buildBc25Packet(r: Renderer, w: w25.World, gameIndex, sideAslot: int,
+                     chrome: string): seq[uint8] =
+  var packet: seq[uint8]
+  let newGame = r.terrainGame != gameIndex
+  let stage = bc25TerrainStage(w)
+
+  if newGame:
+    r.terrainGame = gameIndex
+    r.terrainStage = -1
+    r.liveObjects.clear()
+    r.prevRobotSprite.clear()
+    packet.addClearObjects()
+    packet.addLayer(MapLayerId, MapLayerKind, ZoomableFlag)
+    packet.addViewport(MapLayerId, w.width * TileSize, w.height * TileSize)
+
+  if r.terrainStage != stage:
+    r.terrainStage = stage
+    let terrain = r.renderBc25Terrain(w)
+    packet.addSprite(TerrainSpriteId, terrain.width, terrain.height,
+      straightPixels(terrain), "terrain")
+    packet.addObject(1, 0, 0, -32768, MapLayerId, TerrainSpriteId)
+
+  ## Unclaimed ruins. A ruin with a tower on it is covered by the tower
+  ## sprite, so only the empty ones are drawn.
+  var ruinSeen = initHashSet[int]()
+  for l in w.allRuins:
+    if w25.hasTower(w, l): continue
+    let i = w25.idx(w, l)
+    let objectId = CheeseObjectBase + i
+    ruinSeen.incl(objectId)
+    let sprite = r.spriteId(packet, "ruin")
+    r.addObj(packet, objectId, l.x * TileSize,
+      (w.height - 1 - l.y) * TileSize, 1, sprite)
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= CheeseObjectBase and objectId < TrapAObjectBase and
+        objectId notin ruinSeen:
+      r.dropObj(packet, objectId)
+
+  ## Every live unit. Object ids are stable for a unit's whole life, so the
+  ## client's motion interpolation glides a robot between rounds instead of
+  ## teleporting it. ENEMY MARKERS ARE NEVER DRAWN -- they are per-team state
+  ## and drawing them would leak (Viewer, "Per-robot fog" in Out of scope).
+  var seen = initHashSet[int]()
+  for id in w.execOrder:
+    let unit = w.robotsById[id]
+    let objectId = RobotObjectBase + (id mod 20000)
+    seen.incl(objectId)
+    let sprite = r.spriteId(packet, bc25UnitSprite(unit))
+    r.addObj(packet, objectId, unit.loc.x * TileSize,
+      (w.height - 1 - unit.loc.y) * TileSize,
+      (if u25.isTowerType(unit.kind): 4 else: 5), sprite)
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= RobotObjectBase and objectId < SoupObjectBase and
+        objectId notin seen:
+      r.dropObj(packet, objectId)
+
+  packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
+  packet
+
 proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   ## The ONE place the renderer branches on the year. `Session` is an object
   ## variant, so the compiler checks that a new year gets an arm here.
@@ -649,3 +777,4 @@ proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   of yBc20: r.buildBc20Packet(s.w20, s.gameIndex, s.sideAslot, chrome)
   of yBc21: r.buildBc21Packet(s.w21, s.gameIndex, s.sideAslot, chrome)
   of yBc24: r.buildBc24Packet(s.w24, s.gameIndex, s.sideAslot, chrome)
+  of yBc25: r.buildBc25Packet(s.w25, s.gameIndex, s.sideAslot, chrome)
