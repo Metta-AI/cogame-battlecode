@@ -233,10 +233,14 @@ proc collectGameEvents(
                     "level": e.b,
                     "x": e.c div 100, "y": e.c mod 100}))
     of "tower_lost":
+      ## `remaining` is how many towers the clan has left, counted after the
+      ## loss by the sim itself and carried on `e.s` -- the feed line is
+      ## "TOWER LOST" and the number that makes it matter.
       events.add(ev("tower_lost", game = gameIndex, round = e.round,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                     "tower": Bc25TowerNames[e.b],
-                    "x": e.c div 100, "y": e.c mod 100}))
+                    "x": e.c div 100, "y": e.c mod 100,
+                    "remaining": (try: parseInt(e.s) except CatchableError: 0)}))
     of "srp_completed":
       events.add(ev("srp_completed", game = gameIndex, round = e.round,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
@@ -245,6 +249,7 @@ proc collectGameEvents(
       events.add(ev("srp_active", game = gameIndex, round = e.round,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                     "x": e.b div 100, "y": e.b mod 100,
+                    "active_total": (try: parseInt(e.s) except CatchableError: 0),
                     "income_bonus": e.c}))
     of "srp_broken":
       events.add(ev("srp_broken", game = gameIndex, round = e.round,

@@ -197,6 +197,36 @@ block:
   check("first_action really fired", saw > 0)
 
 block:
+  ## The note's event table, field for field, for the two kinds that were
+  ## short of it (r1-F11): `tower_lost` names how many towers the clan has
+  ## LEFT, and `srp_active` names how many patterns are live, not just the
+  ## bonus one of them pays.
+  var sawLost, sawActive = 0
+  for mapName in ["Filter", "Justice"]:
+    let (doc, _) = record(mapName, 2000, sheets())
+    for e in doc.events:
+      case e.kind
+      of "tower_lost":
+        sawLost += 1
+        for field in ["alias", "tower", "x", "y", "remaining"]:
+          check("tower_lost carries `" & field & "`", e.fields.hasKey(field))
+        check("and `remaining` counts what is left, after the loss",
+          e.fields{"remaining"}.getInt() >= 0)
+      of "srp_active":
+        sawActive += 1
+        for field in ["alias", "x", "y", "active_total", "income_bonus"]:
+          check("srp_active carries `" & field & "`", e.fields.hasKey(field))
+        checkEq("and the bonus is 3 chips a tower per live pattern",
+          e.fields{"income_bonus"}.getInt(),
+          e.fields{"active_total"}.getInt() * 3)
+      of "coverage":
+        for field in ["alias", "permille", "tiles_from_win"]:
+          check("coverage carries `" & field & "`", e.fields.hasKey(field))
+      else: discard
+  check("a tower was really lost in one of those games", sawLost > 0)
+  check("and a resource pattern really went live", sawActive > 0)
+
+block:
   ## The committed fixture still re-derives at this GameVersion.
   let text = readFile("tests/fixtures/replay-bc25.json")
   let doc = parseReplay(text)

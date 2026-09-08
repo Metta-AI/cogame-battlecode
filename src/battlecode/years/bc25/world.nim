@@ -572,9 +572,12 @@ proc updateResourcePatterns*(w: World) =
       kept.add(centre)
       w.srpLifetimes[i] = int32(int(w.srpLifetimes[i]) + 1)
       if int(w.srpLifetimes[i]) == ResourcePatternActiveDelay:
+        ## `s` carries how many of this clan's patterns are now live: the
+        ## note's `active_total`, which the feed reads beside the bonus.
         discard w.beat(BeatSrpActive, "srp_active", ord(team),
           centre.x * 100 + centre.y,
-          w.numActiveResourcePatterns(team) * ExtraResourcesFromPattern)
+          w.numActiveResourcePatterns(team) * ExtraResourcesFromPattern,
+          $w.numActiveResourcePatterns(team))
   w.srpCentres = kept
   var any = false
   for t in [teamA, teamB]:
@@ -638,7 +641,7 @@ proc destroyRobot*(w: World, id: int) =
     w.stats.towers[t] -= 1
     w.stats.towersLost[t] += 1
     discard w.beat(BeatTowerLost, "tower_lost", t, ord(towerKindOf(r.kind)),
-      r.loc.x * 100 + r.loc.y)
+      r.loc.x * 100 + r.loc.y, $w.stats.towers[t])
   else:
     w.stats.robotsLost[t] += 1
     w.lostThisRound[t] += 1
