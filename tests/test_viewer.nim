@@ -394,7 +394,8 @@ block:
 block:
   let fixture = readFile("tools/ci/renderer_fixture.html")
   check("the fixture has a row per year",
-    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23'];" in fixture)
+    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22'];" in
+      fixture)
   check("and fills bc21's own readouts",
     "bc21-influence" in fixture and "bc21-votes" in fixture and
     "bc21-doctrines-body" in fixture)
@@ -414,6 +415,15 @@ block:
     "bc23Doctrines += '<div class=\"dline\"><span class=\"dname\">'" in
       fixture and
     "'<br>' + BC23_WORDS[m23] + '<br><i>' + notes + '</i></div>'" in fixture)
+  ## bc22's row: the SUBMITTED-VS-APPLIED badge and both seats' full-cap
+  ## notes at once, which is the widest line `#bc22-doctrines` can hold.
+  check("and bc22's",
+    "bc22-archons" in fixture and "bc22-anomaly" in fixture and
+    "bc22-econ" in fixture and "bc22-units" in fixture and
+    "bc22-doctrines-body" in fixture)
+  check("with the envelope badge on the card, at full cap",
+    "envelope: doctrine" in fixture and "knobs " in fixture and
+    "what the cog actually sent: " in fixture)
   check("and the fixture refuses to pass on a shortened string",
     "the notes on seat ' + d + ' were shortened" in fixture and
     "the motto on seat ' + s + ' was shortened" in fixture)
@@ -827,9 +837,10 @@ block:
     "window.Bc25Block = {" in page)
   check("and the shared onText calls it",
     "if (window.Bc25Block) window.Bc25Block.onFrame(s);" in page)
-  check("and the bc26 branch is guarded off for bc25 — and now for bc23 " &
-    "too, so the discriminator is six-way",
-    "if (!isBc20 && !isBc21 && !isBc23 && !isBc24 && !isBc25) {" in page)
+  check("and the bc26 branch is guarded off for bc25, bc23 and now bc22 " &
+    "too, so the discriminator is SEVEN-way",
+    "if (!isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 && !isBc25) {" in
+      page)
 
 block:
   ## THE BC23 GAME BLOCK. The same five obligations every year module before
@@ -896,7 +907,7 @@ block:
   check("#bc23-econ too",
     "#bc23-econ { bottom: calc(var(--band, 0px) + 8px); }" in page)
   check("and relayout() MEASURES both of them into --statrail",
-    "'bc23-econ', 'bc23-units']" in page)
+    "'bc23-econ', 'bc23-units'" in page)
 
   ## Every #bc23-* rule is scoped to the year, one way or the other.
   ## THE WHOLE <style> BLOCK, not a line scan: a line scan reads the script's
@@ -933,10 +944,12 @@ block:
         ## a bc23 replay because `html:not([data-year="bc23"])` hides it.
         ## What is forbidden is a rule that could restyle ANOTHER year's
         ## element, i.e. a selector that is neither `#bc23-` prefixed nor
-        ## `data-year` scoped.
+        ## `data-year` scoped. A LATER year's block naming `#bc23-...` under
+        ## its OWN `html[data-year="bcNN"]` scope is the hide list every year
+        ## block ships and is likewise fine.
         if s.startsWith("#bc23-") or
-           s.startsWith("html[data-year=\"bc23\"] ") or
-           s.startsWith("html:not([data-year=\"bc23\"]) "):
+           s.startsWith("html[data-year=") or
+           s.startsWith("html:not([data-year="):
           continue
         unscoped.add(s)
     sel = ""
@@ -1089,5 +1102,174 @@ block:
                "trap_brown_stun", "trap_brown_water", "trap_white_explosive",
                "flag", "flag_outline_thick", "crumb_1", "crumb_2", "crumb_3"]:
     check("the bc24 atlas carries " & name, "\"" & name & "\"" in atlas)
+
+# --- THE BC22 GAME BLOCK ----------------------------------------------------
+block:
+  ## The same obligations every year module before it had to meet, plus the
+  ## two `--statrail` ids and the envelope badge.
+  let page = readFile("client/replay_broadcast.html")
+  checkEq("the bc22 block does not define `markBeat` at all — that name is " &
+    "`chrome_common.js`'s and a same-named function here would HOIST OVER " &
+    "it (the tandem 2026-08-23 collision)",
+    page.count("function markBeat"), 0)
+  for taken in ["function buildBeatButtons",
+                "function buildBc20BeatButtons",
+                "function buildBc21BeatButtons",
+                "function buildBc23BeatButtons",
+                "function buildBc24BeatButtons",
+                "function buildBc25BeatButtons"]:
+    checkEq("the bc22 block does not redefine " & taken,
+      page.count(taken), 1)
+  checkEq("the bc22 builder is defined exactly once",
+    page.count("function buildBc22BeatButtons"), 1)
+  checkEq("and so is its spoiler gate",
+    page.count("function applyBc22BeatSpoilers"), 1)
+  check("the block registers on window.Bc22Block",
+    "window.Bc22Block = {" in page)
+  check("and the shared onText calls it",
+    "if (window.Bc22Block) window.Bc22Block.onFrame(s);" in page)
+  check("and the inherited block attaches the transport to it",
+    "window.Bc22Block.attach({" in page)
+  check("the bc26 branch is guarded off for bc22 too, so the discriminator " &
+    "is SEVEN-way",
+    "if (!isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 && !isBc25) {" in
+      page)
+  for alias in ["window.Bc20Block = {", "window.Bc21Block = {",
+                "window.Bc23Block = {", "window.Bc24Block = {",
+                "window.Bc25Block = {"]:
+    checkEq("the bc22 block does not redeclare " & alias,
+      page.count(alias), 1)
+
+  ## `#bc22-doctrines` carries a dismiss control, an Escape binding, a re-open
+  ## chip and self-dismissal — and it sits OUTSIDE var(--band) (D3).
+  check("the doctrine overlay exists", "id=\"bc22-doctrines\"" in page)
+  check("with a dismiss control carrying an aria-label",
+    "id=\"bc22-doctrines-close\"" in page)
+  check("a re-open chip", "id=\"bc22-doctrines-toggle\"" in page)
+  check("an Escape binding scoped to bc22",
+    "getAttribute('data-year') !== 'bc22'" in page)
+  check("and it carries the SUBMITTED-VS-APPLIED badge the envelope pin " &
+    "requires", "knobs defaulted" in page and
+    "what the cog actually sent" in page and "seat.envelope" in page)
+
+  ## The headline and the signature readouts exist, and the ANOMALY CLOCK
+  ## keeps its type word and countdown at EVERY width — it is the readout that
+  ## makes the year make sense.
+  check("#bc22-archons is the headline pill",
+    "id=\"bc22-archons\"" in page)
+  check("#bc22-anomaly is the signature readout",
+    "id=\"bc22-anomaly\"" in page)
+  check("and it sits immediately ABOVE var(--band), never inside it",
+    "bottom: calc(var(--band, 0px) + 148px);" in page)
+
+  ## The stat boxes size to their own content and are in the --statrail set.
+  check("#bc22-units is lifted above var(--band)",
+    "#bc22-units { bottom: calc(var(--band, 0px) + 76px); }" in page)
+  check("#bc22-econ too",
+    "#bc22-econ { bottom: calc(var(--band, 0px) + 8px); }" in page)
+  check("and relayout() MEASURES both of them into --statrail",
+    "'bc22-econ', 'bc22-units']" in page)
+  check("while #killfeed is still lifted above the rail",
+    "calc(var(--band, 0px) + var(--statrail, 0px) + 8px)" in page)
+
+  ## Every #bc22-* CSS rule is scoped to the year, one way or the other.
+  let cssOpen = page.find("<style>")
+  let cssClose = page.find("</style>")
+  var css = page[cssOpen + len("<style>") ..< cssClose]
+  while true:
+    let a = css.find("/*")
+    if a < 0: break
+    let b = css.find("*/", a)
+    if b < 0: break
+    css = css[0 ..< a] & " " & css[b + 2 .. ^1]
+  var unscoped22: seq[string]
+  var scanned22 = 0
+  var sel22 = ""
+  for ch in css:
+    if ch notin {'{', '}', ';'}:
+      sel22.add(ch)
+      continue
+    if ch == '{' and "bc22" in sel22:
+      for part in sel22.split(','):
+        let one = part.splitWhitespace().join(" ")
+        if "bc22" notin one: continue
+        if one.startsWith("@"): continue
+        inc scanned22
+        if one.startsWith("#bc22-") or
+           one.startsWith("html[data-year=\"bc22\"] ") or
+           one.startsWith("html:not([data-year=\"bc22\"]) "):
+          continue
+        unscoped22.add(one)
+    sel22 = ""
+  check("the scan saw the bc22 rules at all", scanned22 >= 20)
+  checkEq("and every one of them is year-scoped (" &
+    unscoped22.join(" | ") & ")", unscoped22.len, 0)
+
+  ## `#viewpanel` is KEPT: the bc22 pool spans 30x30 to 49x25 and the reserved
+  ## large pool reaches 60x60, so the native render is wider than the 360 px
+  ## featured-match frame.
+  check("the zoom panel is still in the page", "id=\"viewpanel\"" in page)
+
+# --- THE FOUR SHARED-ENDCARD FIXES -----------------------------------------
+block:
+  let page = readFile("client/replay_broadcast.html")
+  ## FIX 1: this year's nouns, not bc26's.
+  check("the endcard's noun table is keyed by year",
+    "var ENDCARD_NOUNS = {" in page)
+  let tableStart = page.find("var ENDCARD_NOUNS = {")
+  let tableEnd = page.find("};", tableStart)
+  let nounTable = page[tableStart .. tableEnd]
+  for year in ["bc26", "bc20", "bc21", "bc22", "bc23", "bc24", "bc25"]:
+    check("the noun table has a " & year & " branch", year & ":" in nounTable)
+  ## The bc26 nouns must be ABSENT from every non-bc26 branch.
+  for line in nounTable.splitLines():
+    if "bc26:" in line: continue
+    for noun in ["rat king", "cheese", "cat"]:
+      check("no `" & noun & "` outside the bc26 branch: " & line.strip(),
+        noun notin line)
+  check("and the win-condition line is per year, not bc26's",
+    "function endcardWinCondition(" in page)
+  check("with bc22's own rungs in it",
+    "more archons left" in page and "won on gold net worth" in page)
+  check("the bc26 branch is guarded rather than being the default",
+    "if (s.year === 'bc26' || !s.year) {" in page)
+
+  ## FIX 2: no clipping or overflow at 1280x800.
+  check("#endcard's content scrolls rather than running off the bottom",
+    "overscroll-behavior: contain;" in page)
+  let smoke = readFile("tools/ci/viewer_smoke.mjs")
+  check("and viewer_smoke.mjs makes it a GATE",
+    "#endcard overflows at 1280x800" in smoke and
+    "endcard_overflow" in smoke)
+
+  ## FIX 3: no raw unrounded floats.
+  check("there is exactly ONE formatter", page.count("window.fmtStat =") == 1)
+  check("and the endcard's own numbers go through it",
+    "window.fmtStat(scores[0])" in page)
+  check("as do the bc22 war panel's",
+    "stat(faction.lead_mined, 'int')" in page and
+    "stat(perGold, 'rate')" in page)
+
+  ## FIX 4: no empty mottos and no article-plus-enum grammar.
+  check("a blank motto renders NOTHING",
+    "var motto = d.motto ? '<br><i>" in page)
+  check("and the scorebug guards it too", "doc.motto ? ' · ' + doc.motto" in
+    page)
+
+# --- the bc22 sprite atlas --------------------------------------------------
+block:
+  check("the bc22 atlas image is committed", fileExists("data/atlas_bc22.png"))
+  check("with its index", fileExists("data/atlas_bc22.json"))
+  let atlas = readFile("data/atlas_bc22.json")
+  for name in ["blue_miner", "blue_builder", "blue_soldier", "blue_sage",
+               "red_miner", "red_builder", "red_soldier", "red_sage",
+               "blue_archon_level1", "blue_archon_level2",
+               "blue_archon_level3", "blue_archon_prototype",
+               "blue_archon_portable_level1", "blue_lab_level1",
+               "blue_lab_prototype", "blue_lab_portable_level3",
+               "blue_watchtower_level1", "blue_watchtower_prototype",
+               "red_archon_level3", "red_watchtower_portable_level2",
+               "lead", "gold", "star"]:
+    check("the bc22 atlas carries " & name, "\"" & name & "\"" in atlas)
 
 finish("test_viewer")

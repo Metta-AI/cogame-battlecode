@@ -103,8 +103,14 @@ spec's prose or the JVM, and every one has a test.
    (`ARCHON` 20 000, `MINER`/`SOLDIER`/`SAGE`/`WATCHTOWER` 10 000, `BUILDER`
    7 500, `LABORATORY` 5 000) have no meaning outside the JVM instrumenter and
    are replaced by a fixed **`DecisionOps` budget of 2 000 / 1 250 / 750 / 500**
-   — one tenth of the Java limits, the same convention bc20, bc21, bc23, bc24
-   and bc25 use. The budget is checked BEFORE each primitive and never inside
+   — the same convention bc20, bc21, bc23, bc24 and bc25 use, which is one
+   tenth of the Java limit for the ARCHON (20 000), the BUILDER (7 500) and the
+   LABORATORY (5 000). The four types on the 10 000 limit get **1 250 and not
+   1 000**, deliberately: a bc22 miner's nine-square scan plus its
+   mine-move-mine turn is the busiest primitive sequence in the year, and the
+   round number would cut it short on the measured maps. The port is generous
+   in the direction that cannot change a RULE — a chassis that is not cut off
+   emits the same orders a chassis with more budget would. The budget is checked BEFORE each primitive and never inside
    one, so a primitive's RESULT is never a function of the remaining budget;
    when it runs out the robot's turn ends where it stands and is **not** resumed
    mid-computation next turn, which is the one place this differs from the JVM.

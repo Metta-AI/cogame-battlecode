@@ -873,9 +873,11 @@ BC22_DECISION_OPS_ARCHON = 2000
 BC22_DECISION_OPS_STANDARD = 1250
 BC22_DECISION_OPS_BUILDER = 750
 BC22_DECISION_OPS_LABORATORY = 500
-    # One tenth of ARCHON 20000 / MINER-SOLDIER-SAGE-WATCHTOWER 10000 /
-    # BUILDER 7500 / LABORATORY 5000, the same convention bc20, bc21, bc23,
-    # bc24 and bc25 use. docs/RULES-BC22.md §Divergences item 1 carries the
+    # The same convention bc20, bc21, bc23, bc24 and bc25 use: a tenth of
+    # ARCHON 20000, BUILDER 7500 and LABORATORY 5000. The four types on the
+    # 10000 limit get 1250 rather than 1000, deliberately -- a bc22 miner's
+    # nine-square scan plus its mine-move-mine turn is the busiest primitive
+    # sequence in the year (docs/RULES-BC22.md Divergences item 1). docs/RULES-BC22.md §Divergences item 1 carries the
     # measurement that makes it harmless in this year: the 2022 example bot
     # peaks at 6-7 % of its limit with ZERO mid-turn cut-offs over eight full
     # 2000-round games.

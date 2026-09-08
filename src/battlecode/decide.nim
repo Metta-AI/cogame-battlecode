@@ -60,7 +60,7 @@ proc chassisForSeat*(year: string, seat: SeatPolicy): ScriptedChassis =
 
 proc chassisNameFor*(year: string, seat: SeatPolicy, sheet: Sheet): string =
   case yearIdOf(year)
-  of yBc20, yBc21, yBc24, yBc25, yBc23:
+  of yBc20, yBc21, yBc22, yBc24, yBc25, yBc23:
     (if seat.isLlm: $strongChassisFor(year)
      else: baselineName(baselineForSeat(year, seat)))
   of yBc26: $sheet.doctrine.chassis
@@ -514,6 +514,98 @@ faction is driven by the `lemonade` chassis. That is not yours to choose:
 there is no `chassis` knob, and a reply that sends one has it ignored.
 """
 
+const Bc22Preamble* = """
+You command a faction of robots in Battlecode 2022, "Mutation": a two-faction
+grid war on a symmetric map between 20x20 and 60x60, 2000 rounds a game, best
+of three.
+
+You do not move a single robot. Before the war you write ONE DOCTRINE — a JSON
+sheet of eleven named knobs — and a deterministic simulation then plays the
+whole match from it while you watch.
+
+THE WORLD
+- Each faction starts with 1 to 4 ARCHONS (600 hp) and 200 lead. LOSE YOUR
+  LAST ARCHON AND YOU LOSE THE GAME IMMEDIATELY.
+- An archon builds MINERS (50 Pb), BUILDERS (40 Pb), SOLDIERS (75 Pb, 50 hp,
+  3 damage at r2<=13) and SAGES (20 Au, 100 hp, 45 damage at r2<=25, one shot
+  every twenty turns) in an adjacent square, and repairs a friendly droid for
+  2/4/6 a turn within r2<=20.
+- A BUILDER puts up LABORATORIES (180 Pb) and WATCHTOWERS (150 Pb) as
+  PROTOTYPES at 80% health that can do nothing until the builder has repaired
+  them to full — ten repairs for a laboratory, fifteen for a watchtower.
+- Every square carries RUBBLE 0..100, and every cooldown a robot pays is
+  floor((1 + rubble/10) * base) at the square it is standing on when the
+  action resolves. Rubble 60 is seven times the cost of bare ground.
+- Lead is on the map and finite: THE MAP ADDS 5 LEAD EVERY 20 ROUNDS TO EVERY
+  SQUARE THAT STILL HOLDS AT LEAST 1, so a miner that takes a square to zero
+  has destroyed that deposit for the rest of the game. A miner's action
+  cooldown is 2 against a limit of 10, so it mines up to FIVE times a turn on
+  flat ground.
+- GOLD exists only because a LABORATORY makes it, or because something died
+  and dropped 20% of its build cost. A laboratory's price is
+  floor(20 - 18*exp(-k*n)) lead per gold in the number n of friendly robots it
+  can see inside r2<=53, with k = 0.02/0.01/0.005 by its level: TWO LEAD A
+  GOLD STANDING ALONE, ELEVEN WITH FORTY FRIENDS NEARBY.
+- Buildings can be MUTATED to level 2 with lead (archon 300, watchtower 150,
+  laboratory 150) and level 3 with gold (80 / 60 / 25), and can TRANSFORM
+  between TURRET mode (acts, cannot move) and PORTABLE mode (moves, cannot
+  act) for 100 cooldown — so an archon can get up and walk.
+- Each map ships a fixed, PUBLIC ANOMALY SCHEDULE of roughly one event per 200
+  rounds. ABYSS takes 10% of the metal on every square and in both reserves,
+  ROUNDED DOWN — so a square holding 9 or fewer loses nothing. CHARGE destroys
+  the top 5% of ALL DROIDS ON THE BOARD ranked by how many friends each can
+  see — the ranking is over BOTH teams, so the side that clumps donates the
+  victims, and under twenty droids IT KILLS NOBODY. FURY takes 5% of the max
+  health of every building IN TURRET MODE — a building in PORTABLE mode and a
+  PROTOTYPE take NOTHING. VORTEX reflects or rotates the rubble map.
+- At round 2000 the SINGULARITY takes the weaker side: more archons alive,
+  then greater gold net worth, then greater lead net worth, then a coin flip.
+
+SCORING
+  points = int(64 * archon share + 24 * gold-net-worth share
+               + 12 * lead-net-worth share)
+Winning a game is worth 200 and points are worth at most 100, so the game
+bonus dominates: killing the last enemy archon wins outright.
+
+YOUR REPLY
+Reply with ONE JSON object and NOTHING else. Your reply must begin with '{'.
+{"sheet": {...knobs...}, "notes": "<=280 chars", "motto": "<=48 chars"}
+
+THE KNOBS (unknown key, wrong type or out-of-range value = that field's
+default; the five integers CLAMP; you cannot forfeit by answering badly, only
+by answering weakly):
+  opening              "soldier_rush" | "miner_eco" | "sage_spam"  default "miner_eco"
+  miner_count_curve    "lean" | "steady" | "heavy"                 default "steady"
+  mine_floor           0..5   how much lead a miner LEAVES         default 1
+  soldier_sage_ratio   0..100 percent of the attack budget, in
+                       lead-equivalent, that goes to soldiers      default 65
+  lab_round            1..1800 when the first laboratory is
+                       commissioned                                default 300
+  lab_solitude         0..40  the most friendly robots a lab
+                       tolerates before it stops transmuting       default 12
+  gold_use             "sages" | "mutations"                       default "sages"
+  watchtower_policy    "never" | "home" | "forward"                default "home"
+  anomaly_play         "ignore" | "time_pushes"                    default "time_pushes"
+  archon_relocate      "never" | "safety" | "lead"                 default "safety"
+  retreat_hp           0..100 percent of max health at which a
+                       droid disengages toward an archon           default 40
+
+No setting of any knob makes your faction idle: it always keeps at least three
+miners per archon digging, always builds a soldier when lead allows and the
+census is short, always spends an archon's action rather than banking it,
+always answers an enemy attacker sensed near one of its own archons, always
+repairs a damaged droid in an archon's reach, and NEVER lets its last archon
+stand up while an enemy attacker is within eight squares. Your faction is
+driven by the `wololo` chassis. That is not yours to choose: there is no
+`chassis` knob, and a reply that sends one has it ignored.
+
+HOW A GAME ENDS
+A game ends the instant a faction's last archon dies (`annihilated`), or at
+round 2000 on the Singularity ladder. There is NO elimination for losing
+droids: a faction with one archon and nothing else plays on to round 2000
+earning 2 lead a round.
+"""
+
 proc preambleFor*(year: string): string =
   case yearIdOf(year)
   of yBc20: Bc20Preamble
@@ -521,6 +613,7 @@ proc preambleFor*(year: string): string =
   of yBc24: Bc24Preamble
   of yBc25: Bc25Preamble
   of yBc23: Bc23Preamble
+  of yBc22: Bc22Preamble
   of yBc26: SystemPreamble
 
 proc briefFor*(
@@ -785,6 +878,130 @@ proc briefFor*(
       "games": plan.maps.len,
       "note": "shares are float32; points truncate to an integer; the " &
               "league ranks by scores, which the win bonus dominates"
+    }
+  of yBc22:
+    payload["economy"] = %*{
+      "start_per_team": {"lead": 200, "gold": 0},
+      "passive_per_team_per_round": {"lead": 2},
+      "map_regeneration": {"every_rounds": 20, "amount": 5,
+        "rule": "added ONLY to a square that still holds at least 1 lead " &
+                "— a square mined to zero is dead for the rest of the game"},
+      "mine_rate": "one unit per action; a miner's action cooldown is 2 " &
+                   "against a limit of 10, so up to FIVE mines a turn on " &
+                   "rubble-free ground",
+      "reclaim": "a destroyed robot drops 20% of its build cost (including " &
+                 "mutations) on the square it last occupied; an archon " &
+                 "drops 20 gold, 36 at level 3",
+      "laboratory": {
+        "lead_per_gold": "floor(20 - 18*exp(-k*n)) where n is the friendly " &
+                         "robots the lab can see (vision r2<=53) and k is " &
+                         "0.02 / 0.01 / 0.005 by level",
+        "measured_level1": {"0": 2, "3": 3, "6": 4, "10": 5, "13": 6,
+                            "21": 8, "30": 10, "40": 11}}
+    }
+    payload["units"] = %*{
+      "archon": {"au": "cannot be built (nominal 100)",
+        "hp": "600/1080/1944 by level", "act_cd": 10, "move_cd": 24,
+        "act_r2": 20, "vis_r2": 34,
+        "does": "builds MINER, BUILDER, SOLDIER and SAGE in an adjacent " &
+                "square; repairs a friendly non-building for 2/4/6 a turn " &
+                "within r2<=20; LOSE YOUR LAST ARCHON AND YOU LOSE THE GAME " &
+                "IMMEDIATELY"},
+      "laboratory": {"pb": 180, "hp": "100/180/324", "act_cd": 10,
+        "move_cd": 24, "vis_r2": 53,
+        "does": "turns lead into exactly 1 gold per action at the " &
+                "loneliness price above; the ONLY source of gold; built by " &
+                "a BUILDER as an 80-HP prototype that needs 10 builder " &
+                "repairs to come alive"},
+      "watchtower": {"pb": 150, "hp": "150/270/486", "dmg": "4/8/12",
+        "act_cd": 10, "act_r2": 20, "vis_r2": 34,
+        "does": "a building that shoots; built by a BUILDER as a 120-HP " &
+                "prototype that needs 15 builder repairs to come alive"},
+      "miner": {"pb": 50, "hp": 40, "act_cd": 2, "move_cd": 20, "act_r2": 2,
+        "vis_r2": 20,
+        "does": "mines one lead or one gold per action from its own square " &
+                "or any of the eight around it"},
+      "builder": {"pb": 40, "hp": 30, "act_cd": 10, "move_cd": 20,
+        "act_r2": 5, "vis_r2": 20,
+        "does": "builds LABORATORY and WATCHTOWER, repairs a friendly " &
+                "building 2 a turn, and MUTATES a friendly building a level"},
+      "soldier": {"pb": 75, "hp": 50, "dmg": 3, "act_cd": 10, "move_cd": 16,
+        "act_r2": 13, "vis_r2": 20,
+        "does": "the general-purpose attacker, and the whole 2022 " &
+                "metagame; 3 damage a hit, so an archon takes 200 hits"},
+      "sage": {"au": 20, "hp": 100, "dmg": 45, "act_cd": 200, "move_cd": 25,
+        "act_r2": 25, "vis_r2": 34,
+        "does": "45 damage — fifteen soldiers' worth — once every twenty " &
+                "turns; and the ONLY unit that can ENVISION an anomaly"}
+    }
+    payload["buildings"] = %*{
+      "modes": "a building is built as a PROTOTYPE at 80% health that can " &
+               "neither act nor move; a BUILDER repairing it to full turns " &
+               "it into a TURRET (acts, cannot move); TRANSFORM flips " &
+               "TURRET<->PORTABLE (moves, cannot act) and costs 100 " &
+               "cooldown on the mode-appropriate counter, i.e. ten of its " &
+               "own turns",
+      "mutations": "level 2 costs LEAD (archon 300, watchtower 150, " &
+                   "laboratory 150); level 3 costs GOLD (archon 80, " &
+                   "watchtower 60, laboratory 25); applied by a BUILDER " &
+                   "within r2<=5 and freezes the building for 100 on BOTH " &
+                   "counters",
+      "archons_walk": "an archon is a building: it can transform to " &
+                      "PORTABLE and relocate"
+    }
+    payload["rubble"] = %*{
+      "range": "0..100 per square, fixed except by a VORTEX",
+      "effect": "every cooldown a robot pays is floor((1 + rubble/10) * " &
+                "base), evaluated at the square the robot is standing on " &
+                "when the action resolves — and for a MOVE that is the " &
+                "DESTINATION square"
+    }
+    payload["anomalies"] = %*{
+      "schedule": "public to every robot at all times, per map, roughly one " &
+                  "per 200 rounds",
+      "abyss": "10% of the lead and gold on EVERY square and in BOTH team " &
+               "reserves, rounded DOWN — so a square holding 9 or fewer " &
+               "loses nothing",
+      "charge": "the top 5% of ALL droids on the board, ranked by how many " &
+                "friendly robots each can see, are destroyed; the ranking " &
+                "is over BOTH teams together, so the side that clumps " &
+                "donates the victims; and floor(0.05*n) is ZERO for any " &
+                "droid count of 19 or fewer",
+      "fury": "every building IN TURRET MODE loses 5% of its max health, " &
+              "rounded down (a level-1 watchtower loses 7); a building in " &
+              "PORTABLE mode and a PROTOTYPE take NOTHING",
+      "vortex": "the rubble map is reflected or rotated according to the " &
+                "map's declared symmetry; lead, gold and robots do not move",
+      "sage_versions": {
+        "abyss": "99% of the metal on every square within r2<=25",
+        "charge": "every enemy droid within r2<=25 loses 22% of its max HP",
+        "fury": "every turret-mode building within r2<=25 loses 10% of its " &
+                "max HP",
+        "vortex": "NOT available to a sage"}
+    }
+    payload["comms"] = %*{
+      "shared_array": 64, "max_value": 65535,
+      "write_rule": "any robot, any time, no cooldown, no range test, no cost",
+      "read_rule": "always"
+    }
+    payload["win"] = %*{
+      "instant": "destroy the enemy's LAST ARCHON",
+      "at_round_2000": ["more archons alive",
+                        "greater gold net worth (reserve + live robots' " &
+                        "gold worth)", "greater lead net worth", "coin flip"],
+      "note": "there is no elimination for losing droids: a faction with " &
+              "one archon and nothing else plays on to round 2000 earning " &
+              "2 lead a round"
+    }
+    payload["sheet_schema"] = bc22SheetSchema()
+    payload["scoring"] = %*{
+      "weights": {"archons_share": 64, "gold_net_worth_share": 24,
+                  "lead_net_worth_share": 12},
+      "win_bonus_per_game": 200,
+      "games": plan.maps.len,
+      "note": "shares are float32; points truncate to an integer; the " &
+              "league ranks by ELO on match wins and results.scores is " &
+              "dominated by the win bonus"
     }
   of yBc26:
     payload["scoring"] = %*{
