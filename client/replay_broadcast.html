@@ -3110,7 +3110,7 @@ html:not([data-year="bc25"]) #bc25-srp { display: none !important; }
 #bc25-coverage .bar .b { position: absolute; right: 0; top: 0; bottom: 0;
   background: #b28b52; }
 #bc25-coverage .bar .tick {
-  position: absolute; top: -2px; bottom: -2px; width: 1px;
+  position: absolute; top: 0; bottom: 0; width: 1px;
   background: rgba(240, 208, 112, .9);
 }
 #bc25-coverage .towin { color: #b6a892; }
@@ -3123,14 +3123,20 @@ html:not([data-year="bc25"]) #bc25-srp { display: none !important; }
   padding: 4px 8px; border-radius: 8px;
   background: rgba(18, 14, 12, .78); border: 1px solid #57493c;
   font: 500 10px/1.35 ui-monospace, Menlo, Consolas, monospace;
-  color: #e3d8c6; max-width: 44vw; pointer-events: none;
+  color: #e3d8c6; pointer-events: none;
+  box-sizing: border-box; max-width: calc(100% - 16px); overflow: hidden;
 }
 #bc25-towers { bottom: calc(var(--band, 0px) + 76px); }
 #bc25-econ { bottom: calc(var(--band, 0px) + 8px); }
 #bc25-towers .row, #bc25-econ .row {
   display: flex; gap: 6px; align-items: baseline; white-space: nowrap;
 }
-#bc25-towers .who, #bc25-econ .who { min-width: 4.4em; color: #b6a892; }
+/* `flex: 0 0 auto` and not just `min-width`: a flex item shrinks BELOW its
+   text unless it is told not to, and a clan name clipped to "CLAN BAS" is a
+   readout that reads short and reports nothing. */
+#bc25-towers .who, #bc25-econ .who {
+  min-width: 4.4em; flex: 0 0 auto; color: #b6a892;
+}
 #bc25-towers .pip { letter-spacing: .1em; }
 #bc25-towers .money { color: #f0d070; }
 #bc25-towers .paint { color: #9fd0ff; }
@@ -3158,9 +3164,13 @@ html:not([data-year="bc25"]) #bc25-srp { display: none !important; }
   font: 700 13px/1 ui-monospace, Menlo, Consolas, monospace;
 }
 #bc25-doctrines-close:hover { color: #fff; }
-#bc25-doctrines .clan { margin: 2px 0 6px; }
-#bc25-doctrines .clan b { color: #f0d070; }
-#bc25-doctrines .fallback { color: #e0523a; }
+/* `.dline` / `.dname` / `.dfall`, the same three class names the inherited
+   panel and the bc20, bc21 and bc24 panels use, so the shared renderer
+   fixture's "the notes were shortened before they were measured" check
+   reaches this year's notes too. */
+#bc25-doctrines .dline { margin: 2px 0 6px; }
+#bc25-doctrines .dname { color: #f0d070; font-weight: 600; }
+#bc25-doctrines .dfall { color: #e0523a; }
 #bc25-doctrines-toggle {
   background: rgba(18, 14, 12, .8); border: 1px solid #57493c;
   border-radius: 999px; color: #e3d8c6; cursor: pointer;
@@ -3198,8 +3208,15 @@ html[data-year="bc25"] .beat-marker.end      { background: #ffffff; }
   #bc25-coverage { font-size: 10px; gap: 5px; }
   #bc25-coverage .bar { width: 74px; }
   #bc25-coverage .towin, #bc25-coverage .lbl { display: none; }
-  #bc25-towers, #bc25-econ { font-size: 9px; max-width: 58vw; }
+  #bc25-towers, #bc25-econ { font-size: 9px; }
   #bc25-towers .who, #bc25-econ .who { min-width: 2.6em; }
+  /* The same discipline the bc24 pill uses at this width: the rows drop
+     their trailing word labels rather than clip them. MEASURED, not
+     guessed: with `23 bots` and the ⏱ countdowns dropped the econ row is
+     316 px inside the 344 px the frame leaves it, and `SRP ×2 → +6/tower`
+     -- the year's signature readout -- stays. */
+  #bc25-towers .lbl, #bc25-econ .lbl,
+  #bc25-econ .pending { display: none; }
   #bc25-towers { bottom: calc(var(--band, 0px) + 66px); }
   #bc25-doctrines { max-width: 88%; font-size: 10px; }
 }
@@ -4547,9 +4564,9 @@ html[data-year="bc25"] .beat-marker.end      { background: #ffffff; }
     if (!body || !s.doctrines) return;
     var html = '';
     s.doctrines.forEach(function (seat, i) {
-      html += '<div class="clan"><b>' + esc(seat.alias) + '</b> \u2014 ' +
-        esc(seat.name || '') +
-        (seat.fallback ? ' <span class="fallback">[fallback: ' +
+      html += '<div class="dline"><span class="dname">' + esc(seat.alias) +
+        '</span> \u2014 ' + esc(seat.name || '') +
+        (seat.fallback ? ' <span class="dfall">[fallback: ' +
           esc(seat.fallback) + ']</span>' : '') +
         '<br>' + esc((seat.words || []).join(' \u00b7 ')) +
         (seat.notes ? '<br><i>' + esc(seat.notes) + '</i>' : '') +

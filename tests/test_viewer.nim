@@ -404,6 +404,15 @@ block:
   check("and bc25's",
     "bc25-coverage" in fixture and "bc25-towers" in fixture and
     "bc25-econ" in fixture and "bc25-doctrines-body" in fixture)
+  ## The fixture's "the notes were shortened before they were measured"
+  ## check reads `#<year>-doctrines .dline i`, so a year whose doctrine rows
+  ## carry any other class name passes that check VACUOUSLY -- bc25 shipped
+  ## `.clan`/`<b>` first and the fixture found nothing to measure. Both the
+  ## page and the fixture use the four years' own class names now.
+  check("the bc25 doctrine rows are .dline/.dname like every other year's",
+    "<div class=\"dline\"><span class=\"dname\">' + esc(seat.alias)" in page and
+    "#bc25-doctrines .dline {" in page and
+    "#bc25-doctrines .dname {" in page)
 
 ## Transport rules from the design note.
 check("relayout sets --hudscale", "--hudscale" in page)

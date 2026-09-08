@@ -340,8 +340,9 @@
   }
   var bc25Doctrines = '';
   for (var m25 = 0; m25 < 2; m25++) {
-    bc25Doctrines += '<div class="clan"><b>' + ALIASES[m25] + '</b> \u2014 ' +
-      NAMES[m25] + '<br>' + BC25_WORDS[m25] + '<br><i>' + notes + '</i></div>';
+    bc25Doctrines += '<div class="dline"><span class="dname">' +
+      ALIASES[m25] + '</span> \u2014 ' + NAMES[m25] + '<br>' +
+      BC25_WORDS[m25] + '<br><i>' + notes + '</i></div>';
   }
 
   document.body.innerHTML =
