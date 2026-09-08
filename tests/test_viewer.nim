@@ -383,9 +383,10 @@ check("and at both FIT and 2x zoom", "[[\"fit\", 0], [\"2x\", 91]]" in
   readFile("tools/ci/viewer_smoke.mjs"))
 block:
   let ci = readFile(".github/workflows/ci.yml")
-  check("on all four years' replays", "dist/smoke/replay-bc21.json" in ci and
+  check("on all five years' replays", "dist/smoke/replay-bc21.json" in ci and
     "dist/smoke/replay-bc20.json" in ci and "dist/smoke/replay.json" in ci and
-    "dist/smoke/replay-bc24.json" in ci)
+    "dist/smoke/replay-bc24.json" in ci and
+    "dist/smoke/replay-bc25.json" in ci)
   check("and bc24's viewer smoke gets the longer settle its round cost needs",
     "--timeout 120 --soak 15" in ci)
 
@@ -393,13 +394,16 @@ block:
 block:
   let fixture = readFile("tools/ci/renderer_fixture.html")
   check("the fixture has a row per year",
-    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24'];" in fixture)
+    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25'];" in fixture)
   check("and fills bc21's own readouts",
     "bc21-influence" in fixture and "bc21-votes" in fixture and
     "bc21-doctrines-body" in fixture)
   check("and bc24's",
     "bc24-crumbs" in fixture and "bc24-flags" in fixture and
     "bc24-levels" in fixture and "bc24-doctrines-body" in fixture)
+  check("and bc25's",
+    "bc25-coverage" in fixture and "bc25-towers" in fixture and
+    "bc25-econ" in fixture and "bc25-doctrines-body" in fixture)
 
 ## Transport rules from the design note.
 check("relayout sets --hudscale", "--hudscale" in page)

@@ -320,7 +320,7 @@ block:
 block:
   let policies = parseJson(readFile("tools/ci/policies.json"))
   ## Four per year: two `PLAYER_PROMPT` champions and two scripted fillers.
-  checkEq("sixteen policies ship — four per year", policies.len, 16)
+  checkEq("twenty policies ship — four per year", policies.len, 20)
   var prompts = 0
   var scripted = 0
   var owned = 0
@@ -343,9 +343,9 @@ block:
         p["env"]["PLAYER_PROMPT"].getStr().len > 200)
     if p["env"].hasKey("PLAYER_SCRIPTED"): inc scripted
     if p.hasKey("player"): inc owned
-  checkEq("two LLM champions per year", prompts, 8)
-  checkEq("two scripted baselines per year", scripted, 8)
-  checkEq("each year's champion #2 carries its owning player", owned, 4)
+  checkEq("two LLM champions per year", prompts, 10)
+  checkEq("two scripted baselines per year", scripted, 10)
+  checkEq("each year's champion #2 carries its owning player", owned, 5)
   checkEq("bc26 champion #2 is the second prompt policy",
     policies[1]["player"].getStr(),
     "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
@@ -389,6 +389,26 @@ block:
     "gone-sharkin,examplefuncsplayer24")
   check("and neither bc24 filler is a champion",
     not policies[14].hasKey("player") and not policies[15].hasKey("player"))
+  checkEq("bc25 champion #1 is the coverage doctrine",
+    policies[16]["name"].getStr(), "battlecode-bc25-coverage")
+  checkEq("bc25 champion #2 is the siege doctrine",
+    policies[17]["name"].getStr(), "battlecode-bc25-siege")
+  checkEq("and bc25 champion #2 carries its owning player",
+    policies[17]["player"].getStr(),
+    "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
+  check("the two bc25 champion prompts differ",
+    policies[16]["env"]["PLAYER_PROMPT"].getStr() !=
+    policies[17]["env"]["PLAYER_PROMPT"].getStr())
+  check("bc25 champion #1 is the coverage-economy pole",
+    policies[16]["env"]["PLAYER_PROMPT"].getStr().contains("paint_eco"))
+  check("and champion #2 the tower-siege pole",
+    policies[17]["env"]["PLAYER_PROMPT"].getStr().contains("tower_rush"))
+  checkEq("the bc25 fillers name the two published chassis",
+    policies[18]["env"]["PLAYER_SCRIPTED"].getStr() & "," &
+    policies[19]["env"]["PLAYER_SCRIPTED"].getStr(),
+    "spaark,examplefuncsplayer25")
+  check("and neither bc25 filler is a champion",
+    not policies[18].hasKey("player") and not policies[19].hasKey("player"))
   check("the two bc21 champion prompts differ",
     policies[8]["env"]["PLAYER_PROMPT"].getStr() !=
     policies[9]["env"]["PLAYER_PROMPT"].getStr())
