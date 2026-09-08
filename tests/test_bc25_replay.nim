@@ -4,10 +4,10 @@
 ## towers, SRPs and chips re-derived from events + config + seed with NOTHING
 ## STORED; and EVERY event kind inside its per-game bound.
 
-import std/[json, strutils, tables, unicode]
+import std/[json, os, strutils, tables, unicode]
 import harness
 import bc25_fixture
-import battlecode/[baselines, broadcast, match, replay, results]
+import battlecode/[baselines, broadcast, decide, match, replay, results]
 import battlecode/years/dispatch
 
 const Chassis = [scSpaark, scExamplefuncsplayer25]
@@ -195,6 +195,56 @@ block:
     check("`" & action & "` is in Bc25ActionNames", action in Bc25ActionNames)
     check("and the event kind survived", e.kind == "first_action")
   check("first_action really fired", saw > 0)
+
+block:
+  ## ...and so do the PRE-MATCH kinds, which carry `game = -1` and are
+  ## therefore skipped by the loop above (r1-F12). They are produced by
+  ## `decide`, not by the sim, so they are counted here against a doctrine
+  ## phase driven into every failure path it has: two LLM seats pointed at a
+  ## dead endpoint, both attempts spent, both seats falling back.
+  ##
+  ## Two of the note's numbers are the PER-SEAT ceiling and the code's is the
+  ## per-episode one, which is what the note's table means but does not say:
+  ## `doctrine_requested` is emitted ONCE PER LLM SEAT (ceiling 2, the note
+  ## says 4 — it is emitted at seeding, not per attempt), and
+  ## `doctrine_retry` once per failed seat PER ATTEMPT (ceiling 2 seats x 2
+  ## attempts = 4, the note says 2). Both are bounded by the same
+  ## `attempt < 2` loop, so neither can grow.
+  putEnv("AWS_ENDPOINT_URL_BEDROCK_RUNTIME", "http://127.0.0.1:1")
+  putEnv("AWS_BEARER_TOKEN_BEDROCK", "test-not-a-real-token")
+  var config = defaultGameConfig()
+  config.year = "bc25"
+  config.pool = "small"
+  config.gamesPerMatch = 1
+  config.attempt1Ms = 400
+  config.retryMs = 400
+  config.doctrineBudgetMs = 8000
+  let plan = buildPlan(config, sheets(), 11)
+  var policies: array[2, SeatPolicy]
+  for slot in 0 .. 1:
+    policies[slot] = SeatPolicy(isLlm: true, prompt: "doctrine, please",
+      registered: true)
+  let decision = decide(config, plan, policies)
+  delEnv("AWS_ENDPOINT_URL_BEDROCK_RUNTIME")
+  delEnv("AWS_BEARER_TOKEN_BEDROCK")
+  const PreMatchBounds = {
+    "doctrine_requested": 2, "doctrine_received": 2, "doctrine_retry": 4,
+    "doctrine_fallback": 2}.toTable
+  var counts = initTable[string, int]()
+  for e in decision.events:
+    checkEq("`" & e.kind & "` is a pre-match event", e.game, -1)
+    counts[e.kind] = counts.getOrDefault(e.kind, 0) + 1
+  for kind, n in counts:
+    if kind notin PreMatchBounds:
+      check("the pre-match kind `" & kind & "` has a documented bound", false)
+    else:
+      check(kind & " x" & $n & " is inside its bound of " &
+        $PreMatchBounds[kind], n <= PreMatchBounds[kind])
+  check("the doctrine phase really did run its failure paths",
+    counts.getOrDefault("doctrine_fallback", 0) == 2)
+  ## `episode_start` and `episode_end` are emitted once each by
+  ## `server.runEpisode`, outside this process; `docker-smoke` is what
+  ## exercises them.
 
 block:
   ## The note's event table, field for field, for the two kinds that were
