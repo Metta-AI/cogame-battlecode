@@ -525,7 +525,11 @@ func winBonusFor*(year: string): float =
   ## synthetic finals — with 100 it would be a `>=`; with 200 it is a `>`.
   ## bc23 pays 200 for the same reason, and its 60/22/10/5/3 weights are
   ## strictly super-increasing so the tiebreak property is provable as well.
-  if yearIdOf(year) in {yBc25, yBc23}: 200.0 else: 100.0
+  ## bc22 pays 200 for the third time and for a reason of its own: its
+  ## `points` can legitimately favour the LOSER on a narrow archon margin
+  ## (docs/RULES-BC22.md, Scoring), so only a bonus that dominates the whole
+  ## [0, 100] range keeps `results.scores` ordered with `results.wins`.
+  if yearIdOf(year) in {yBc25, yBc23, yBc22}: 200.0 else: 100.0
 
 proc scoresFor*(games: seq[GameOutcome],
                 year = "bc26"): array[2, float] =

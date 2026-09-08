@@ -56,7 +56,7 @@
 ##   square the example bot's soldier attacks), the order ABYSS and FURY sweep
 ##   the map, and the order the sage anomalies apply.
 
-import std/tables
+import std/[algorithm, tables]
 import ../../sim_types, ../../rng
 import units, trove
 
@@ -850,7 +850,16 @@ proc newWorld*(spec: MapSpec, maxRounds: int): World =
   result.rand = initJavaRandom(spec.randomSeed)
   when defined(bc22BrokenChassis):
     result.brokenChassis = true
-  for b in spec.initialBodies:
+  ## `LiveMap`'s constructor SORTS its initial bodies ASCENDING BY ID, and that
+  ## order IS the initial `ObjectInfo.dynamicBodyExecOrder`. The converter
+  ## already emits them sorted; the sort is repeated here because it is a RULE
+  ## and not a property of the file format — and because the official maps
+  ## carry archon ids BELOW the 10 000 `IDGenerator` floor, so the order is
+  ## what makes A and B alternate in the opening turn order.
+  var bodies = spec.initialBodies
+  bodies.sort(proc (a, b: tuple[id, x, y, team, kind: int]): int =
+                cmp(a.id, b.id))
+  for b in bodies:
     let team = if b.team == 1: teamA else: teamB
     ## The map file's `BodyType` ordinals are the SCHEMA's, not `RobotType`'s:
     ## {MINER, BUILDER, SOLDIER, SAGE, ARCHON, LABORATORY, WATCHTOWER}.

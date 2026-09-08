@@ -418,6 +418,15 @@ proc doctrinesJson*(doc: ReplayDoc): JsonNode =
     var words = newJArray()
     for word in doc.seats[slot].sheet.plainWords():
       words.add(%word)
+    ## THE SUBMITTED-VS-APPLIED BADGE's data (the envelope pin, LEARNINGS
+    ## 2026-09-08): which envelope rule fired, how many knobs took their
+    ## default, how many there are, and the first 120 runes of what the cog
+    ## actually sent. A seat that played the schema-default sheet because its
+    ## knobs arrived inside a protocol envelope is then visible to a spectator
+    ## in one glance, which is the whole point of the finding.
+    var applied = newJArray()
+    for field in doc.seats[slot].sheet.defaultsApplied:
+      applied.add(%field)
     result.add(%*{
       "alias": aliasFor(slot),
       "name": doc.seats[slot].name,
@@ -425,7 +434,12 @@ proc doctrinesJson*(doc: ReplayDoc): JsonNode =
       "fallback": doc.seats[slot].fallback,
       "words": words,
       "notes": doc.seats[slot].sheet.notes,
-      "motto": doc.seats[slot].sheet.motto
+      "motto": doc.seats[slot].sheet.motto,
+      "envelope": doc.seats[slot].sheet.envelope,
+      "defaults_applied": applied,
+      "knob_count": knownKeysFor(doc.year).len,
+      "submitted":
+        doc.seats[slot].sheet.submitted.truncateRunes(120)
     })
 
 proc bc20Flood(w: w20.World): JsonNode =

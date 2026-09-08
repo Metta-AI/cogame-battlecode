@@ -431,8 +431,9 @@ for key in ("names", "scores"):
 # making a green smoke meaningless.
 CLOSED_KEYS = [
     "names", "aliases", "scores", "wins", "points", "games", "seed", "year",
-    "policy_kind", "sheet_defaults_applied", "fallbacks", "decision_ms",
-    "sim_seconds", "reason", "wall_clock_seconds", "game_version",
+    "policy_kind", "sheet_defaults_applied", "sheet_envelope", "fallbacks",
+    "decision_ms", "sim_seconds", "reason", "wall_clock_seconds",
+    "game_version",
 ]
 missing = [k for k in CLOSED_KEYS if k not in results]
 if missing:
