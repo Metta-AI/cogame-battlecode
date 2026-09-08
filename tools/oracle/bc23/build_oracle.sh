@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build the bc23 parity oracle: verify the published jar by sha256 AND size,
-# then compile the trace driver and the upstream example bot.
+# then compile the trace driver, the upstream example bot (Tier A) and our own
+# scenario bot (Tier A').
 #
 # CI-TIME ONLY. Nothing here reaches any runtime image stage.
 #
@@ -82,8 +83,19 @@ if ! diff <(tail -n +2 "$HERE/examplefuncsplayer23/RobotPlayer.java") \
   exit 1
 fi
 
+# THE TIER A' SCENARIO BOT. Unlike the example bot it is OURS, so it is
+# compiled straight from the committed file with no substitution: it is the
+# Java twin of src/battlecode/years/bc23/chassis/scenario23.nim and the two
+# are meant to be read side by side.
+cp -r "$HERE/bc23scenario" "$OUT/src/bc23scenario"
+
 javac -nowarn -encoding UTF-8 -cp "$JAR" -d "$OUT/classes" \
   "$HERE/Bc23Trace.java" \
-  "$OUT/src/examplefuncsplayer23/RobotPlayer.java"
+  "$OUT/src/examplefuncsplayer23/RobotPlayer.java" \
+  "$OUT/src/bc23scenario/RobotPlayer.java"
+
+test -f "$OUT/classes/bc23scenario/RobotPlayer.class" || {
+  echo "::error::the Tier A' scenario bot did not compile into $OUT/classes"
+  exit 1; }
 
 echo "oracle built into $OUT/classes"

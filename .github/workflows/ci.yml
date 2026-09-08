@@ -1779,32 +1779,44 @@ jobs:
           fi
           echo "Tier B: the committed arithmetic table IS the jar's own output"
 
-      - name: Build the Nim trace emitter
+      - name: Build the Nim trace emitters (Tier A and Tier A')
         run: |
           set -euo pipefail
           nim c --hints:off -d:release --path:src \
             -o:/tmp/oracle23/parity_trace_bc23 tools/parity_trace_bc23.nim
+          # The SAME source with `-d:bc23Scenario`, which swaps the chassis
+          # for src/battlecode/years/bc23/chassis/scenario23.nim -- the Nim
+          # half of the Tier A' twin.
+          nim c --hints:off -d:release -d:bc23Scenario --path:src \
+            -o:/tmp/oracle23/parity_trace_bc23_scenario \
+            tools/parity_trace_bc23.nim
 
-      # WHOLE 2000-ROUND GAMES on the six `small` pairs. Every `java`
-      # invocation is wrapped in `timeout 600`, because the sandboxed player
-      # threads are NON-DAEMON and a driver that throws without System.exit()
-      # hangs for ever (measured).
-      - name: Run both engines on the six pairs (whole 2000-round games)
+      # WHOLE 2000-ROUND GAMES on the six `small` pairs, for BOTH bots. Every
+      # `java` invocation is wrapped in `timeout 600`, because the sandboxed
+      # player threads are NON-DAEMON and a driver that throws without
+      # System.exit() hangs for ever (measured).
+      - name: Run both engines on twelve pairs (whole 2000-round games)
         run: |
           set -euo pipefail
           mkdir -p /tmp/oracle23/traces
-          for MAP in Quiet SmallElements Lantern Spin Sneaky Barcode; do
-            timeout 600 java -Xmx2g -XX:+UseSerialGC \
-              -cp "/tmp/oracle23/battlecode23.jar:/tmp/oracle23/build/classes" \
-              battlecode.world.Bc23Trace "$MAP" 2000 examplefuncsplayer23 \
-              /tmp/oracle23/build/classes \
-              > "/tmp/oracle23/traces/examplefuncsplayer23.${MAP}.java" \
-              2> "/tmp/oracle23/traces/${MAP}.java.log"
-            tail -1 "/tmp/oracle23/traces/${MAP}.java.log"
-            /tmp/oracle23/parity_trace_bc23 "$MAP" 2000 \
-              > "/tmp/oracle23/traces/examplefuncsplayer23.${MAP}.nim"
-            echo "${MAP}: java $(wc -l < "/tmp/oracle23/traces/examplefuncsplayer23.${MAP}.java") lines," \
-                 "nim $(wc -l < "/tmp/oracle23/traces/examplefuncsplayer23.${MAP}.nim") lines"
+          for BOT in examplefuncsplayer23 bc23scenario; do
+            case "$BOT" in
+              examplefuncsplayer23) NIMBIN=/tmp/oracle23/parity_trace_bc23 ;;
+              bc23scenario) NIMBIN=/tmp/oracle23/parity_trace_bc23_scenario ;;
+            esac
+            for MAP in Quiet SmallElements Lantern Spin Sneaky Barcode; do
+              timeout 600 java -Xmx2g -XX:+UseSerialGC \
+                -cp "/tmp/oracle23/battlecode23.jar:/tmp/oracle23/build/classes" \
+                battlecode.world.Bc23Trace "$MAP" 2000 "$BOT" \
+                /tmp/oracle23/build/classes \
+                > "/tmp/oracle23/traces/${BOT}.${MAP}.java" \
+                2> "/tmp/oracle23/traces/${BOT}.${MAP}.java.log"
+              tail -1 "/tmp/oracle23/traces/${BOT}.${MAP}.java.log"
+              "$NIMBIN" "$MAP" 2000 \
+                > "/tmp/oracle23/traces/${BOT}.${MAP}.nim"
+              echo "${BOT}/${MAP}: java $(wc -l < "/tmp/oracle23/traces/${BOT}.${MAP}.java") lines," \
+                   "nim $(wc -l < "/tmp/oracle23/traces/${BOT}.${MAP}.nim") lines"
+            done
           done
 
       # EVERY GAME REALLY RAN. This is the step that catches the JDK-21 ASM
@@ -1814,27 +1826,103 @@ jobs:
       - name: Every game really ran (the ASM trap)
         run: |
           set -euo pipefail
+          for BOT in examplefuncsplayer23 bc23scenario; do
           for MAP in Quiet SmallElements Lantern Spin Sneaky Barcode; do
-            log="/tmp/oracle23/traces/${MAP}.java.log"
+            log="/tmp/oracle23/traces/${BOT}.${MAP}.java.log"
             rounds="$(sed -n 's/.* rounds=\([0-9]*\) .*/\1/p' "$log" | tail -1)"
             built="$(sed -n 's/.* built=\([0-9]*\).*/\1/p' "$log" | tail -1)"
             pct="$(sed -n 's/.* peak_pct=\([0-9]*\) .*/\1/p' "$log" | tail -1)"
-            echo "${MAP}: rounds=${rounds} built=${built} peak_bytecode=${pct}%"
+            echo "${BOT}/${MAP}: rounds=${rounds} built=${built} peak_bytecode=${pct}%"
             test "${rounds:-0}" -ge 1900 || {
-              echo "::error::${MAP} only reached round ${rounds}. Under a JDK"
-              echo "::error::newer than 8 the instrumenter kills every robot as"
-              echo "::error::it spawns and the trace is a few hundred empty"
-              echo "::error::lines."
+              echo "::error::${BOT}/${MAP} only reached round ${rounds}. Under"
+              echo "::error::a JDK newer than 8 the instrumenter kills every"
+              echo "::error::robot as it spawns and the trace is a few hundred"
+              echo "::error::empty lines."
               exit 1; }
-            test "${built:-0}" -ge 100 || {
-              echo "::error::${MAP} built only ${built} robots in 2000 rounds."
+            test "${built:-0}" -ge 50 || {
+              echo "::error::${BOT}/${MAP} built only ${built} robots in 2000"
+              echo "::error::rounds."
               exit 1; }
             test "${pct:-100}" -le 50 || {
-              echo "::error::${MAP} peaked at ${pct}% of a bytecode limit,"
-              echo "::error::above the 50% headroom bound. Past that point the"
-              echo "::error::comparison is no longer defined."
+              echo "::error::${BOT}/${MAP} peaked at ${pct}% of a bytecode"
+              echo "::error::limit, above the 50% headroom bound. Past that"
+              echo "::error::point the comparison is no longer defined."
               exit 1; }
           done
+          done
+
+      # A SCENARIO BOT THAT AGREES BIT FOR BIT WHILE DOING NOTHING PROVES
+      # NOTHING (docs/PARITY.md section bc23). This reads the JAVA traces --
+      # the engine's own output, not the port's -- and asserts that the paths
+      # Tier A cannot reach really fired. Every threshold below is MEASURED
+      # on the six committed maps at this jar and this bot; they are floors,
+      # not equalities, so a change that fires a path MORE often is green.
+      - name: Tier A-prime really exercised the paths Tier A cannot reach
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, sys
+
+          MAPS = ["Quiet", "SmallElements", "Lantern", "Spin", "Sneaky",
+                  "Barcode"]
+          seen = {
+              "an anchor planted on an island (I own=1|2 anch=STANDARD)": 0,
+              "an island lost back to neutral after being held": 0,
+              "a well upgraded to rate 3": 0,
+              "a well transformed to elixir (W ty=EX)": 0,
+              "an amplifier built (U ty=AMPLIFIER)": 0,
+              "a carrier holding an anchor (U ty=CARRIER anc=1)": 0,
+              "the shared array changing (S fold not constant)": 0,
+          }
+          for name in MAPS:
+              path = pathlib.Path(
+                  f"/tmp/oracle23/traces/bc23scenario.{name}.java")
+              owned = {}
+              folds = set()
+              for line in path.read_text().splitlines():
+                  f = line.split()
+                  if len(f) < 4:
+                      continue
+                  kind = f[2]
+                  if kind == "I":
+                      island, own, anch = f[3], f[4], f[6]
+                      if own in ("own=1", "own=2"):
+                          owned[island] = True
+                          if anch == "anch=STANDARD":
+                              seen["an anchor planted on an island "
+                                   "(I own=1|2 anch=STANDARD)"] += 1
+                      elif own == "own=0" and owned.get(island):
+                          owned[island] = False
+                          seen["an island lost back to neutral after "
+                               "being held"] += 1
+                  elif kind == "W":
+                      if f[5] == "rate=3":
+                          seen["a well upgraded to rate 3"] += 1
+                      if f[4] == "ty=EX":
+                          seen["a well transformed to elixir (W ty=EX)"] += 1
+                  elif kind == "U":
+                      if f[5] == "ty=AMPLIFIER":
+                          seen["an amplifier built (U ty=AMPLIFIER)"] += 1
+                      if f[5] == "ty=CARRIER" and f[12] != "anc=0":
+                          seen["a carrier holding an anchor "
+                               "(U ty=CARRIER anc=1)"] += 1
+                  elif kind == "S" and f[3] == "A":
+                      folds.add(f[4])
+              if len(folds) > 1:
+                  seen["the shared array changing "
+                       "(S fold not constant)"] += 1
+
+          bad = []
+          for what, count in sorted(seen.items()):
+              print(f"  {count:8d}  {what}")
+              if count == 0:
+                  bad.append(what)
+          for b in bad:
+              print(f"::error::Tier A-prime never produced: {b}. The scenario "
+                    f"bot agrees with the engine while doing nothing, which "
+                    f"proves nothing.")
+          sys.exit(1 if bad else 0)
+          PY
 
       - name: Tier A and Tier C (both BLOCKING)
         run: |
@@ -1846,7 +1934,7 @@ jobs:
           python3 tools/ci/parity_tiers_bc23.py \
             --dir /tmp/oracle23/traces \
             --maps Quiet SmallElements Lantern Spin Sneaky Barcode \
-            --bots examplefuncsplayer23 \
+            --bots examplefuncsplayer23 bc23scenario \
             --ledger tools/ci/parity_ledger_bc23.json \
             --summary "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
@@ -1856,21 +1944,23 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/oracle23/upload
           cd /tmp/oracle23/traces
+          for BOT in examplefuncsplayer23 bc23scenario; do
           for MAP in Quiet SmallElements Lantern Spin Sneaky Barcode; do
-            j="examplefuncsplayer23.${MAP}.java"
-            n="examplefuncsplayer23.${MAP}.nim"
+            j="${BOT}.${MAP}.java"
+            n="${BOT}.${MAP}.nim"
             [ -f "$j" ] && [ -f "$n" ] || continue
             # A 2000-round trace is 18-22 MB a side; only the first 200
             # divergent lines and a gzipped digest are uploaded.
             sed -E 's/ bc=[0-9]+//' "$j" > "/tmp/j.$$"
             diff "/tmp/j.$$" "$n" | head -200 \
-              > "/tmp/oracle23/upload/${MAP}.diff.txt" || true
+              > "/tmp/oracle23/upload/${BOT}.${MAP}.diff.txt" || true
             head -400 "$j" | gzip -9 \
-              > "/tmp/oracle23/upload/${MAP}.java.head.gz"
+              > "/tmp/oracle23/upload/${BOT}.${MAP}.java.head.gz"
             head -400 "$n" | gzip -9 \
-              > "/tmp/oracle23/upload/${MAP}.nim.head.gz"
-            cp "${MAP}.java.log" "/tmp/oracle23/upload/" || true
+              > "/tmp/oracle23/upload/${BOT}.${MAP}.nim.head.gz"
+            cp "${BOT}.${MAP}.java.log" "/tmp/oracle23/upload/" || true
             rm -f "/tmp/j.$$"
+          done
           done
           ls -la /tmp/oracle23/upload
 

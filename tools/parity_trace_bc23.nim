@@ -8,7 +8,9 @@
 ##     tools/parity_trace_bc23.nim
 ##   /tmp/parity_trace_bc23 <map> <rounds> [scaffold|scenario]
 ##
-## The `-d:bc23Scenario` build of the same file is the Tier A′ side.
+## The `-d:bc23Scenario` build of the same file is the Tier A′ side: it swaps
+## the chassis for `src/battlecode/years/bc23/chassis/scenario23.nim`, whose
+## Java twin is `tools/oracle/bc23/bc23scenario/RobotPlayer.java`.
 ##
 ## The trace is byte-comparable with the Java side, LINE FOR LINE:
 ##
@@ -37,6 +39,19 @@ proc resourceLetters(r: Resource): string =
   of resMana: "MN"
   of resElixir: "EX"
   of resNone: "-"
+
+proc javaHex(v: uint64): string =
+  ## `java.lang.Long.toHexString`: lower case with NO leading zeros, and the
+  ## single digit "0" for zero. Nim's `toHex` pads to sixteen, so a checksum
+  ## whose top nibble is zero read as a divergence on every line that carried
+  ## it. Tier A never saw it because `examplefuncsplayer23` never writes the
+  ## shared array and the all-zero fold has no leading zero; the Tier A'
+  ## scenario bot writes on round 1 and hit it on round 13 (r1-F19).
+  result = toLowerAscii(toHex(v))
+  var i = 0
+  while i < result.high and result[i] == '0':
+    i += 1
+  result = result[i .. ^1]
 
 proc fnv(values: openArray[int]): uint64 =
   result = 0xCBF29CE484222325'u64
@@ -81,7 +96,7 @@ proc emitRound(w: w23.World, out0: File) =
       " ad=", w.wellAt[i].adamantium,
       " mn=", w.wellAt[i].mana,
       " ex=", w.wellAt[i].elixir, "\n")
-  out0.write("R ", cur, " M chk=", toLowerAscii(toHex(multiplierChecksum(w))),
+  out0.write("R ", cur, " M chk=", javaHex(multiplierChecksum(w)),
     "\n")
   for id in w.execOrder:
     let r = w.robotsById[id]
@@ -99,7 +114,7 @@ proc emitRound(w: w23.World, out0: File) =
     for i in 0 ..< SharedArrayLength:
       arr[i] = w.stats.sharedArray[ti][i]
     out0.write("R ", cur, " S ", teamLetter(Team(ti)),
-      " arr=", toLowerAscii(toHex(fnv(arr))), "\n")
+      " arr=", javaHex(fnv(arr)), "\n")
 
 proc main() =
   if paramCount() < 2:

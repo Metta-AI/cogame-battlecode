@@ -17,20 +17,22 @@ enforces:
                       DOES NOT ASSUME THAT: it reads the `bc=` column and
                       FAILS if any unit on any round exceeds the headroom
                       bound, naming the round and the unit.
-  Tier A' (NOT SHIPPED IN THIS LANDING) the scenario packages. Tier A's own
+  Tier A' (BLOCKING)  the SCENARIO PACKAGE, `bc23scenario`, on the same six
+                      maps and the same whole 2000-round window. Tier A's own
                       measurement showed exactly what it cannot cover -- over
                       six full games the example bot never took an anchor,
                       never placed one, never captured an island, never built
                       an amplifier, a destabilizer or a booster, never
                       transferred a resource to a headquarters, never
                       upgraded or transformed a well and never wrote the
-                      shared array -- and the Nim half of the answer is
-                      committed (`chassis/scenario23.nim`, behind
-                      `-d:bc23Scenario`). Its bit-exact Java twin is a
-                      phase-30 item and `docs/PARITY.md` section bc23 says so
-                      in those words. This script compares whatever `--bots`
-                      it is given, so adding the twin is a one-line change to
-                      the workflow.
+                      shared array. `tools/oracle/bc23/bc23scenario/
+                      RobotPlayer.java` and `chassis/scenario23.nim` (behind
+                      `-d:bc23Scenario`) are the two halves of the twin,
+                      written line for line against each other, RNG-free and
+                      scripted by round number. Measured peak bytecode
+                      28-43 % of the limit, so this bot too is never cut off
+                      mid-turn. What it still does not reach is listed in
+                      `docs/PARITY.md` section "What is NOT compared".
   Tier C  (BLOCKING)  the first divergent round of every pair, compared
                       against `tools/ci/parity_ledger_bc23.json`. It FAILS if
                       (a) a pair diverges and has no ledger entry, (b) a pair
@@ -306,8 +308,7 @@ def main() -> int:
     lines.append("")
     lines.append(f"Ledger: {len(entries)} accepted divergence(s). "
                  f"The phase-30 exit condition is Tiers A, A' and B passing "
-                 f"with an EMPTY ledger; Tier A' is not shipped in this "
-                 f"landing (see docs/PARITY.md section bc23).")
+                 f"with an EMPTY ledger (see docs/PARITY.md section bc23).")
     table = "\n".join(lines)
     print(table)
     if args.summary:
