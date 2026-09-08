@@ -1270,3 +1270,278 @@ robot's id (`test_rng`).
 * **`setWinnerArbitrary`'s `Math.random()`.** Wall-clock seeded and therefore
   not reproducible; replaced by a world-RNG draw (D4) and reachable only when
   all five rungs tie.
+
+---
+
+# bc22 — Battlecode 2022 "Mutation"
+
+The published 2022 fat jar as a CI-only differential oracle, in the
+`parity-oracle-bc22` job of `.github/workflows/ci.yml`. **Forty trace pairs —
+one example-bot pair and four scenario pairs on each of eight maps — are
+bit-exact for whole 2000-round games, and the ledger
+(`tools/ci/parity_ledger_bc22.json`) is EMPTY.** Everything below was measured
+against `battlecode22-2.2.1.jar` on Temurin 8 before the job was written.
+
+## The jar is self-contained, and its version string is a SECOND pin
+
+`https://releases.battlecode.org/maven/org/battlecode/battlecode22/2.2.1/battlecode22-2.2.1.jar`
+— **16 989 241 bytes**, sha256
+`56e7530b89893584bf706c90937b3df0eb583cd850f058f9d62004cd5ce78e1c`, pinned by
+size **and** sha256 in `tools/oracle/bc22/jar.lock`. It carries **11 549
+entries**: every `battlecode` class, every bundled dependency **including
+`net.sf.jsi` and `gnu.trove`** (trove4j 3.0.3, dated 2012-06-03 — so the
+dead-artifact problem that forced bc21's jsi shim, its 94-file `javac` and its
+`deps.lock` does not arise), `battlecode/instrumenter/bytecode/resources/
+MethodCosts.txt`, and all **75** `.map22` map resources. There is **no Gradle,
+no shim, no multi-file compile, no Maven download list and no `deps.lock`** in
+this job.
+
+Unlike bc23's and bc25's jars, this one really does report its own version:
+`GameConstants.SPEC_VERSION` inside the released 2.2.1 jar is the literal
+string `2.2.1`. So the job asserts it — as a *second* pin on top of the sha256
+and the size, not as the primary one. Tier B cross-checks every constant
+anyway.
+
+## TEMURIN 8, AND WHY IT IS NOT NEGOTIABLE
+
+`engine/build.gradle` sets `sourceCompatibility = 1.8` and declares
+`org.ow2.asm:asm:5.0.4`, which cannot read modern class files. **Under JDK 21
+the instrumenter throws `java.lang.IllegalArgumentException` inside
+`org.objectweb.asm.ClassReader.<init>`** — from
+`battlecode.instrumenter.TeamClassLoaderFactory.normalReader:233`, via
+`battlecode.instrumenter.bytecode.MethodCostUtil.getMethodData:96` — **on every
+player class load.** Every robot dies as it spawns, **no robot is ever built**,
+and the game ends at **round 1** with `winner=A dom=ANNIHILATION` after six
+trace lines. A job that only diffed traces would exit 0 and prove nothing.
+
+Three things stop that:
+
+1. `tools/oracle/bc22/Bc22Trace.java` **exits 3 if no robot is ever built**.
+2. `ci.yml` asserts that the example bot reached round **1 900**, built at
+   least **100** robots and peaked at at least **60** on the board, and that
+   every scenario game reached round **800** and built at least **40**.
+3. The job asserts `java -version` is `1.8.` **and that this `javac` rejects
+   `--release`** — `--release` arrived in JDK 9 and dies with "invalid flag" on
+   a JDK-8 `javac` in seconds (the bc21 lesson). No `--release`, no `-source`,
+   no `-target`: the compiler *is* 8, so the target is 8.
+
+**The driver must call `System.exit()`.** The sandboxed player threads are
+non-daemon; a driver that returns or throws without it hangs for ever. Every
+`java` invocation in the job is also wrapped in `timeout 600`/`timeout 900`.
+**The player URL must be the compiled classes directory** — an empty URL fails
+class loading and the world constructor NPEs.
+
+## The trace
+
+`GameMapIO.loadMapAsResource(loader, "battlecode/world/resources", map)` takes
+**three** arguments in 2022, not bc23's four; `new GameMaker(info, null, false)`
+is explicitly supported, so the null packet sink means **no flatbuffers are
+written at all** and there is no `.bc22` file and no flatbuffers reader on
+either side of this port. The driver is `package battlecode.world;` and needs
+reflection only for `ObjectInfo.dynamicBodyExecOrder` (private — the only way
+to print in exec order) and `GameWorld.lead` / `gold` / `rubble` (private — the
+only way to checksum the three map arrays).
+
+```
+R <round> T <A|B> pb= au= ar= la= wa= mi= bu= so= sa=
+R <round> G leadchk= goldchk= rubblechk= leadsum= goldsum=
+R <round> U <id> team= ty= md= lv= x= y= hp= acd= mcd= bc=
+R <round> S <A|B> arr=<fnv1a64 of the 64-slot shared array>
+R <round> H hashord=<fnv1a64 of the ids in robotsArray() order>
+R <round> A next=<idx> type=<ABYSS|CHARGE|FURY|VORTEX|-> round=<n>
+R <round> Z winner=<A|B|-> dom=<NAME|->
+```
+
+Robots are printed **in exec order**, which is what makes an ordering bug
+visible at all. The `H` line is what makes a **trove-order** bug visible
+(`docs/RULES-BC22.md` §Divergences item 4) and it is compared **every round**,
+not only on charge rounds, so a trove bug surfaces on round 1 as a checksum
+mismatch instead of on round 400 as a mystery. The three map checksums make one
+wrong square visible without printing 3 600 squares a round, and `rubblechk` is
+what proves a VORTEX permuted the right way — measured on `charge`, it changes
+exactly once, at round 1000, and never again.
+
+**The fold is wire format.** Both sides compute
+`h = (h ^ (value & 0xFFFFFFFF)) * 0x100000001B3`, one whole int per iteration —
+*not* canonical byte-wise FNV-1a. `src/battlecode/years/bc22/trove.nim`'s
+`fnv1a64` is the single Nim definition and `world.nim`'s `fnvArray` is an alias
+for it; `Bc22Trace.fnv` is the Java one. They are checked against each other on
+five hand-written vectors as well as on every trace line.
+
+## The measured bytecode headroom, and why Tier A is a WHOLE-GAME window
+
+The 2022 example bot **never approaches its bytecode limit**: over eight full
+2000-round games the peak was **680–760 bytecodes, i.e. 6–7 % of the 10 000
+MINER limit**, with **zero** mid-turn cut-offs. So the port's "no mid-turn
+resumption" divergence (`docs/RULES-BC22.md` §Divergences item 1) is never
+exercised and the comparison stays defined to the last round. **The job does
+not assume that**: `tools/ci/parity_tiers_bc22.py` reads the `bc=` column and
+fails if any robot on any round exceeds **50 %** of its type's limit (**25 %**
+for the four scenario bots), naming the round and the robot. This is exactly
+where bc21 could not go: its example bot *did* hit the ceiling, which is why
+its windows were 22–245 rounds.
+
+| map | trace lines | size | peak bytecode | peak robots | mean robots | ended |
+| --- | --- | --- | --- | --- | --- | --- |
+| `chalice` | 197 901 | 15 MB | 712 (7 %) | 155 | 92 | 2000, MORE_LEAD_NET_WORTH |
+| `maze` | 231 441 | 18 MB | 696 (6 %) | 193 | 109 | 2000, MORE_LEAD_NET_WORTH |
+| `nottestsmall` | 209 186 | 16 MB | 744 (7 %) | 128 | 98 | 2000, MORE_LEAD_NET_WORTH |
+| `snowflake_redux` | 184 177 | 14 MB | 712 (7 %) | 108 | 85 | 2000, MORE_LEAD_NET_WORTH |
+| `rugged` | 215 868 | 17 MB | 744 (7 %) | 158 | 101 | 2000, MORE_LEAD_NET_WORTH |
+| `charge` | 220 340 | 17 MB | 760 (7 %) | 160 | 103 | 2000, MORE_LEAD_NET_WORTH |
+| `turtle` | 254 876 | 20 MB | 692 (6 %) | 209 | 120 | 2000, MORE_LEAD_NET_WORTH |
+| `vortex` | 284 395 | 22 MB | 680 (6 %) | 349 | 135 | 2000, MORE_LEAD_NET_WORTH |
+
+Traces are written to `$RUNNER_TEMP`, compared **streaming** (never loaded
+whole), and only the first 200 divergent lines plus a gzipped digest are
+uploaded.
+
+## The tiers
+
+- **Tier A (BLOCKING)** — rounds 1…2000 bit-exact, whole games, on the eight
+  pairs above, `examplefuncsplayer22` against itself, every field **including
+  `H hashord`**. The eight maps cover all four `causeVortexGlobal` arms, all
+  four anomaly bodies, archon counts 1–4, all three symmetries and one map with
+  **no** anomaly schedule at all (`rugged`) as a control. **Result: bit-exact
+  on all eight.**
+- **Tier A′ (BLOCKING)** — four scenario packages,
+  `bc22scenario` / `bc22scenarioannihilate` / `bc22scenariotie` /
+  `bc22scenariofury`, on the same eight maps and the same whole-game window,
+  against `chassis/scenario22.nim` behind `-d:bc22Scenario` and its three
+  variant switches. **Result: bit-exact on all thirty-two, peak bytecode
+  13–23 % of the limit.** Tier A′ exists because Tier A's own measurement said
+  what it cannot cover: over eight full games the example bot **never built a
+  builder, a sage, a laboratory or a watchtower, never mutated, never
+  transformed, never transmuted, never envisioned, never wrote the shared
+  array, never made a single gold, and ended EVERY game on
+  `MORE_LEAD_NET_WORTH` with gold 0-0**.
+- **Tier B (BLOCKING)** — `tools/JavaBc22Tables.java`, run against the jar's own
+  classes under the CI JDK 8, regenerates `data/bc22/tables.json` and the job
+  **byte-diffs** it. bc22 has exactly **one** transcendental and its domain is
+  finite, so this tier is not a sample: the whole `RobotType` table, the
+  `AnomalyType` table, the **entire** rubble cooldown lattice (rubble 0…100 ×
+  eight bases, 808 entries, the 22 that differ from the integer form flagged in
+  the file), the prototype health, the reclaim, the four anomaly truncations
+  over their whole reachable domains and the laboratory rate for all 3 × 177
+  `(level, n)` pairs. **All 32 `GameConstants` static fields are cross-checked
+  against `constants.nim` as well — the whole class, not a sample.**
+- **Tier C (BLOCKING against the ledger)** — the first divergent round of every
+  pair, against `tools/ci/parity_ledger_bc22.json`. It fails if a pair diverges
+  with no entry, diverges earlier than its entry, has an entry that no longer
+  reproduces, or diverges at all while the bytecode peak is under the headroom
+  bound — which on this year's evidence means always, and therefore means a
+  real rules bug rather than an instrumentation artefact.
+
+## THE LEDGER IS EMPTY
+
+`tools/ci/parity_ledger_bc22.json` is `{"entries": []}` and the job fails if a
+pair diverges without one. **Root-cause-or-fail is the standing rule** and it is
+the operator's ruling on the bc26 run (Fleet card 1218171523823317), not this
+document's preference: an unexplained divergence is a FAIL, not a ledger line,
+and a cause of "unknown" is rejected by the schema check.
+
+The one place a divergence was genuinely plausible is **D2**, the trove
+iteration order, which is why `H hashord` is compared every round. Measured:
+**51–58 % of CHARGE rounds contain at least one tie that the iteration order
+decides**, so a wrong order would not have been subtle — and the `H` line is
+bit-exact on all forty pairs, every round.
+
+## The comparator's three fixed bugs
+
+`tools/ci/parity_tiers_bc22.py` is bc23's script with all three known
+comparator bugs fixed, and the same commit fixes them in
+`parity_tiers_bc21.py`, `_bc24.py` and `_bc25.py`:
+
+1. **`bc=` is stripped from BOTH traces** by one `normalize()` applied to each
+   side. Stripping only the Java side compares a line against itself plus a
+   suffix and "diverges" at round 1 on otherwise-identical lines.
+2. **`itertools.zip_longest`, never `zip`.** `zip` stops at the shorter file
+   and discards the tail, so a Java trace one line longer than the Nim trace
+   reads bit-exact. `--selftest` constructs exactly that pair, in both
+   directions.
+3. **Hex folds are canonicalised on both sides.** `Long.toHexString` emits
+   lower case with no leading zeros and, for a negative long, the unsigned
+   64-bit form; Nim's `toHex` zero-pads to sixteen. `normalize()` re-parses the
+   value of every **named checksum field** — the explicit allowlist `leadchk`,
+   `goldchk`, `rubblechk`, `arr`, `hashord` — as an unsigned 64-bit integer and
+   re-emits it canonically. Decimal fields are untouched, which is why the
+   allowlist is explicit rather than a regex over anything hex-shaped: `hp=99`
+   is a valid hex string and is not a checksum.
+
+`--selftest` runs first in the job and covers all three, plus the negative
+controls: a *different* checksum and a zero-padded `hp` must both still read as
+divergences. **A gate that cannot fail is not a gate.**
+
+## Tier A′: what the scenario bots reach
+
+Every one of these is asserted **off the JAVA trace** — the engine's own
+output, not the port's — over the thirty-two scenario games, because **a
+scenario bot that agrees bit for bit while doing nothing proves nothing**. The
+counts are the measured values; the job's floors sit under them.
+
+| what fired | games (of 32) |
+| --- | --- |
+| a LABORATORY promoted from PROTOTYPE to TURRET (ten repairs) | 8 |
+| a WATCHTOWER promoted from PROTOTYPE to TURRET (fifteen repairs) | 2 |
+| a robot MUTATED to level 2 (the lead mutation) | 2 |
+| a robot MUTATED to level 3 (the GOLD mutation) | 2 |
+| an ARCHON transformed to PORTABLE and then MOVED | 14 |
+| the shared array changed (a write from a robot with nothing nearby) | 24 |
+| the rubble changed (a VORTEX permuted the board) | 20 |
+| gold appeared on the MAP (a reclaim drop) | 17 |
+| a team's gold reserve rose (a TRANSMUTATION) | 32 |
+| the anomaly cursor advanced | 28 |
+| a SAGE existed on the board | 12 |
+| the game ended by `ANNIHILATION` | 4 |
+| the game ended on `MORE_ARCHONS` | 8 |
+| the game ended on `MORE_GOLD_NET_WORTH` | 5 |
+| the game ended on `MORE_LEAD_NET_WORTH` | 15 |
+
+Three measurements cost a round each and are recorded so the next year does not
+repeat them:
+
+* **A three-round transform window leaves the archon PORTABLE for ever.** The
+  transform cooldown is the type's movement cooldown scaled by rubble, so
+  `canTransform()` was still false on round 303 after a round-300 transform:
+  the archon never came back, never built again, and no sage — and therefore no
+  envision — existed in any of the thirty-two games. The window is now
+  open-ended (out at 300, move 301-319, back from 320).
+* **A single build attempt on round 4 misses on three maps.** On `maze`,
+  `turtle` and `vortex` the archon's square carries enough rubble that its
+  action cooldown lands on round 4; those maps then ran 2000 rounds with no
+  builder, no laboratory, no watchtower, no gold and no sage. The builder is
+  now retried over rounds 4-12 until one is visible.
+* **An uncapped sage spends every gold the laboratory ever makes** — 1 722
+  sage-rounds on `chalice` and no level-3 mutation anywhere. The archon now
+  builds exactly one.
+
+### What is NOT compared
+
+* **A WATCHTOWER standing up to PORTABLE to dodge a scheduled FURY.** The
+  scenario bot scripts it, and it never fires: only `nottestsmall` ever gets a
+  watchtower finished on these eight maps, and `nottestsmall`'s anomaly
+  schedule is CHARGE and VORTEX only — it has no FURY at all. Forcing it would
+  need a synthetic map, which this port does not ship. The rule itself — FURY
+  damages a TURRET-mode building and does **nothing** to a PORTABLE one — is
+  covered by `tests/test_bc22_anomaly.nim`, and the watchtower transform by
+  `tests/test_bc22_buildings.nim`, and **not** by the differential oracle.
+* **`WON_BY_DUBIOUS_REASONS`.** The fourth ladder rung needs equal archons,
+  equal gold net worth *and* equal lead net worth, and over forty whole games
+  no pair ever tied all three — the mirrored `bc22scenariotie` variant included,
+  because exec order breaks the mirror. `tests/test_bc22_endladder.nim` covers
+  the rung and its world-RNG coin flip; the oracle does not.
+* **The bytecode counter itself.** There is none on the Nim side; the `bc=`
+  column is used only for the headroom assertion.
+* **Indicator strings, dots and lines, and the profiler.** Instrumentation with
+  no runtime meaning and no port.
+* **`.bc22` match files.** There is no flatbuffers reader on either side of
+  this port; the driver constructs `new GameMaker(info, null, false)` with a
+  null packet sink.
+* **`net.sf.jsi`'s RTree.** The engine writes to it and never reads it
+  (`docs/RULES-BC22.md` §Divergences item 5), so it is not ported and there is
+  nothing to compare.
+* **`setWinnerArbitrary`'s `Math.random()`.** Wall-clock seeded and therefore
+  not reproducible; replaced by a world-RNG draw (D3) and reachable only when
+  every rung ties.
+* **`rc.resign()`.** A real engine method that no doctrine sheet can call
+  (D8).

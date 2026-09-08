@@ -10,6 +10,10 @@ import std/[json, strutils]
 import harness
 import battlecode/[baselines, match, replay, results, sheet, sim_types]
 import battlecode/years/bc26/[constants, maps, rules, world]
+import battlecode/years/dispatch
+import battlecode/rng
+from battlecode/years/bc22/maps as maps22 import nil
+from battlecode/years/bc22/anomaly as anomaly22 import nil
 
 proc play(mapName: string, sheets: array[2, Sheet], rounds: int,
           sideAslot = 0): GameOutcome26 =
@@ -349,5 +353,56 @@ block:
   ## blocks fill it and this fails if one is ever dropped.
   for reason in EndReason:
     check("record -> re-derive covered " & $reason, $reason in seenReasons)
+
+# --- bc22 -------------------------------------------------------------------
+block:
+  ## bc22's own record -> re-derive lives in `tests/test_bc22_replay.nim`,
+  ## which is written against bc22's world type. What belongs HERE is the
+  ## year-neutral half: the chassis fallback, the two INDEPENDENT
+  ## `java.util.Random` streams, and determinism through
+  ## `years/dispatch.nim` — the path the wasm viewer takes.
+  let s22 = [baselineSheet("bc22", blWololo), baselineSheet("bc22", blWololo)]
+  let strong22 = playGameFor("bc22", "chalice", s22,
+    [scWololo, scWololo], 0, 0, 220, 0)[0]
+  let foreign22 = playGameFor("bc22", "chalice", s22,
+    [scLemonade, scGoneSharkin], 0, 0, 220, 0)[0]
+  checkEq("a foreign chassis name on a bc22 game plays wololo",
+    foreign22.hashChain, strong22.hashChain)
+  checkEq("and the bc22 chassis strings round-trip",
+    $parseScriptedChassis("examplefuncsplayer22"), "examplefuncsplayer22")
+  checkEq("as does the strong one", $parseScriptedChassis("wololo"), "wololo")
+  checkEq("for bc22 the strong chassis is wololo",
+    $strongChassisFor("bc22"), "wololo")
+  let again22 = playGameFor("bc22", "chalice", s22,
+    [scWololo, scWololo], 0, 0, 220, 0)[0]
+  checkEq("bc22 is deterministic in one process", again22.hashChain,
+    strong22.hashChain)
+  checkEq("down to the per-round chain", again22.roundChains,
+    strong22.roundChains)
+
+block:
+  ## THE TWO INDEPENDENT `java.util.Random` STREAMS. bc22 is the first year
+  ## this repo ships that needs BOTH an `IDGenerator` and a LIVE
+  ## `Random(mapSeed)` — the VORTEX draw — and they are SEPARATE OBJECTS with
+  ## separate 48-bit states seeded from the SAME number. A port that shared
+  ## one stream would desynchronise every id after the first vortex.
+  let spec = maps22.loadMap("vortex")
+  var w = anomaly22.newWorld(spec, 2000)
+  let cursorBefore = w.idGen.cursor
+  let randStateBefore = w.rand.seed
+  checkEq("both streams start from the same seed's scramble",
+    initJavaRandom(spec.randomSeed).seed, randStateBefore)
+  ## Drawing an id must not move the world RNG...
+  discard w.idGen.nextId()
+  checkEq("an id draw leaves the world RNG alone", w.rand.seed,
+    randStateBefore)
+  check("but it does move the id stream", w.idGen.cursor > cursorBefore)
+  ## ...and drawing a vortex permutation must not move the id stream.
+  let cursorMid = w.idGen.cursor
+  var report = anomaly22.AnomalyReport()
+  discard anomaly22.causeVortexGlobal(w, report)
+  check("a vortex draw moves the world RNG", w.rand.seed != randStateBefore)
+  checkEq("and leaves the id stream exactly where it was", w.idGen.cursor,
+    cursorMid)
 
 finish("test_determinism")

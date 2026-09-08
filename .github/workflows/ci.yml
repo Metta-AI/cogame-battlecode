@@ -20,12 +20,13 @@ name: CI
 
 on:
   push:
-    # `bc20-year-module`, `bc21-year-module`, `bc23-year-module`,
-    # `bc24-year-module` and `bc25-year-module` are the branches the second,
-    # third, sixth, fourth and fifth year modules land on. main's trigger
-    # semantics are untouched; this only adds branches.
-    branches: [ main, bc20-year-module, bc21-year-module, bc23-year-module,
-                bc24-year-module, bc25-year-module ]
+    # `bc20-year-module`, `bc21-year-module`, `bc22-year-module`,
+    # `bc23-year-module`, `bc24-year-module` and `bc25-year-module` are the
+    # branches the second, third, seventh, sixth, fourth and fifth year
+    # modules land on. main's trigger semantics are untouched; this only adds
+    # branches.
+    branches: [ main, bc20-year-module, bc21-year-module, bc22-year-module,
+                bc23-year-module, bc24-year-module, bc25-year-module ]
   pull_request:
   workflow_dispatch:
 
@@ -85,6 +86,26 @@ env:
   # and the job exits 0 (docs/PARITY.md section bc23).
   BC23_COMMIT: "af42086ecd09709dc603b2aaa9e9b98312c9ef79"
   BC23_JAR_URL: "https://releases.battlecode.org/maven/org/battlecode/battlecode23/3.0.15/battlecode23-3.0.15.jar"
+  # The Battlecode 2022 sources the `bc22` year module is a port OF. Used at
+  # CI time by the constants generator, the map converter, the sprite cutter
+  # and the bc22 parity oracle; the PUBLISHED FAT JAR (sha256 AND size pinned
+  # in tools/oracle/bc22/jar.lock) is used only by that oracle, and it is
+  # SELF-CONTAINED -- 11549 entries, every battlecode class, every bundled
+  # dependency INCLUDING net.sf.jsi and gnu.trove (trove4j 3.0.3), plus
+  # MethodCosts.txt and all 75 .map22 resources -- so there is no Gradle, no
+  # jsi shim, no Maven download list and no deps.lock in that job. There is no
+  # JDK in any image stage.
+  #
+  # THE ORACLE RUNS ON TEMURIN 8 AND THAT IS NOT NEGOTIABLE: engine/build.gradle
+  # sets sourceCompatibility 1.8 and declares org.ow2.asm:asm:5.0.4, and under
+  # JDK 21 the instrumenter throws IllegalArgumentException inside
+  # ClassReader.<init> (from TeamClassLoaderFactory.normalReader via
+  # MethodCostUtil.getMethodData) on EVERY player class load; every robot dies
+  # as it spawns, NO ROBOT IS EVER BUILT, the game ends at round 1 with
+  # ANNIHILATION after six trace lines, and the job would exit 0. That is the
+  # exact "green oracle proving nothing" trap (docs/PARITY.md section bc22).
+  BC22_COMMIT: "6ed05b679c0822e9bbe332812ff5655812dd023e"
+  BC22_JAR_URL: "https://releases.battlecode.org/maven/org/battlecode/battlecode22/2.2.1/battlecode22-2.2.1.jar"
 
 jobs:
   # ---------------------------------------------------------------------
@@ -99,7 +120,13 @@ jobs:
     # plays eight of them in the debug pass alone. Its knob sweep is the one
     # shard whose SIGNED DELTAS are gated in release only, for the reason its
     # own header gives; the debug pass still runs the sweep.
-    timeout-minutes: 110
+    # 130, not 110: the SEVENTH year module adds sixteen shards, and every
+    # shard runs TWICE (debug and -d:release). The measured CI wall clock on
+    # this repo is ~65-75 min a round with six year modules (LEARNINGS
+    # 2026-09-08), and the heaviest bc22 shards play whole 2000-round games
+    # with every range check on -- its knob sweep plays seventy-two of them in
+    # the debug pass alone.
+    timeout-minutes: 130
     steps:
       - uses: actions/checkout@v5
 
@@ -316,6 +343,39 @@ jobs:
           echo "official .map23 files parsed: ${parsed}"
           test "${parsed}" = "103" || {
             echo "::error::expected all 103 .map23 files to parse, got ${parsed}"
+            exit 1; }
+
+      # The bc22 year module is generated from a SEVENTH pinned checkout, and
+      # every generated artefact is re-generated here and byte-diffed: the
+      # constants table, all twenty-two converted maps and the sprite atlas
+      # cut from the 2022 client. A hand-edited generated file fails the
+      # build.
+      - name: Fetch the pinned Battlecode 2022 sources
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/engine22
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode22/archive/${BC22_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/engine22
+          echo "BC22_DIR=/tmp/engine22/battlecode22-${BC22_COMMIT}" >> "$GITHUB_ENV"
+
+      - name: The bc22 generated files match the pinned 2022 sources
+        run: |
+          set -euo pipefail
+          python3 tools/gen_year_constants.py --year bc22 --engine "$BC22_DIR" --check
+          python3 tools/convert_maps_bc22.py --engine "$BC22_DIR" \
+            --out data/maps/bc22 --check
+          python3 tools/build_sprite_atlas_bc22.py --engine "$BC22_DIR" \
+            --out data --check
+          # And EVERY ONE of the 75 official `.map22` flatbuffers reads with
+          # the converter's own vtable walk, not only the 22 that are
+          # committed: a reader that only works on the maps we ship is a
+          # reader nobody can extend the pool with.
+          parsed="$(python3 tools/convert_maps_bc22.py --engine "$BC22_DIR" \
+            --parse-all 2>&1 >/dev/null | grep -oE '^[0-9]+' | head -1)"
+          echo "official .map22 files parsed: ${parsed}"
+          test "${parsed}" = "75" || {
+            echo "::error::expected all 75 .map22 files to parse, got ${parsed}"
             exit 1; }
 
       - name: Run tests
@@ -1974,6 +2034,499 @@ jobs:
           retention-days: 14
 
   # ---------------------------------------------------------------------
+  # THE bc22 PARITY ORACLE. The published 2022 fat jar as a CI-ONLY
+  # differential test, on TEMURIN 8 -- and that is not a preference: the jar
+  # bundles ASM 5.0.4 and under JDK 21 the instrumenter throws inside
+  # ClassReader.<init> on EVERY player class load, no robot is ever built,
+  # the game ends at round 1 with ANNIHILATION after six trace lines, and the
+  # job would exit 0 while proving nothing (docs/PARITY.md section bc22).
+  # There is no JDK in any image stage -- only here.
+  #
+  # MEASURED IN THE SANDBOX BEFORE THIS JOB WAS WRITTEN, with this jar and
+  # this JDK: ALL FORTY trace pairs -- one example-bot pair and four scenario
+  # pairs on each of eight maps -- are bit-exact for WHOLE 2000-round games,
+  # 180k-285k trace lines a side, with the example bot's traced bytecode peak
+  # at 6-7 % of its limit and the scenario bots' at 13-23 %, and ZERO
+  # mid-turn cut-offs anywhere. That is why tools/ci/parity_ledger_bc22.json
+  # ships EMPTY.
+  # ---------------------------------------------------------------------
+  parity-oracle-bc22:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache nimby toolchain and nimcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nimby
+            ~/.cache/nim
+          key: nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-${{ hashFiles('nimby.lock') }}
+          restore-keys: |
+            nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-
+
+      - name: Install nimby and Nim
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/nimby" \
+            "https://github.com/treeform/nimby/releases/download/${NIMBY_VERSION}/nimby-Linux-X64"
+          chmod +x "$HOME/.local/bin/nimby"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/nimby" use "$NIM_VERSION"
+
+      - name: Sync Nim dependencies
+        run: nimby --global sync nimby.lock
+
+      - name: Regenerate nim.cfg from the synced package tree
+        run: |
+          set -euo pipefail
+          rm -f nim.cfg
+          for pkg in "$HOME"/.nimby/pkgs/*; do
+            [ -e "$pkg" ] || continue
+            if [ -d "$pkg/src" ]; then
+              echo "--path:\"$pkg/src\"" >> nim.cfg
+            else
+              echo "--path:\"$pkg\"" >> nim.cfg
+            fi
+          done
+          echo '--path:"src"' >> nim.cfg
+
+      # TEMURIN 8. NOT NEGOTIABLE. See the job comment.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+
+      - name: The JDK really is 8
+        run: |
+          set -euo pipefail
+          java -version 2>&1 | tee /tmp/javaver22
+          javac -version 2>&1 | tee -a /tmp/javaver22
+          grep -q '1\.8\.' /tmp/javaver22 || {
+            echo "::error::this oracle MUST run on Temurin 8: the jar bundles"
+            echo "::error::ASM 5.0.4 and under a newer JDK the instrumenter"
+            echo "::error::throws on every player class load, no robot is ever"
+            echo "::error::built, and this job would be green while proving"
+            echo "::error::nothing (docs/PARITY.md section bc22)."
+            exit 1; }
+          # And `--release` must NOT be used: it arrived in JDK 9 and dies
+          # with "invalid flag" here in seconds (the bc21 lesson). This
+          # asserts the trap rather than trusting a comment.
+          if javac --release 8 -version >/dev/null 2>&1; then
+            echo "::error::this javac accepts --release, so it is not 8"
+            exit 1
+          fi
+          echo "javac rejects --release, as a JDK-8 javac must"
+
+      - name: Fetch the published 2022 jar
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle22
+          curl -fsSL -o /tmp/oracle22/battlecode22.jar "${BC22_JAR_URL}"
+
+      - name: Build the oracle (jar sha256 AND size verified, JDK 8, no javac flags)
+        run: |
+          set -euo pipefail
+          ./tools/oracle/bc22/build_oracle.sh /tmp/oracle22/battlecode22.jar \
+            /tmp/oracle22/build
+
+      # Tier B, part 1: every GameConstants field, PRINTED from the jar's own
+      # classes -- and unlike bc23's and bc25's jars this one really does
+      # report its own version, so SPEC_VERSION is a SECOND pin on top of the
+      # sha256 and the size rather than a trap.
+      - name: The jar's own constants, and its SPEC_VERSION
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle22/build/classes
+          javac -nowarn -encoding UTF-8 -cp /tmp/oracle22/battlecode22.jar \
+            -d /tmp/oracle22/build/classes tools/JavaBc22Tables.java
+          timeout 600 java -cp \
+            "/tmp/oracle22/battlecode22.jar:/tmp/oracle22/build/classes" \
+            JavaBc22Tables constants | tee /tmp/oracle22/constants.txt
+          spec="$(grep '^SPEC_VERSION=' /tmp/oracle22/constants.txt | cut -d= -f2)"
+          echo "the released 2.2.1 jar reports SPEC_VERSION=${spec}"
+          test "${spec}" = "2.2.1" || {
+            echo "::error::the jar's SPEC_VERSION is ${spec}, not 2.2.1. The"
+            echo "::error::primary pin is the sha256 and the size in"
+            echo "::error::tools/oracle/bc22/jar.lock, so this means the pin"
+            echo "::error::and the file have come apart."
+            exit 1; }
+          # Every constant the generated table claims, against the JAR.
+          python3 - <<'PY'
+          import pathlib, re
+          jar = {}
+          for line in pathlib.Path("/tmp/oracle22/constants.txt").read_text().splitlines():
+              if "=" not in line:
+                  continue
+              k, v = line.split("=", 1)
+              jar[k] = v
+          src = pathlib.Path("src/battlecode/years/bc22/constants.nim").read_text()
+          def camel(name):
+              parts = name.split("_")
+              return parts[0].capitalize() + "".join(p.capitalize() for p in parts[1:])
+          bad = []
+          checked = 0
+          for name, value in sorted(jar.items()):
+              m = re.search(r"^  " + re.escape(camel(name)) +
+                            r"\*: (\w+) = (.+)$", src, re.M)
+              if not m:
+                  print(f"::error::GameConstants.{name} has no counterpart in "
+                        f"src/battlecode/years/bc22/constants.nim")
+                  bad.append(name)
+                  continue
+              kind, literal = m.group(1), m.group(2).strip()
+              checked += 1
+              if kind == "string":
+                  want = literal.strip('"')
+                  if want != value:
+                      bad.append(f"{name}: nim {want!r} jar {value!r}")
+              elif kind in ("float32", "float64"):
+                  if abs(float(literal) - float(value)) > 1e-6:
+                      bad.append(f"{name}: nim {literal} jar {value}")
+              else:
+                  if int(literal) != int(float(value)):
+                      bad.append(f"{name}: nim {literal} jar {value}")
+          print(f"cross-checked {checked} GameConstants fields against the jar")
+          # The 2022 GameConstants has exactly 32 static fields and the
+          # generated table carries ALL of them (measured), so this floor is
+          # the whole class, not a sample.
+          if checked < 32:
+              raise SystemExit(f"::error::only {checked} fields cross-checked")
+          for b in bad:
+              print(f"::error::{b}")
+          if bad:
+              raise SystemExit(1)
+          PY
+
+      # Tier B, part 2 (BLOCKING): the WHOLE FINITE ARITHMETIC DOMAIN,
+      # regenerated from the jar's own classes and BYTE-DIFFED against the
+      # committed table -- the RobotType table (9 constructor fields x 7
+      # types) with every per-level health/damage/healing/mutate-cost/worth/
+      # drop, the AnomalyType table, THE ENTIRE rubble cooldown lattice
+      # (rubble 0..100 x eight bases, 808 entries, the 22 that differ from
+      # the integer form flagged in the file), the prototype health, the
+      # reclaim, the four anomaly truncations over their whole reachable
+      # domains, and the laboratory rate for all 3 x 177 (level, n) pairs.
+      # bc22 has exactly ONE transcendental and its domain is finite, so this
+      # tier is not a sample: it is the entire domain.
+      - name: Tier B (BLOCKING) — the WHOLE finite arithmetic domain, byte-diffed
+        run: |
+          set -euo pipefail
+          timeout 600 java -cp \
+            "/tmp/oracle22/battlecode22.jar:/tmp/oracle22/build/classes" \
+            JavaBc22Tables tables > /tmp/oracle22/tables.json
+          if ! diff -u data/bc22/tables.json /tmp/oracle22/tables.json; then
+            echo "::error::data/bc22/tables.json is not what the jar's own"
+            echo "::error::classes emit. Re-run tools/JavaBc22Tables.java and"
+            echo "::error::commit the result."
+            exit 1
+          fi
+          echo "Tier B: the committed arithmetic table IS the jar's own output"
+
+      - name: Build the Nim trace emitters (Tier A and the four Tier A′ variants)
+        run: |
+          set -euo pipefail
+          nim c --hints:off -d:release --path:src \
+            -o:/tmp/oracle22/parity_trace_bc22 tools/parity_trace_bc22.nim
+          # The SAME source with `-d:bc22Scenario`, which swaps the chassis
+          # for src/battlecode/years/bc22/chassis/scenario22.nim -- the Nim
+          # half of the Tier A′ twin -- plus its three end-forcing variants.
+          nim c --hints:off -d:release -d:bc22Scenario --path:src \
+            -o:/tmp/oracle22/pt_bc22scenario tools/parity_trace_bc22.nim
+          nim c --hints:off -d:release -d:bc22Scenario \
+            -d:bc22ScenarioAnnihilate --path:src \
+            -o:/tmp/oracle22/pt_bc22scenarioannihilate \
+            tools/parity_trace_bc22.nim
+          nim c --hints:off -d:release -d:bc22Scenario -d:bc22ScenarioTie \
+            --path:src -o:/tmp/oracle22/pt_bc22scenariotie \
+            tools/parity_trace_bc22.nim
+          nim c --hints:off -d:release -d:bc22Scenario -d:bc22ScenarioFury \
+            --path:src -o:/tmp/oracle22/pt_bc22scenariofury \
+            tools/parity_trace_bc22.nim
+
+      # WHOLE 2000-ROUND GAMES on the eight parity pairs, for ALL FIVE bots.
+      # Every `java` invocation is wrapped in `timeout 900`, because the
+      # sandboxed player threads are NON-DAEMON and a driver that throws
+      # without System.exit() hangs for ever (measured).
+      - name: Run both engines on forty pairs (whole 2000-round games)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle22/traces
+          for BOT in examplefuncsplayer22 bc22scenario \
+                     bc22scenarioannihilate bc22scenariotie \
+                     bc22scenariofury; do
+            case "$BOT" in
+              examplefuncsplayer22) NIMBIN=/tmp/oracle22/parity_trace_bc22 ;;
+              *) NIMBIN="/tmp/oracle22/pt_${BOT}" ;;
+            esac
+            for MAP in chalice maze nottestsmall snowflake_redux rugged \
+                       charge turtle vortex; do
+              timeout 900 java -Xmx2g -XX:+UseSerialGC \
+                -cp "/tmp/oracle22/battlecode22.jar:/tmp/oracle22/build/classes" \
+                battlecode.world.Bc22Trace "$MAP" 2000 "$BOT" \
+                /tmp/oracle22/build/classes \
+                > "/tmp/oracle22/traces/${BOT}.${MAP}.java" \
+                2> "/tmp/oracle22/traces/${BOT}.${MAP}.java.log"
+              tail -1 "/tmp/oracle22/traces/${BOT}.${MAP}.java.log"
+              "$NIMBIN" "$MAP" 2000 \
+                > "/tmp/oracle22/traces/${BOT}.${MAP}.nim"
+              echo "${BOT}/${MAP}: java $(wc -l < "/tmp/oracle22/traces/${BOT}.${MAP}.java") lines," \
+                   "nim $(wc -l < "/tmp/oracle22/traces/${BOT}.${MAP}.nim") lines"
+            done
+          done
+
+      # EVERY GAME REALLY RAN. This is the step that catches the JDK-21 ASM
+      # trap from the other side: the driver exits 3 when no robot is built,
+      # and this asserts the rounds, the robot count and the headroom as
+      # well, so a harness that produced a few hundred empty lines cannot be
+      # green. The floors are MEASURED and they differ by bot: the example
+      # bot mirrors itself into 108-349 robots and plays to round 2000 on
+      # every map (built 186-342), while the scenario bots are deliberately
+      # small (built 57-155) and SEVERAL of their games END EARLY by winning
+      # -- an ANNIHILATION at rounds 1084-1366 and two ladder-driven early
+      # ends at 1641 and 1764 -- which is the whole point of those variants.
+      # So their round floor is 800, and what catches the ASM trap for them
+      # is the `built` floor and the driver's own exit 3: under a JDK newer
+      # than 8 no robot is EVER built and the game ends at round 1.
+      - name: Every game really ran (the ASM trap)
+        run: |
+          set -euo pipefail
+          for BOT in examplefuncsplayer22 bc22scenario \
+                     bc22scenarioannihilate bc22scenariotie \
+                     bc22scenariofury; do
+          case "$BOT" in
+            examplefuncsplayer22) MINROUNDS=1900; MINBUILT=100; MAXPCT=50 ;;
+            *) MINROUNDS=800; MINBUILT=40; MAXPCT=25 ;;
+          esac
+          for MAP in chalice maze nottestsmall snowflake_redux rugged \
+                     charge turtle vortex; do
+            log="/tmp/oracle22/traces/${BOT}.${MAP}.java.log"
+            rounds="$(sed -n 's/.* rounds=\([0-9]*\) .*/\1/p' "$log" | tail -1)"
+            built="$(sed -n 's/.* built=\([0-9]*\).*/\1/p' "$log" | tail -1)"
+            robots="$(sed -n 's/.* peak_robots=\([0-9]*\) .*/\1/p' "$log" | tail -1)"
+            pct="$(sed -n 's/.* peak_pct=\([0-9]*\) .*/\1/p' "$log" | tail -1)"
+            echo "${BOT}/${MAP}: rounds=${rounds} built=${built}" \
+                 "peak_robots=${robots} peak_bytecode=${pct}%"
+            test "${rounds:-0}" -ge "${MINROUNDS}" || {
+              echo "::error::${BOT}/${MAP} only reached round ${rounds}. Under"
+              echo "::error::a JDK newer than 8 the instrumenter kills every"
+              echo "::error::robot as it spawns and the trace is a few hundred"
+              echo "::error::empty lines."
+              exit 1; }
+            test "${built:-0}" -ge "${MINBUILT}" || {
+              echo "::error::${BOT}/${MAP} built only ${built} robots."
+              exit 1; }
+            test "${pct:-100}" -le "${MAXPCT}" || {
+              echo "::error::${BOT}/${MAP} peaked at ${pct}% of a bytecode"
+              echo "::error::limit, above the ${MAXPCT}% headroom bound. Past"
+              echo "::error::that point the comparison is no longer defined,"
+              echo "::error::because the port's DecisionOps budget has no"
+              echo "::error::mid-turn resumption and the JVM's limit does."
+              exit 1; }
+          done
+          done
+          # The example bot's mirror really does fill a board.
+          for MAP in chalice maze nottestsmall snowflake_redux rugged \
+                     charge turtle vortex; do
+            robots="$(sed -n 's/.* peak_robots=\([0-9]*\) .*/\1/p' \
+              "/tmp/oracle22/traces/examplefuncsplayer22.${MAP}.java.log" | tail -1)"
+            test "${robots:-0}" -ge 60 || {
+              echo "::error::examplefuncsplayer22/${MAP} peaked at only"
+              echo "::error::${robots} robots; the measured range is 108-349."
+              exit 1; }
+          done
+
+      # A SCENARIO BOT THAT AGREES BIT FOR BIT WHILE DOING NOTHING PROVES
+      # NOTHING (docs/PARITY.md section bc22). This reads the JAVA traces --
+      # the engine's own output, not the port's -- and asserts that the paths
+      # Tier A cannot reach really fired. Every threshold below is MEASURED
+      # on the eight committed maps at this jar and these bots; they are
+      # floors over the WHOLE set of thirty-two scenario games, not
+      # per-game equalities, so a change that fires a path more often is
+      # green. What the scenario bots still do NOT reach is listed in
+      # docs/PARITY.md section bc22, "What is NOT compared".
+      - name: Tier A-prime really exercised the paths Tier A cannot reach
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, sys
+
+          MAPS = ["chalice", "maze", "nottestsmall", "snowflake_redux",
+                  "rugged", "charge", "turtle", "vortex"]
+          BOTS = ["bc22scenario", "bc22scenarioannihilate",
+                  "bc22scenariotie", "bc22scenariofury"]
+          # what -> (measured floor over all 32 games)
+          FLOORS = {
+              "a LABORATORY promoted from PROTOTYPE to TURRET": 4,
+              "a WATCHTOWER promoted from PROTOTYPE to TURRET": 1,
+              "a robot MUTATED to level 2": 1,
+              "a robot MUTATED to level 3 (the GOLD mutation)": 1,
+              "an ARCHON transformed to PORTABLE and then MOVED": 8,
+              "the shared array changed (S fold not constant)": 16,
+              "the rubble changed (a VORTEX permuted the board)": 12,
+              "gold appeared on the MAP (a reclaim drop)": 8,
+              "a team's gold reserve rose (a TRANSMUTATION)": 24,
+              "the anomaly cursor advanced": 20,
+              "a SAGE existed on the board": 4,
+              "the game ended by ANNIHILATION": 2,
+              "the game ended on MORE_ARCHONS": 2,
+              "the game ended on MORE_GOLD_NET_WORTH": 2,
+              "the game ended on MORE_LEAD_NET_WORTH": 2,
+          }
+          seen = dict.fromkeys(FLOORS, 0)
+
+          for bot in BOTS:
+              for name in MAPS:
+                  path = pathlib.Path(
+                      f"/tmp/oracle22/traces/{bot}.{name}.java")
+                  labproto = set()
+                  wtproto = set()
+                  labdone = wtdone = lv2 = lv3 = 0
+                  moved = 0
+                  portloc = {}
+                  folds = set()
+                  rubble = set()
+                  cursor = set()
+                  mapgold = 0
+                  teamgold = 0
+                  sage = 0
+                  for line in path.open():
+                      f = line.split()
+                      if len(f) < 4:
+                          continue
+                      kind = f[2]
+                      if kind == "U":
+                          rid, ty, md = f[3], f[5][3:], f[6][3:]
+                          lv = int(f[7][3:])
+                          if ty == "LABORATORY":
+                              if md == "PROTOTYPE":
+                                  labproto.add(rid)
+                              elif md == "TURRET" and rid in labproto:
+                                  labdone += 1
+                          elif ty == "WATCHTOWER":
+                              if md == "PROTOTYPE":
+                                  wtproto.add(rid)
+                              elif md == "TURRET" and rid in wtproto:
+                                  wtdone += 1
+                          elif ty == "SAGE":
+                              sage += 1
+                          if lv >= 2:
+                              lv2 += 1
+                          if lv >= 3:
+                              lv3 += 1
+                          if md == "PORTABLE" and ty == "ARCHON":
+                              xy = (f[8], f[9])
+                              if rid in portloc and portloc[rid] != xy:
+                                  moved += 1
+                              portloc[rid] = xy
+                      elif kind == "S":
+                          folds.add(f[4])
+                      elif kind == "G":
+                          rubble.add(f[5])
+                          mapgold = max(mapgold, int(f[7][8:]))
+                      elif kind == "T":
+                          teamgold = max(teamgold, int(f[4][3:]))
+                      elif kind == "A":
+                          cursor.add(f[3])
+                      elif kind == "Z":
+                          dom = f[4][4:]
+                          key = f"the game ended by ANNIHILATION" \
+                              if dom == "ANNIHILATION" \
+                              else f"the game ended on {dom}"
+                          if key in seen:
+                              seen[key] += 1
+                  seen["a LABORATORY promoted from PROTOTYPE to TURRET"] += \
+                      1 if labdone else 0
+                  seen["a WATCHTOWER promoted from PROTOTYPE to TURRET"] += \
+                      1 if wtdone else 0
+                  seen["a robot MUTATED to level 2"] += 1 if lv2 else 0
+                  seen["a robot MUTATED to level 3 (the GOLD mutation)"] += \
+                      1 if lv3 else 0
+                  seen["an ARCHON transformed to PORTABLE and then MOVED"] += \
+                      1 if moved else 0
+                  seen["the shared array changed (S fold not constant)"] += \
+                      1 if len(folds) > 1 else 0
+                  seen["the rubble changed (a VORTEX permuted the board)"] += \
+                      1 if len(rubble) > 1 else 0
+                  seen["gold appeared on the MAP (a reclaim drop)"] += \
+                      1 if mapgold else 0
+                  seen["a team's gold reserve rose (a TRANSMUTATION)"] += \
+                      1 if teamgold else 0
+                  seen["the anomaly cursor advanced"] += \
+                      1 if len(cursor) > 1 else 0
+                  seen["a SAGE existed on the board"] += 1 if sage else 0
+
+          bad = []
+          for what, floor in sorted(FLOORS.items()):
+              count = seen[what]
+              print(f"  {count:5d} / {floor:<5d}  {what}")
+              if count < floor:
+                  bad.append(f"{what}: {count}, floor {floor}")
+          for b in bad:
+              print(f"::error::Tier A-prime under its measured floor: {b}. "
+                    f"The scenario bots agree with the engine while doing "
+                    f"less than they did, which proves less.")
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: Tier A, A′ and C (all BLOCKING)
+        run: |
+          set -euo pipefail
+          # The comparator's own negative control first, covering all THREE
+          # known comparator bugs: a `bc=` column on one side only, a trace
+          # pair that differs only in LENGTH (in both directions), and a
+          # zero-padded hex fold that is the same fold.
+          python3 tools/ci/parity_tiers_bc22.py --selftest
+          python3 tools/ci/parity_tiers_bc22.py \
+            --dir /tmp/oracle22/traces \
+            --maps chalice maze nottestsmall snowflake_redux rugged charge \
+                   turtle vortex \
+            --bots examplefuncsplayer22 bc22scenario \
+                   bc22scenarioannihilate bc22scenariotie bc22scenariofury \
+            --ledger tools/ci/parity_ledger_bc22.json \
+            --summary "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+      - name: Upload the traces (first 200 divergent lines and a digest)
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle22/upload
+          cd /tmp/oracle22/traces
+          for BOT in examplefuncsplayer22 bc22scenario \
+                     bc22scenarioannihilate bc22scenariotie \
+                     bc22scenariofury; do
+          for MAP in chalice maze nottestsmall snowflake_redux rugged \
+                     charge turtle vortex; do
+            j="${BOT}.${MAP}.java"
+            n="${BOT}.${MAP}.nim"
+            [ -f "$j" ] && [ -f "$n" ] || continue
+            # A 2000-round trace is 18-27 MB a side; only the first 200
+            # divergent lines and a gzipped digest are uploaded.
+            sed -E 's/ bc=[0-9]+//' "$j" > "/tmp/j.$$"
+            diff "/tmp/j.$$" "$n" | head -200 \
+              > "/tmp/oracle22/upload/${BOT}.${MAP}.diff.txt" || true
+            head -400 "$j" | gzip -9 \
+              > "/tmp/oracle22/upload/${BOT}.${MAP}.java.head.gz"
+            head -400 "$n" | gzip -9 \
+              > "/tmp/oracle22/upload/${BOT}.${MAP}.nim.head.gz"
+            cp "${BOT}.${MAP}.java.log" "/tmp/oracle22/upload/" || true
+            rm -f "/tmp/j.$$"
+          done
+          done
+          ls -la /tmp/oracle22/upload
+
+      - name: Upload the parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-bc22
+          path: /tmp/oracle22/upload
+          if-no-files-found: warn
+          retention-days: 14
+  # ---------------------------------------------------------------------
   docker-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -2394,12 +2947,145 @@ jobs:
             echo "::error::whole episode, and one heal is worth 80."
             exit 1; }
 
-      - name: All six smoke replays are present and are different years
+      # A SEVENTH EPISODE: bc22. 700 rounds and not 400, for two reasons that
+      # are both this year's: the default `lab_round` is 300 and a laboratory
+      # needs a builder commissioned, walked, placed and then TEN repairs, so
+      # the window has to reach roughly round 400 for the strong chassis to
+      # actually make a gold -- which is the one signature of this year the
+      # smoke asserts across the pair -- and the smallest map's FIRST ANOMALY
+      # IS AT ROUND 200, so 700 rounds guarantees at least one anomaly really
+      # struck. 700 rounds also records ~25 s of playback, which outlasts the
+      # viewer smoke's 15 s soak (the ecos 2026-08-23 scar).
+      #
+      # The seed is PINNED so the map cannot drift: `tests/test_bc22_maps.nim`
+      # asserts that seed 2029 on the `small` pool draws exactly
+      # `snowflake_redux` (20x20, TWO archons a side, 32 lead squares
+      # totalling 760, first anomaly at round 200) -- the liveliest small map.
+      #
+      # THE PER-SEAT FLOOR IS MEASURED, NOT GUESSED. `SMOKE_REQUIRE_STATS` is
+      # enforced FOR BOTH SEATS by the script, so it may only name things
+      # BOTH chassis do -- including the weak floor, whose archons build a
+      # miner or a soldier most turns from round 1, whose miners mine every
+      # adjacent square every turn (five times a turn on flat ground) and
+      # whose soldiers attack `enemies[0]`. Phase 20 measured a whole
+      # 2000-round `wololo` mirror on this map at units_built [27+13, 30+10],
+      # lead_mined [10939, 8534] and damage_dealt [1519, 1845]; this smoke is
+      # a THIRD of that window against a weak floor, so the committed numbers
+      # are the design note's own 15 / 100 / 10, which sit well under a third
+      # of the weak seat's measured value.
+      - name: Raw-Docker episode smoke (bc22, scripted vs scripted)
+        env:
+          SMOKE_SLUG: ${{ env.SLUG }}
+          SMOKE_EXPECT_YEAR: bc22
+          # The manifest declares exactly the two players the certification
+          # fixture seats, and `PLAYER_SCRIPTED` resolves per year: on bc22
+          # `awu` is wololo and `scaffold` is examplefuncsplayer22
+          # (src/battlecode/baselines.nim).
+          SMOKE_PLAYER_IDS: awu,scaffold
+          SMOKE_CONFIG_OVERRIDE: >-
+            {"year":"bc22","pool":"small","seed":2029,"gamesPerMatch":1,
+             "maxRounds":700,"perGameBudgetSeconds":70,
+             "matchBudgetSeconds":80,"connectTimeoutMs":15000}
+          SMOKE_REQUIRE_STATS: >-
+            {"units_built":15,"lead_mined":100,"damage_dealt":10}
+          SMOKE_REPLAY_OUT: ${{ github.workspace }}/dist/smoke/replay-bc22.json
+          SMOKE_CONTRACT_PROBE: "0"
+        run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
+
+      # THE ACROSS-THE-PAIR HALF, and for this year it is the half that
+      # matters. The signatures of 2022 -- commissioning a BUILDER, finishing
+      # a LABORATORY, making a GOLD and taking a hit from an ANOMALY -- are
+      # things only a seat playing WELL does: measured over eight full
+      # 2000-round games, the upstream example bot's builder, sage,
+      # laboratory and watchtower branches are EMPTY and it made 0 gold in
+      # every one, so asserting them per-seat would be asserting that the
+      # weak floor is not weak. Together these seven make an idle win
+      # machine-visible, which is exactly what the 2026-09-03 round-1
+      # degenerate match lacked.
+      #
+      # IF `labs_finished >= 1` OR `transmutes >= 1` EVER STOPS HOLDING, THE
+      # FIX IS TO RAISE THE SMOKE'S `maxRounds` UNTIL IT DOES, or to pull
+      # `lab_round` forward -- never to drop the assertion. An episode of
+      # this year in which nobody ever makes a gold is not this game being
+      # played.
+      - name: The bc22 episode really played bc22
+        run: |
+          set -euo pipefail
+          # Read from the REPLAY, whose `result` block is the results
+          # document verbatim: `dist/smoke/results.json` is overwritten by
+          # every episode in turn and naming it here would make this
+          # assertion depend on which episode happened to run last (the bc24
+          # fix).
+          sum() { jq -r "[.result.games[0].$1[]] | add" \
+            dist/smoke/replay-bc22.json; }
+          built="$(sum units_built)"
+          mined="$(sum lead_mined)"
+          builders="$(sum builders_built)"
+          labs="$(sum labs_built)"
+          finished="$(sum labs_finished)"
+          transmutes="$(sum transmutes)"
+          charge="$(sum anomaly_losses_charge)"
+          fury="$(sum anomaly_losses_fury_hp)"
+          abyss="$(sum anomaly_losses_abyss_lead)"
+          bite=$(( charge + fury + abyss ))
+          echo "across the two seats: units=${built} lead=${mined}" \
+               "builders=${builders} labs=${labs}/${finished}" \
+               "transmutes=${transmutes} anomaly bite=${bite}"
+          test "${built}" -ge 45 || {
+            echo "::error::the bc22 smoke episode built ${built} robots"
+            echo "::error::between the two seats. Both cooldowns start a"
+            echo "::error::robot's life at ZERO in this year and an archon"
+            echo "::error::acts every turn: a faction does not build twenty."
+            exit 1; }
+          test "${mined}" -ge 300 || {
+            echo "::error::${mined} lead was mined in the whole episode."
+            echo "::error::A miner's action cooldown is 2 against a limit of"
+            echo "::error::10, so it mines FIVE TIMES A TURN on flat ground."
+            exit 1; }
+          test "${builders}" -ge 1 || {
+            echo "::error::nobody commissioned a builder, so nothing could"
+            echo "::error::ever be built: a LABORATORY and a WATCHTOWER are"
+            echo "::error::a BUILDER's to place, not an archon's."
+            exit 1; }
+          test "${labs}" -ge 1 || {
+            echo "::error::no laboratory was placed in the whole episode."
+            exit 1; }
+          test "${finished}" -ge 1 || {
+            echo "::error::a laboratory was placed and never FINISHED. A"
+            echo "::error::building spawns as an 80-HP PROTOTYPE that can"
+            echo "::error::neither act nor move until a builder has repaired"
+            echo "::error::it to full -- ten repairs. A prototype that is"
+            echo "::error::never finished is 180 lead of nothing."
+            exit 1; }
+          test "${transmutes}" -ge 1 || {
+            echo "::error::not one gold was made in the whole episode. A"
+            echo "::error::LABORATORY IS THE ONLY SOURCE OF GOLD IN THIS"
+            echo "::error::GAME. RAISE maxRounds until it fires, or pull"
+            echo "::error::lab_round forward; do NOT drop this."
+            exit 1; }
+          test "${bite}" -ge 1 || {
+            echo "::error::no anomaly measurably hit anyone, and the map's"
+            echo "::error::first one is scheduled for round 200 of 700."
+            exit 1; }
+
+      # THE PACING NUMBER the next year module sizes its own probe from, and
+      # the number that decided this year's own `--timeout 120 --soak 15`
+      # (docs/RULES-BC22.md, "Playback pacing, measured").
+      - name: Print the bc22 episode's simulated seconds per round
+        run: |
+          set -euo pipefail
+          jq -r '"bc22 smoke: sim_seconds=\(.result.sim_seconds) " +
+                 "rounds=\(.result.games[0].rounds_played) " +
+                 "wall=\(.result.wall_clock_seconds)s"' \
+            dist/smoke/replay-bc22.json
+
+      - name: All SEVEN smoke replays are present and are different years
         run: |
           set -euo pipefail
           for f in dist/smoke/replay.json dist/smoke/replay-bc20.json \
                    dist/smoke/replay-bc21.json dist/smoke/replay-bc24.json \
-                   dist/smoke/replay-bc25.json dist/smoke/replay-bc23.json; do
+                   dist/smoke/replay-bc25.json dist/smoke/replay-bc23.json \
+                   dist/smoke/replay-bc22.json; do
             test -s "$f" || { echo "::error::$f is missing"; exit 1; }
           done
           y26="$(jq -r .year dist/smoke/replay.json)"
@@ -2408,16 +3094,19 @@ jobs:
           y24="$(jq -r .year dist/smoke/replay-bc24.json)"
           y25="$(jq -r .year dist/smoke/replay-bc25.json)"
           y23="$(jq -r .year dist/smoke/replay-bc23.json)"
+          y22="$(jq -r .year dist/smoke/replay-bc22.json)"
           echo "replay.json year=$y26  bc20=$y20  bc21=$y21  bc24=$y24" \
-               "bc25=$y25  bc23=$y23"
+               "bc25=$y25  bc23=$y23  bc22=$y22"
           test "$y26" = "bc26" || { echo "::error::replay.json is not bc26"; exit 1; }
           test "$y20" = "bc20" || { echo "::error::replay-bc20.json is not bc20"; exit 1; }
           test "$y21" = "bc21" || { echo "::error::replay-bc21.json is not bc21"; exit 1; }
           test "$y24" = "bc24" || { echo "::error::replay-bc24.json is not bc24"; exit 1; }
           test "$y25" = "bc25" || { echo "::error::replay-bc25.json is not bc25"; exit 1; }
           test "$y23" = "bc23" || { echo "::error::replay-bc23.json is not bc23"; exit 1; }
-          if [ "$(printf '%s\n' "$y26" "$y20" "$y21" "$y24" "$y25" "$y23" | sort -u | wc -l)" -ne 6 ]; then
-            echo "::error::the six smoke replays are not six different years"
+          test "$y22" = "bc22" || { echo "::error::replay-bc22.json is not bc22"; exit 1; }
+          if [ "$(printf '%s\n' "$y26" "$y20" "$y21" "$y24" "$y25" "$y23" \
+                  "$y22" | sort -u | wc -l)" -ne 7 ]; then
+            echo "::error::the seven smoke replays are not seven different years"
             exit 1
           fi
 
@@ -2527,7 +3216,7 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx --yes playwright@1.55.0 install --with-deps chromium
 
-      - name: Load the bundle in a real browser (ALL SIX years' replays)
+      - name: Load the bundle in a real browser (ALL SEVEN years' replays)
         run: |
           set -euo pipefail
           # A for-loop, not `ls … | head -1`: under `set -o pipefail` an unmatched
@@ -2538,7 +3227,8 @@ jobs:
                            dist/smoke/replay-bc21.json \
                            dist/smoke/replay-bc24.json \
                            dist/smoke/replay-bc25.json \
-                           dist/smoke/replay-bc23.json; do
+                           dist/smoke/replay-bc23.json \
+                           dist/smoke/replay-bc22.json; do
             if [ -f "${candidate}" ]; then replays="${replays} ${candidate}"; fi
           done
           test -n "${replays}" || {
@@ -2583,8 +3273,17 @@ jobs:
           # measured Java mirror carries 121-157 robots against bc25's 26-29
           # (docs/RULES-BC23.md, "What this year measures"). Decided here
           # rather than discovered at phase 60.
+          # bc22 GETS THE SAME LONGER LEASH, and it is decided here rather
+          # than discovered at phase 60. The measured Java mirror carries
+          # 85-135 robots on the board on average with peaks of 108-204 on
+          # the pool's map sizes (349 on 60x60) -- between bc25's 26-29 and
+          # bc23's 121-157 -- and the Worker re-simulates from the start of
+          # the game on every seek (docs/RULES-BC22.md, "Playback pacing,
+          # measured"). The phase-60 check-8 dispatch for bc22 uses
+          # `settle=20000 soak=15` for the same reason.
           if [ "${replay}" = "dist/smoke/replay-bc24.json" ] || \
              [ "${replay}" = "dist/smoke/replay-bc25.json" ] || \
+             [ "${replay}" = "dist/smoke/replay-bc22.json" ] || \
              [ "${replay}" = "dist/smoke/replay-bc23.json" ]; then
             node tools/ci/viewer_smoke.mjs \
               --bundle dist/static-replay-viewer \
@@ -2694,6 +3393,14 @@ jobs:
             "${{ github.workspace }}/dist/smoke/replay-bc23.json"
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
             "${{ github.workspace }}/tests/fixtures/replay-bc23.json"
+          # bc22: the smoke episode this run produced, and the COMMITTED bc22
+          # fixture -- which is the one that carries ALL FOURTEEN beat kinds
+          # (tests/test_bc22_beats.nim asserts emission, label and style
+          # against exactly these bytes).
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/dist/smoke/replay-bc22.json"
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/tests/fixtures/replay-bc22.json"
 
       # The text the CI replay never carries. Every replay CI produces is
       # SCRIPTED, so its notes and motto are the short strings baselines.nim

@@ -1,0 +1,10 @@
+{
+  "url": "https://releases.battlecode.org/maven/org/battlecode/battlecode22/2.2.1/battlecode22-2.2.1.jar",
+  "version": "2.2.1",
+  "bytes": 16989241,
+  "sha256": "56e7530b89893584bf706c90937b3df0eb583cd850f058f9d62004cd5ce78e1c",
+  "engine_commit": "6ed05b679c0822e9bbe332812ff5655812dd023e",
+  "spec_version": "2.2.1",
+  "jdk": "8",
+  "note": "UNLIKE bc23's and bc25's jars, this one really does report its own version: GameConstants.SPEC_VERSION inside the released 2.2.1 jar is the literal string 2.2.1 (measured), so the version string is a SECOND pin on top of the sha256 and the size rather than a trap. Tier B cross-checks every constant against the jar's own classes anyway. The jar is SELF-CONTAINED: 11549 entries, every battlecode class, every bundled dependency INCLUDING net.sf.jsi and gnu.trove (trove4j 3.0.3, dated 2012-06-03, LGPL-2.1 -- see NOTICE), battlecode/instrumenter/bytecode/resources/MethodCosts.txt and all 75 .map22 map resources -- so this job needs no Gradle, no shim, no multi-file compile, no Maven download list and no deps.lock, and the dead-artifact problem that forced bc21's jsi shim does not arise. IT MUST RUN ON TEMURIN 8: engine/build.gradle sets sourceCompatibility = 1.8 and declares org.ow2.asm:asm:5.0.4, and under JDK 21 the instrumenter throws IllegalArgumentException inside ClassReader.<init> on every player class load, every robot dies as it spawns, NO ROBOT IS EVER BUILT, the game ends at round 1 with winner=A dom=ANNIHILATION after six trace lines, and the job would exit 0 while proving nothing. Bc22Trace.java exits 3 on that condition and ci.yml additionally asserts every game reached 1900 rounds and carried 60 robots at its peak."
+}

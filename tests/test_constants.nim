@@ -326,4 +326,128 @@ checkEq("A HEADQUARTERS ACTS FIVE TIMES A TURN: cooldown 2 against a limit " &
   "of 10", c23.CooldownLimit div c23.RobotSpecs[c23.rtHeadquarters].actionCooldown,
   5)
 
+# ---------------------------------------------------------------------------
+#  bc22 — the seventh generated constants table, and its three generated data
+#         sets
+# ---------------------------------------------------------------------------
+block:
+  ## `BC22_DIR` is the pinned battlecode22 checkout `.github/workflows/ci.yml`
+  ## fetches. With it, the check is the real one: regenerate the constants,
+  ## re-convert all 22 committed maps, re-cut the sprite atlas and byte-diff
+  ## every one of them, and read ALL 75 official `.map22` files with the
+  ## converter's own vtable walk — a reader that only works on the maps we ship
+  ## is a reader nobody can extend the pool with.
+  let dir22 = getEnv("BC22_DIR")
+  if dir22.len > 0 and dirExists(dir22):
+    block:
+      let (output, code) = execCmdEx(
+        "python3 tools/gen_year_constants.py --year bc22 --engine " &
+        quoteShell(dir22) & " --check")
+      check("bc22 constants.nim is byte-identical to a fresh generation: " &
+        output.strip(), code == 0)
+    block:
+      let (output, code) = execCmdEx(
+        "python3 tools/convert_maps_bc22.py --engine " & quoteShell(dir22) &
+        " --out data/maps/bc22 --check")
+      check("the 22 committed bc22 maps re-convert identically: " &
+        output.strip(), code == 0)
+    block:
+      let (output, code) = execCmdEx(
+        "python3 tools/build_sprite_atlas_bc22.py --engine " &
+        quoteShell(dir22) & " --out data --check")
+      check("the bc22 sprite atlas is a fresh cut of the 2022 client art: " &
+        output.strip(), code == 0)
+    block:
+      let (output, code) = execCmdEx(
+        "python3 tools/convert_maps_bc22.py --engine " & quoteShell(dir22) &
+        " --parse-all")
+      check("the converter reads every official .map22", code == 0)
+      var parsed = 0
+      for line in output.splitLines():
+        if line.len > 0 and line.contains("\t"): parsed += 1
+      checkEq("all 75 of them", parsed, 75)
+  else:
+    echo "BC22_DIR unset; falling back to spot values from the pinned commit"
+
+import battlecode/years/bc22/constants as c22
+
+checkEq("bc22 EngineCommit", c22.EngineCommit,
+  "6ed05b679c0822e9bbe332812ff5655812dd023e")
+checkEq("bc22 OracleJarVersion", c22.OracleJarVersion, "2.2.1")
+checkEq("bc22 SPEC_VERSION MATCHES the released jar's own version — unlike " &
+  "bc23's and bc25's — so the oracle job asserts the string as well as the " &
+  "sha256", c22.SpecVersion, "2.2.1")
+checkEq("GAME_MAX_NUMBER_OF_ROUNDS", c22.GameMaxNumberOfRounds, 2000)
+checkEq("MAP_MIN_WIDTH", c22.MapMinWidth, 20)
+checkEq("MAP_MAX_WIDTH", c22.MapMaxWidth, 60)
+checkEq("MAP_MIN_HEIGHT", c22.MapMinHeight, 20)
+checkEq("MAP_MAX_HEIGHT", c22.MapMaxHeight, 60)
+checkEq("MIN_STARTING_ARCHONS", c22.MinStartingArchons, 1)
+checkEq("MAX_STARTING_ARCHONS", c22.MaxStartingArchons, 4)
+checkEq("MIN_RUBBLE", c22.MinRubble, 0)
+checkEq("MAX_RUBBLE", c22.MaxRubble, 100)
+checkEq("INITIAL_LEAD_AMOUNT is per TEAM, not per archon",
+  c22.InitialLeadAmount, 200)
+checkEq("INITIAL_GOLD_AMOUNT", c22.InitialGoldAmount, 0)
+checkEq("PASSIVE_LEAD_INCREASE", c22.PassiveLeadIncrease, 2)
+checkEq("ADD_LEAD_EVERY_ROUNDS", c22.AddLeadEveryRounds, 20)
+checkEq("ADD_LEAD", c22.AddLead, 5)
+checkEq("COOLDOWN_LIMIT", c22.CooldownLimit, 10)
+checkEq("COOLDOWNS_PER_TURN", c22.CooldownsPerTurn, 10)
+checkEq("TRANSFORM_COOLDOWN", c22.TransformCooldown, 100)
+checkEq("MUTATE_COOLDOWN", c22.MutateCooldown, 100)
+checkEq("MAX_LEVEL", c22.MaxLevel, 3)
+checkEq("SHARED_ARRAY_LENGTH", c22.SharedArrayLength, 64)
+checkEq("MAX_SHARED_ARRAY_VALUE", c22.MaxSharedArrayValue, 65535)
+checkEq("PROTOTYPE_HP_PERCENTAGE is a float32 0.8f",
+  c22.PrototypeHpPercentage, 0.8'f32)
+checkEq("RECLAIM_COST_MULTIPLIER is a float32 0.2f",
+  c22.ReclaimCostMultiplier, 0.2'f32)
+checkEq("ALCHEMIST_LONELINESS_A is a DOUBLE 20", c22.AlchemistLonelinessA,
+  20.0)
+checkEq("ALCHEMIST_LONELINESS_B is a DOUBLE 18", c22.AlchemistLonelinessB,
+  18.0)
+checkEq("ALCHEMIST_LONELINESS_K_L1", c22.AlchemistLonelinessKL1, 0.02)
+checkEq("ALCHEMIST_LONELINESS_K_L2", c22.AlchemistLonelinessKL2, 0.01)
+checkEq("ALCHEMIST_LONELINESS_K_L3", c22.AlchemistLonelinessKL3, 0.005)
+checkEq("the ARCHON's DecisionOps budget is a tenth of its 20000",
+  c22.DecisionOpsArchon * 10, c22.RobotSpecs[c22.rtArchon].bytecodeLimit)
+checkEq("the BUILDER's is a tenth of its 7500",
+  c22.DecisionOpsBuilder * 10, c22.RobotSpecs[c22.rtBuilder].bytecodeLimit)
+checkEq("the LABORATORY's is a tenth of its 5000",
+  c22.DecisionOpsLaboratory * 10,
+  c22.RobotSpecs[c22.rtLaboratory].bytecodeLimit)
+checkEq("and the four on the 10000 limit get 1250, deliberately",
+  c22.DecisionOpsStandard, 1250)
+## The whole RobotType table, spot-checked against the design note's own
+## transcription of the jar's output.
+checkEq("a SOLDIER is 75 lead", c22.RobotSpecs[c22.rtSoldier].buildCostLead, 75)
+checkEq("and deals 3", c22.RobotSpecs[c22.rtSoldier].damage, 3)
+checkEq("at r2 <= 13", c22.RobotSpecs[c22.rtSoldier].actionRadiusSquared, 13)
+checkEq("a SAGE is 20 GOLD", c22.RobotSpecs[c22.rtSage].buildCostGold, 20)
+checkEq("and deals 45", c22.RobotSpecs[c22.rtSage].damage, 45)
+checkEq("once every 200 cooldown", c22.RobotSpecs[c22.rtSage].actionCooldown,
+  200)
+checkEq("a MINER's action cooldown is 2 — FIVE MINES A TURN",
+  c22.RobotSpecs[c22.rtMiner].actionCooldown, 2)
+checkEq("an ARCHON has 600 health", c22.RobotSpecs[c22.rtArchon].health, 600)
+checkEq("and REPAIRS, so its damage is NEGATIVE",
+  c22.RobotSpecs[c22.rtArchon].damage, -2)
+checkEq("a LABORATORY sees r2 <= 53, the crowd that prices its gold",
+  c22.RobotSpecs[c22.rtLaboratory].visionRadiusSquared, 53)
+checkEq("ABYSS takes a tenth globally",
+  c22.AnomalySpecs[c22.anAbyss].globalPercentage, 0.1'f32)
+checkEq("and 99 % from a sage", c22.AnomalySpecs[c22.anAbyss].sagePercentage,
+  0.99'f32)
+checkEq("CHARGE takes the top 5 %",
+  c22.AnomalySpecs[c22.anCharge].globalPercentage, 0.05'f32)
+checkEq("FURY takes 5 % of a turret's max health",
+  c22.AnomalySpecs[c22.anFury].globalPercentage, 0.05'f32)
+check("and a VORTEX IS NOT A SAGE ANOMALY",
+  not c22.AnomalySpecs[c22.anVortex].isSageAnomaly)
+check("while the other three are",
+  c22.AnomalySpecs[c22.anAbyss].isSageAnomaly and
+  c22.AnomalySpecs[c22.anCharge].isSageAnomaly and
+  c22.AnomalySpecs[c22.anFury].isSageAnomaly)
+
 finish("test_constants")

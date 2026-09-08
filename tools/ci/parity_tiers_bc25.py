@@ -47,6 +47,7 @@ needs the JVM rather than the traces.
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import pathlib
 import re
@@ -74,29 +75,35 @@ def strip_bc(line: str) -> str:
 
 
 def first_divergence(java_path: pathlib.Path, nim_path: pathlib.Path):
-    """(round, java line, nim line) of the first differing record, or None.
+    """(round, line number, java line, nim line) of the first differing
+    record, or None.
+
+    `itertools.zip_longest`, NEVER `zip`. `zip` pulls from `jf` first and
+    DISCARDS the line it already holds when `nf` runs out, so a Java trace
+    exactly ONE line longer than the Nim one read as bit-exact: the tail check
+    below it then read the line AFTER the discarded one and found nothing.
+    Lengths are now compared by the walk itself -- a missing line is a
+    divergence at the line number where it is missing.
+
+    `strip_bc` ON BOTH SIDES, for the same reason: stripping only the Java
+    side compares a line against itself plus a suffix the moment the Nim
+    emitter grows a `bc=` column of its own.
 
     Streamed: a 2000-round trace is 3-4 MB a side and eighteen pairs would be
     seventy megabytes held at once otherwise.
     """
+    ended = "<the trace ends here>"
     with java_path.open() as jf, nim_path.open() as nf:
-        for lineno, (jl, nl) in enumerate(zip(jf, nf), start=1):
-            j = strip_bc(jl.rstrip("\n"))
-            n = nl.rstrip("\n")
+        for lineno, (jl, nl) in enumerate(
+                itertools.zip_longest(jf, nf), start=1):
+            j = ended if jl is None else strip_bc(jl.rstrip("\n"))
+            n = ended if nl is None else strip_bc(nl.rstrip("\n"))
             if j != n:
                 round_no = -1
-                m = re.match(r"^R (\d+) ", j)
+                m = re.match(r"^R (\d+) ", j) or re.match(r"^R (\d+) ", n)
                 if m:
                     round_no = int(m.group(1))
                 return (round_no, lineno, j, n)
-        # One file may still be longer than the other.
-        jrest = jf.readline()
-        nrest = nf.readline()
-        if jrest or nrest:
-            j = strip_bc(jrest.rstrip("\n"))
-            n = nrest.rstrip("\n")
-            m = re.match(r"^R (\d+) ", j or n)
-            return (int(m.group(1)) if m else -1, -1, j, n)
     return None
 
 

@@ -13,14 +13,16 @@ hand-edited constant fails the build.
         --out src/battlecode/years/bc26/constants.nim
     tools/gen_year_constants.py --engine ... --check   # diff, exit 1 on drift
 
-`--year bc20`, `--year bc21`, `--year bc23`, `--year bc24` and `--year bc25`
-do the same job
+`--year bc20`, `--year bc21`, `--year bc22`, `--year bc23`, `--year bc24` and
+`--year bc25` do the same job
 for the other year modules against a checkout of the matching engine at its
 pinned commit. bc20 and bc21 read `common/GameConstants.java` and
 `common/RobotType.java`; bc24 reads `common/GameConstants.java`,
 `common/SkillType.java`, `common/TrapType.java` and `common/GlobalUpgrade.java`;
 bc25 reads `common/GameConstants.java` and `common/UnitType.java`; bc23 reads
-`common/GameConstants.java`, `common/RobotType.java` and `common/Anchor.java`:
+`common/GameConstants.java`, `common/RobotType.java` and `common/Anchor.java`;
+bc22 reads `common/GameConstants.java`, `common/RobotType.java` and
+`common/AnomalyType.java`:
 
     tools/gen_year_constants.py --year bc20 --engine /path/to/battlecode20 \
         --out src/battlecode/years/bc20/constants.nim
@@ -855,10 +857,156 @@ def render_bc23(engine: pathlib.Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+# ---------------------------------------------------------------------------
+#  bc22 -- Battlecode 2022 "Mutation"
+# ---------------------------------------------------------------------------
+
+BC22_COMMIT = "6ed05b679c0822e9bbe332812ff5655812dd023e"
+
+BC22_ROBOT_RE = re.compile(
+    r"^\s*(ARCHON|LABORATORY|WATCHTOWER|MINER|BUILDER|SOLDIER|SAGE)"
+    r"\s*\((.*?)\)\s*[,;]?\s*$", re.M)
+BC22_ANOMALY_RE = re.compile(
+    r"^\s*(ABYSS|CHARGE|FURY|VORTEX)\s*\((.*?)\)\s*[,;]\s*$", re.M)
+
+BC22_DECISION_OPS_ARCHON = 2000
+BC22_DECISION_OPS_STANDARD = 1250
+BC22_DECISION_OPS_BUILDER = 750
+BC22_DECISION_OPS_LABORATORY = 500
+    # The same convention bc20, bc21, bc23, bc24 and bc25 use: a tenth of
+    # ARCHON 20000, BUILDER 7500 and LABORATORY 5000. The four types on the
+    # 10000 limit get 1250 rather than 1000, deliberately -- a bc22 miner's
+    # nine-square scan plus its mine-move-mine turn is the busiest primitive
+    # sequence in the year (docs/RULES-BC22.md Divergences item 1). docs/RULES-BC22.md §Divergences item 1 carries the
+    # measurement that makes it harmless in this year: the 2022 example bot
+    # peaks at 6-7 % of its limit with ZERO mid-turn cut-offs over eight full
+    # 2000-round games.
+
+
+def render_bc22(engine: pathlib.Path) -> str:
+    common = engine / "engine/src/main/battlecode/common"
+    consts = read_constants_from(common / "GameConstants.java",
+                                 strip_comments=True)
+    robot_src = (common / "RobotType.java").read_text()
+    robot_src = re.sub(r"//[^\n]*", "", robot_src)
+    robot_src = re.sub(r"/\*.*?\*/", "", robot_src, flags=re.S)
+    robots = [(n, [v.strip() for v in a.split(",")])
+              for n, a in BC22_ROBOT_RE.findall(robot_src)]
+    if len(robots) != 7:
+        raise SystemExit(
+            f"::error::expected 7 RobotType entries, saw {len(robots)}")
+    for name, a in robots:
+        if len(a) != 9:
+            raise SystemExit(
+                f"::error::RobotType.{name} has {len(a)} arguments, expected 9")
+
+    anomaly_src = (common / "AnomalyType.java").read_text()
+    anomaly_src = re.sub(r"//[^\n]*", "", anomaly_src)
+    anomaly_src = re.sub(r"/\*.*?\*/", "", anomaly_src, flags=re.S)
+    anomalies = [(n, [v.strip() for v in a.split(",")])
+                 for n, a in BC22_ANOMALY_RE.findall(anomaly_src)]
+    if len(anomalies) != 4:
+        raise SystemExit(
+            f"::error::expected 4 AnomalyType entries, saw {len(anomalies)}")
+    for name, a in anomalies:
+        if len(a) != 4:
+            raise SystemExit(
+                f"::error::AnomalyType.{name} has {len(a)} arguments, "
+                "expected 4")
+
+    lines: list[str] = []
+    add = lines.append
+    add('## Battlecode 2022 "Mutation" gameplay constants '
+        "-- GENERATED, do not edit.")
+    add("##")
+    add(f"## Source: github.com/battlecode/battlecode22 at commit "
+        f"`{BC22_COMMIT}`,")
+    add("## files `common/GameConstants.java`, `common/RobotType.java` and")
+    add("## `common/AnomalyType.java`, read by `tools/gen_year_constants.py")
+    add("## --year bc22`. The `test` job of `.github/workflows/ci.yml` re-runs")
+    add("## that generator with `--check`, which byte-diffs this file, so an")
+    add("## edit here fails the build instead of quietly changing the rules")
+    add("## under a `GameVersion` that no longer describes them.")
+    add("##")
+    add('## `SPEC_VERSION` below is "2.2.1" and -- unlike bc23\'s and bc25\'s')
+    add("## -- it MATCHES the released jar's own version, so the oracle job")
+    add("## asserts the string as well as the sha256 pinned in")
+    add("## `tools/oracle/bc22/jar.lock`.")
+    add("##")
+    add("## THE ONE TRANSCENDENTAL IN BC22 is the laboratory's transmutation")
+    add("## rate, `(int)(20.0 - 18.0 * exp(-k*n))`, whose domain is finite")
+    add("## (3 levels x n in 0..176) and is therefore TABLED whole into")
+    add("## `data/bc22/tables.json` rather than evaluated at run time. Every")
+    add("## other non-integer expression -- the float64 rubble multiplier and")
+    add("## the float32 prototype, reclaim and anomaly truncations -- is")
+    add("## likewise tabled over its whole reachable domain.")
+    add("")
+    add(f'const EngineCommit* = "{BC22_COMMIT}"')
+    add('const OracleJarVersion* = "2.2.1"')
+    add("")
+    add("type")
+    add("  RobotType* = enum")
+    for name, _ in robots:
+        add(f'    rt{camel(name)} = "{name}"')
+    add("")
+    add("  AnomalyKind* = enum")
+    for name, _ in anomalies:
+        add(f'    an{camel(name)} = "{name}"')
+    add("")
+    add("  RobotSpec* = object")
+    add("    ## `common/RobotType.java`'s nine constructor arguments, in the")
+    add("    ## file's own order. `damage` is NEGATIVE for a repairer (ARCHON")
+    add("    ## -2, BUILDER -2) and `getHealing` is its negation, exactly as")
+    add("    ## the engine carries it.")
+    add("    buildCostLead*, buildCostGold*: int")
+    add("    actionCooldown*, movementCooldown*, health*, damage*: int")
+    add("    actionRadiusSquared*, visionRadiusSquared*, bytecodeLimit*: int")
+    add("")
+    add("  AnomalySpec* = object")
+    add("    ## `common/AnomalyType.java`'s four constructor arguments.")
+    add("    isGlobalAnomaly*, isSageAnomaly*: bool")
+    add("    globalPercentage*, sagePercentage*: float32")
+    add("")
+    add("const")
+    for name, nim_type, literal in consts:
+        if nim_type == "float32":
+            literal = f32_literal(literal)
+        add(f"  {camel(name)}*: {nim_type} = {literal}")
+    add("")
+    add(f"  DecisionOpsArchon*: int = {BC22_DECISION_OPS_ARCHON}")
+    add(f"  DecisionOpsStandard*: int = {BC22_DECISION_OPS_STANDARD}")
+    add(f"  DecisionOpsBuilder*: int = {BC22_DECISION_OPS_BUILDER}")
+    add(f"  DecisionOpsLaboratory*: int = {BC22_DECISION_OPS_LABORATORY}")
+    add("    ## Replace `RobotType.bytecodeLimit` outside the JVM: no mid-turn")
+    add("    ## resumption, no mid-primitive cut, enforced by the sim rather")
+    add("    ## than by the bot.")
+    add("")
+    add("  RobotSpecs*: array[RobotType, RobotSpec] = [")
+    for name, a in robots:
+        add(f"    rt{camel(name)}: RobotSpec(buildCostLead: {a[0]},")
+        add(f"      buildCostGold: {a[1]},")
+        add(f"      actionCooldown: {a[2]}, movementCooldown: {a[3]},")
+        add(f"      health: {a[4]}, damage: {a[5]},")
+        add(f"      actionRadiusSquared: {a[6]}, visionRadiusSquared: {a[7]},")
+        add(f"      bytecodeLimit: {a[8]}),")
+    add("  ]")
+    add("")
+    add("  AnomalySpecs*: array[AnomalyKind, AnomalySpec] = [")
+    for name, a in anomalies:
+        add(f"    an{camel(name)}: AnomalySpec("
+            f"isGlobalAnomaly: {a[0]}, isSageAnomaly: {a[1]},")
+        add(f"      globalPercentage: {f32_literal(a[2].rstrip('fF'))}'f32,")
+        add(f"      sagePercentage: {f32_literal(a[3].rstrip('fF'))}'f32),")
+    add("  ]")
+    add("")
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--year", default="bc26",
-                    choices=["bc26", "bc20", "bc21", "bc23", "bc24", "bc25"])
+                    choices=["bc26", "bc20", "bc21", "bc22", "bc23", "bc24",
+                             "bc25"])
     ap.add_argument("--engine", required=True, type=pathlib.Path)
     ap.add_argument("--out", type=pathlib.Path, default=None)
     ap.add_argument("--check", action="store_true",
@@ -868,10 +1016,12 @@ def main() -> int:
     out = args.out or pathlib.Path(
         f"src/battlecode/years/{args.year}/constants.nim")
     label = {"bc26": TAG, "bc20": BC20_COMMIT, "bc21": BC21_COMMIT,
+             "bc22": BC22_COMMIT,
              "bc23": BC23_COMMIT, "bc24": BC24_COMMIT,
              "bc25": BC25_COMMIT}[args.year]
     text = {"bc26": render, "bc20": render_bc20,
-            "bc21": render_bc21, "bc23": render_bc23,
+            "bc21": render_bc21, "bc22": render_bc22,
+            "bc23": render_bc23,
             "bc24": render_bc24,
             "bc25": render_bc25}[args.year](args.engine)
     if args.check:

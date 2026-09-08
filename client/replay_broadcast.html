@@ -1865,6 +1865,15 @@ body.sidelanes-both #killfeed {
   z-index: 30;
   padding: calc(20 * var(--u));
   text-align: center;
+  /* ENDCARD FIX 2 (shared, all years): NO CLIPPING OR OVERFLOW. The card is
+     bounded by the two measured bands and its CONTENT scrolls rather than
+     running off the bottom of a 1280x800 window once a year's war panel and
+     two full-cap doctrine blocks are on it. bc25's phase-60 finding was the
+     winner's stat block being cut off; `viewer_smoke.mjs --killfeed-overlap`
+     now asserts `#endcard`'s scrollHeight against its clientHeight after the
+     100 % seek, so it is a gate rather than a hope. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 #endcard.on { display: flex; animation: ec-shake 160ms ease-out; }
 @keyframes cardfade { from { opacity: 0; } to { opacity: 1; } }
@@ -3401,6 +3410,208 @@ html[data-year="bc23"] .beat-marker.end         { background: #ffffff; }
   #bc23-econ .prog, #bc23-units .lbl { display: none; }
 }
 
+
+/* ========================================================================
+   BC22 additions to the inherited cogame-battlecode chrome
+   ------------------------------------------------------------------------
+   The game block for the `bc22` year. Everything above this banner is the
+   page as it shipped for `bc26`, `bc20`, `bc21`, `bc23`, `bc24` and `bc25`.
+   NOTHING is removed and no existing id is reused for a different purpose:
+   every id below is new and `#bc22-` prefixed, and the seven blocks are
+   switched by ONE attribute — `document.documentElement.dataset.year`, set
+   from the replay header — plus the rules right here. `#viewpanel` is KEPT:
+   the `bc22` variant's pool spans 30x30 to 49x25 and 45x35 and the reserved
+   large pool reaches 60x60, so the native 16 px-per-square render is
+   400–960 px wide against a 360 px featured-match frame, where a 49-wide
+   board would give 7.3 px per square.
+   ======================================================================== */
+html[data-year="bc22"] #coopchip,
+html[data-year="bc22"] #bars,
+html[data-year="bc22"] #econ,
+html[data-year="bc22"] #doctrines,
+html[data-year="bc22"] #bc20-flood,
+html[data-year="bc22"] #bc20-soup,
+html[data-year="bc22"] #bc20-units,
+html[data-year="bc22"] #bc20-doctrines,
+html[data-year="bc22"] #bc20-doctrines-toggle,
+html[data-year="bc22"] #bc20-chain,
+html[data-year="bc22"] #bc21-votes,
+html[data-year="bc22"] #bc21-influence,
+html[data-year="bc22"] #bc21-units,
+html[data-year="bc22"] #bc21-doctrines,
+html[data-year="bc22"] #bc21-doctrines-toggle,
+html[data-year="bc22"] #bc21-bids,
+html[data-year="bc22"] #bc23-islands,
+html[data-year="bc22"] #bc23-econ,
+html[data-year="bc22"] #bc23-units,
+html[data-year="bc22"] #bc23-doctrines,
+html[data-year="bc22"] #bc23-doctrines-toggle,
+html[data-year="bc22"] #bc23-tempest,
+html[data-year="bc22"] #bc24-flags,
+html[data-year="bc22"] #bc24-crumbs,
+html[data-year="bc22"] #bc24-levels,
+html[data-year="bc22"] #bc24-doctrines,
+html[data-year="bc22"] #bc24-doctrines-toggle,
+html[data-year="bc22"] #bc24-traps,
+html[data-year="bc22"] #bc25-coverage,
+html[data-year="bc22"] #bc25-towers,
+html[data-year="bc22"] #bc25-econ,
+html[data-year="bc22"] #bc25-doctrines,
+html[data-year="bc22"] #bc25-doctrines-toggle,
+html[data-year="bc22"] #bc25-srp { display: none !important; }
+
+html:not([data-year="bc22"]) #bc22-archons,
+html:not([data-year="bc22"]) #bc22-anomaly,
+html:not([data-year="bc22"]) #bc22-econ,
+html:not([data-year="bc22"]) #bc22-units,
+html:not([data-year="bc22"]) #bc22-doctrines,
+html:not([data-year="bc22"]) #bc22-doctrines-toggle,
+html:not([data-year="bc22"]) #bc22-mutation { display: none !important; }
+
+/* THE HEADLINE READOUT AND THE YEAR'S WHOLE STORY: a two-sided archon tally
+   with a health pip per archon that drains as it is shot, a level dot and a
+   PORTABLE outline on any archon currently walking. It flashes red when an
+   archon dies, because that is the only event that can end the game. It sits
+   in the same top-centre pill slot bc20 uses for its flood gauge and bc23 for
+   its island tally, ABOVE the board and never inside the transport band. */
+#bc22-archons {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(var(--topband, 0px) + 6px);
+  display: flex; gap: 8px; align-items: baseline;
+  font: 700 12px/1 var(--mono); color: #d9cdb8;
+  background: rgba(10, 12, 18, .82); border: 1px solid #2a3342;
+  border-radius: 999px; padding: 5px 12px; z-index: 7; white-space: nowrap;
+}
+#bc22-archons.flash { animation: bc22flash .9s ease-out 1; }
+@keyframes bc22flash {
+  0% { box-shadow: 0 0 0 0 rgba(224, 82, 58, .9); }
+  100% { box-shadow: 0 0 0 14px rgba(224, 82, 58, 0); }
+}
+#bc22-archons .ash { color: #7fb2e8; }
+#bc22-archons .basil { color: #e0523a; }
+#bc22-archons .pips { letter-spacing: .08em; }
+#bc22-archons .portable { color: #f0d070; }
+#bc22-archons .lost { color: #6f6558; }
+
+/* THE YEAR'S SIGNATURE READOUT, AND THE ONE NO OTHER YEAR HAS: the anomaly
+   clock. The next scheduled anomaly and how far away, the whole remaining
+   schedule as a mini-timeline, and the Singularity countdown. It sits
+   IMMEDIATELY ABOVE var(--band), never inside it. */
+#bc22-anomaly {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--band, 0px) + 148px);
+  display: flex; gap: 8px; align-items: center;
+  font: 600 11px/1 var(--mono); color: #cdbfa6;
+  background: rgba(10, 12, 18, .82); border: 1px solid #2a3342;
+  border-radius: 8px; padding: 4px 10px; z-index: 7; white-space: nowrap;
+  max-width: 92%; overflow: hidden;
+}
+#bc22-anomaly .next { font-weight: 800; }
+#bc22-anomaly .abyss { color: #b98ad0; }
+#bc22-anomaly .charge { color: #ffffff; }
+#bc22-anomaly .fury { color: #ffb347; }
+#bc22-anomaly .vortex { color: #6ac4ff; }
+#bc22-anomaly .sing { color: #b6a892; }
+#bc22-anomaly .tl { letter-spacing: .12em; color: #6f6558; }
+#bc22-anomaly .tl b { color: #f2e8d8; }
+#bc22-anomaly.struck { color: #f2e8d8; border-color: #6a5a3a; }
+
+#bc22-econ, #bc22-units {
+  position: absolute; left: 8px;
+  width: max-content; max-width: calc(100% - 16px);
+  font: 500 10px/1.35 var(--mono); color: #cdbfa6;
+  background: rgba(10, 12, 18, .78); border: 1px solid #2a3342;
+  border-radius: 8px; padding: 5px 8px; z-index: 6;
+}
+#bc22-units { bottom: calc(var(--band, 0px) + 76px); }
+#bc22-econ { bottom: calc(var(--band, 0px) + 8px); }
+#bc22-econ .row, #bc22-units .row {
+  display: flex; gap: 7px; align-items: baseline; white-space: nowrap;
+}
+#bc22-econ .who, #bc22-units .who {
+  min-width: 4.2em; color: #8b8375; font-weight: 700;
+}
+#bc22-econ .pb { color: #9fb0bd; }
+#bc22-econ .au { color: #e8c46a; }
+#bc22-econ .lab { color: #8fd48f; }
+#bc22-econ .dry { color: #e0523a; }
+#bc22-units .sol { color: #e0523a; font-weight: 700; }
+#bc22-units .min { color: #9fb0bd; }
+#bc22-units .sag { color: #e8c46a; }
+#bc22-units .pro { color: #8b8375; }
+#bc22-units .lbl { color: #8b8375; }
+
+/* The dismissible doctrine overlay (D3): a close control, an Escape binding,
+   a re-open chip and self-dismissal on the first playback advance. It sits
+   ABOVE the board and NEVER inside the transport band. It carries the
+   SUBMITTED-VS-APPLIED BADGE the envelope pin requires. */
+#bc22-doctrines {
+  position: absolute; left: 8px; right: 8px;
+  top: calc(var(--topband, 0px) + 34px);
+  max-height: min(46vh,
+    calc(100% - var(--topband, 0px) - var(--band, 0px) - 46px));
+  overflow: auto;
+  font: 500 11px/1.4 var(--mono); color: #d9cdb8;
+  background: rgba(10, 12, 18, .9); border: 1px solid #2a3342;
+  border-radius: 8px; padding: 8px 26px 8px 10px; z-index: 8;
+}
+#bc22-doctrines.dismissed { display: none !important; }
+#bc22-doctrines-close {
+  position: absolute; top: 3px; right: 6px;
+  background: none; border: 0; color: #b6a892; cursor: pointer;
+  font: 700 15px/1 var(--mono); padding: 2px 4px;
+}
+#bc22-doctrines-close:hover { color: #fff; }
+#bc22-doctrines .dline { margin-bottom: 6px; }
+#bc22-doctrines .dname { color: #f2e8d8; font-weight: 700; }
+#bc22-doctrines .dfall { color: #e0523a; }
+#bc22-doctrines .dbadge { color: #ffb347; font-weight: 700; }
+#bc22-doctrines .dsub { color: #8b8375; }
+
+/* The endcard war panel. Nothing about archons, resources, buildings or
+   anomalies is stored in the replay: the wasm sim re-derives every round. */
+#bc22-mutation {
+  margin-top: 8px; font: 500 11px/1.45 var(--mono);
+  color: #d9cdb8; max-height: 30vh; overflow: auto;
+}
+#bc22-mutation .clan b { color: #f0d070; }
+
+/* Beat markers, EVERY ONE scoped to html[data-year="bc22"] so none of them
+   can restyle another year's marker of the same name (`doctrine`, `game`,
+   `build`, `tower`, `rout`, `duel` and `end` already exist for other years).
+   FOURTEEN kinds, and `tests/test_bc22_beats.nim` asserts that the COMMITTED
+   FIXTURE REPLAY emits every one of them — emission, label and style, all
+   three. */
+html[data-year="bc22"] .beat-marker.doctrine { background: #9a8ad0; }
+html[data-year="bc22"] .beat-marker.game     { background: #b6a892; }
+html[data-year="bc22"] .beat-marker.build    { background: #7fb2e5; }
+html[data-year="bc22"] .beat-marker.lab      { background: #8fd48f; }
+html[data-year="bc22"] .beat-marker.sage     { background: #e8c46a; }
+html[data-year="bc22"] .beat-marker.tower    { background: #a08a5e; }
+html[data-year="bc22"] .beat-marker.mutate   { background: #b98ad0; }
+html[data-year="bc22"] .beat-marker.gold     { background: #f0d070; }
+html[data-year="bc22"] .beat-marker.anomaly  { background: #ffb347; width: 3px; }
+html[data-year="bc22"] .beat-marker.dodge    { background: #6ac4ff; }
+html[data-year="bc22"] .beat-marker.archon   { background: #e0523a; width: 3px; }
+html[data-year="bc22"] .beat-marker.rout     { background: #c0392b; width: 3px; }
+html[data-year="bc22"] .beat-marker.duel     { background: #e07a3a; }
+html[data-year="bc22"] .beat-marker.end      { background: #ffffff; }
+
+@media (max-width: 640px) {
+  /* 360 px is the featured-match iframe width and the width this page is
+     checked at. The boxes drop their word labels to glyphs — but
+     `#bc22-anomaly` KEEPS its type word and its countdown at every width,
+     because it is the readout that makes the year make sense. */
+  #bc22-archons { font-size: 10px; gap: 5px; }
+  #bc22-archons .lost { display: none; }
+  #bc22-anomaly { font-size: 9px; gap: 5px; }
+  #bc22-anomaly .tl { display: none; }
+  #bc22-econ, #bc22-units { font-size: 9px; }
+  #bc22-econ .who, #bc22-units .who { min-width: 2.6em; }
+  #bc22-econ .dry, #bc22-units .lbl { display: none; }
+  #bc22-doctrines { max-width: 96%; font-size: 10px; }
+}
+
 </style>
 </head>
 <body>
@@ -3448,6 +3659,9 @@ html[data-year="bc23"] .beat-marker.end         { background: #ffffff; }
                   title="Show doctrines">doctrines</button>
           <!-- BC23: re-opens #bc23-doctrines after it has been dismissed. -->
           <button type="button" id="bc23-doctrines-toggle" hidden
+                  title="Show the doctrines">doctrines</button>
+          <!-- BC22: re-opens #bc22-doctrines after it has been dismissed. -->
+          <button type="button" id="bc22-doctrines-toggle" hidden
                   title="Show the doctrines">doctrines</button>
         </div>
       </div>
@@ -3544,6 +3758,18 @@ html[data-year="bc23"] .beat-marker.end         { background: #ffffff; }
       <div id="bc23-doctrines-body"></div>
     </div>
 
+    <!-- BC22 additions to the inherited cogame-battlecode chrome -->
+    <div id="bc22-archons"></div>
+    <div id="bc22-anomaly"></div>
+    <div id="bc22-units"></div>
+    <div id="bc22-econ"></div>
+    <div id="bc22-doctrines" role="region" aria-label="Doctrines">
+      <button type="button" id="bc22-doctrines-close"
+              aria-label="Dismiss doctrines" title="Dismiss doctrines (Esc)"
+              >&times;</button>
+      <div id="bc22-doctrines-body"></div>
+    </div>
+
     <!-- BC24 additions to the inherited cogame-battlecode chrome -->
     <div id="bc24-flags"></div>
     <div id="bc24-levels"></div>
@@ -3608,6 +3834,10 @@ html[data-year="bc23"] .beat-marker.end         { background: #ffffff; }
            tempo is stored in the replay -- the wasm sim re-derives every
            round. -->
       <div id="bc23-tempest"></div>
+      <!-- BC22: the war panel. Nothing about archons, resources, buildings
+           or anomalies is stored in the replay -- the wasm sim re-derives
+           every round. -->
+      <div id="bc22-mutation"></div>
       <div class="ec-replay" id="ec-replay"></div>
     </div>
   </div>
@@ -5144,6 +5374,360 @@ html[data-year="bc23"] .beat-marker.end         { background: #ffffff; }
 })();
 </script>
 
+<!-- ======================================================================
+     BC22 additions to the inherited cogame-battlecode chrome
+     ----------------------------------------------------------------------
+     The game block for the `bc22` year. It registers itself on
+     `window.Bc22Block` BEFORE the inherited block runs, and the inherited
+     block calls into it: two lines there, everything else here. No function
+     name in this file collides with `chrome_common.js`, with the bc26 block
+     or with the bc20, bc21, bc23, bc24 and bc25 ones -- the beat builder is
+     `buildBc22BeatButtons`, never `markBeat` (the tandem 2026-08-23 hoisting
+     collision), never `buildBeatButtons` (bc26), and never
+     `buildBc20BeatButtons`, `buildBc21BeatButtons`, `buildBc23BeatButtons`,
+     `buildBc24BeatButtons` or `buildBc25BeatButtons`.
+     ====================================================================== -->
+<script>
+(function () {
+  'use strict';
+
+  var api = null;                    // {C, send, seek, dismissEndcard}
+  var beatsBuilt = false;
+  var beatEls = [];
+  var dismissed = false;
+  var pinned = false;                // the viewer opened it themselves
+  var lastFrame = -1;
+  var lastArchons = [-1, -1];
+  var feedShown = {};
+
+  function $(id) { return document.getElementById(id); }
+  function esc(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ---- the dismissible doctrine overlay (D3) ---------------------------
+  function setDoctrinesOpen(open) {
+    dismissed = !open;
+    var panel = $('bc22-doctrines');
+    var chip = $('bc22-doctrines-toggle');
+    if (panel) panel.classList.toggle('dismissed', dismissed);
+    if (chip) chip.hidden = !dismissed;
+  }
+
+  function wireDoctrines() {
+    var close = $('bc22-doctrines-close');
+    if (close) {
+      close.addEventListener('click', function (event) {
+        event.stopPropagation();
+        pinned = false;
+        setDoctrinesOpen(false);
+      });
+    }
+    var chip = $('bc22-doctrines-toggle');
+    if (chip) {
+      chip.addEventListener('click', function (event) {
+        event.stopPropagation();
+        // A panel the viewer opened by hand STAYS open -- that is their
+        // choice, not a lid the page left on the board.
+        pinned = true;
+        setDoctrinesOpen(true);
+      });
+    }
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape' && event.key !== 'Esc') return;
+      if (document.documentElement.getAttribute('data-year') !== 'bc22') return;
+      pinned = false;
+      setDoctrinesOpen(false);
+    });
+    // The viewer who never presses play still gets the board back.
+    setTimeout(function () {
+      if (!pinned) setDoctrinesOpen(false);
+    }, 6000);
+  }
+
+  // ---- beats ------------------------------------------------------------
+  function buildBc22BeatButtons(s) {
+    if (beatsBuilt || !s.beats || !s.beats.length) return;
+    beatsBuilt = true;
+    var scrub = $('scrub');
+    var span = Math.max(1, (s.mx || 1) - (s.st || 0));
+    s.beats.forEach(function (b) {
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'beat-marker ' + (b.k || 'game');
+      el.style.left =
+        (Math.min(1, Math.max(0, (b.t - (s.st || 0)) / span)) * 100) + '%';
+      el.setAttribute('aria-label', b.label || b.k);
+      el.title = b.label || b.k;
+      el.__tick = b.t;
+      el.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (api) api.seek(b.t / span);
+      });
+      if (scrub && scrub.parentNode) scrub.parentNode.appendChild(el);
+      beatEls.push(el);
+    });
+  }
+
+  function applyBc22BeatSpoilers(s) {
+    if (!beatEls.length) return;
+    var show = !!s.sp0 || s.ph === 'gameover';
+    beatEls.forEach(function (el) {
+      el.style.visibility = (show || el.__tick <= s.t) ? 'visible' : 'hidden';
+    });
+  }
+
+  // ---- the archon pill: the only readout that can end the game -----------
+  function archonPips(faction) {
+    var out = '';
+    (faction.pips || []).slice(0, 8).forEach(function (a) {
+      var frac = a.max > 0 ? a.health / a.max : 0;
+      var glyph = ['\u25cb', '\u25d4', '\u25d1', '\u25d5', '\u25cf'][
+        Math.max(0, Math.min(4, Math.round(frac * 4)))];
+      out += a.portable
+        ? '<span class="portable">[' + glyph + ']</span>'
+        : glyph;
+    });
+    return out || '\u00b7';
+  }
+
+  function renderArchons(s) {
+    var box = $('bc22-archons');
+    var data = s.bc22_archons;
+    if (!box || !data) return;
+    var a = data.factions[0];
+    var b = data.factions[1];
+    box.innerHTML =
+      '<span class="ash">ASH ' + a.alive + '</span>' +
+      '<span class="pips">' + archonPips(a) + '</span>' +
+      '<span class="lost">archons \u00b7 ' + a.lost + ' lost / ' +
+        b.lost + ' lost</span>' +
+      '<span class="pips">' + archonPips(b) + '</span>' +
+      '<span class="basil">' + b.alive + ' BASIL</span>';
+    // It flashes when either side loses one -- the only event that can end
+    // the game outright.
+    var flash = false;
+    [a, b].forEach(function (faction, i) {
+      if (lastArchons[i] >= 0 && faction.alive < lastArchons[i]) flash = true;
+      lastArchons[i] = faction.alive;
+    });
+    if (flash) {
+      box.classList.remove('flash');
+      void box.offsetWidth;
+      box.classList.add('flash');
+    }
+  }
+
+  // ---- the anomaly clock: the readout no other year has ------------------
+  function renderAnomaly(s) {
+    var box = $('bc22-anomaly');
+    var an = s.bc22_anomaly;
+    if (!box || !an) return;
+    var timeline = '';
+    (an.schedule || []).slice(0, 14).forEach(function (entry) {
+      var glyph = { abyss: 'A', charge: 'C', fury: 'F', vortex: 'V' }[
+        entry.type] || '?';
+      timeline += entry.past ? '<b>' + glyph + '</b>' : glyph;
+    });
+    var head = an.next
+      ? '<span class="next ' + esc(an.next) + '">' +
+        esc(an.next).toUpperCase() + ' in ' + an.in_rounds + '</span>'
+      : '<span class="next">no anomaly left</span>';
+    box.innerHTML = head +
+      '<span class="tl">' + timeline + '</span>' +
+      '<span class="sing">SINGULARITY round ' + an.singularity_round +
+        ' \u2014 ' + an.singularity_in + ' to go</span>';
+  }
+
+  // ---- the two stat boxes ------------------------------------------------
+  function renderEcon(s) {
+    var box = $('bc22-econ');
+    var econ = s.bc22_econ;
+    if (!box || !econ) return;
+    var html = '';
+    econ.factions.forEach(function (faction) {
+      var labs = (faction.labs || []).map(function (l) {
+        return l.mode === 'PROTOTYPE'
+          ? 'lab building'
+          : 'lab ' + l.rate + ' Pb/Au';
+      }).join(' \u00b7 ') || 'no laboratory';
+      html += '<div class="row"><span class="who">' + esc(faction.alias) +
+        '</span>' +
+        '<span class="pb">\u25c6' + faction.lead + '</span>' +
+        '<span class="au">\u2726' + faction.gold + '</span>' +
+        '<span class="lab">' + esc(labs) + '</span>' +
+        '<span class="dry">' + faction.squares_mined_dry +
+          ' dry</span></div>';
+    });
+    html += '<div class="row"><span class="who">map</span><span>' +
+      econ.lead_on_map + ' lead left on ' + econ.lead_squares +
+      ' squares</span></div>';
+    box.innerHTML = html;
+  }
+
+  function renderUnits(s) {
+    var box = $('bc22-units');
+    var rows = s.bc22_units;
+    if (!box || !rows) return;
+    var html = '';
+    rows.forEach(function (faction) {
+      html += '<div class="row"><span class="who">' + esc(faction.alias) +
+        '</span>' +
+        '<span class="sol">\u2694' + faction.soldiers + '</span>' +
+        '<span class="min">\u26cf' + faction.miners + '</span>' +
+        '<span>\u2692' + faction.builders + '</span>' +
+        '<span class="sag">\u2726' + faction.sages + '</span>' +
+        '<span>\u2697' + faction.laboratories + '</span>' +
+        '<span>\u26ed' + faction.watchtowers + '</span>' +
+        '<span class="pro">+' + faction.prototypes + ' building</span>' +
+        '<span class="lbl">lost ' + faction.lost + '</span></div>';
+    });
+    box.innerHTML = html;
+  }
+
+  // ---- the doctrines, in plain words, with the envelope badge ------------
+  function renderDoctrines(s) {
+    var body = $('bc22-doctrines-body');
+    if (!body || !s.doctrines) return;
+    var html = '';
+    s.doctrines.forEach(function (seat) {
+      // THE SUBMITTED-VS-APPLIED BADGE (the envelope pin, LEARNINGS
+      // 2026-09-08). A seat that played the schema-default sheet because its
+      // knobs arrived inside a protocol envelope is visible to a spectator in
+      // one glance, which is the whole point of the finding.
+      var badge = '';
+      var applied = seat.defaults_applied || [];
+      var total = seat.knob_count || 11;
+      if (seat.envelope || applied.length) {
+        var parts = [];
+        if (seat.envelope) parts.push('envelope: ' + esc(seat.envelope));
+        if (applied.length) {
+          parts.push(applied.length + ' of ' + total + ' knobs defaulted');
+        }
+        badge = ' <span class="dbadge">' + parts.join(' \u00b7 ') + '</span>';
+      }
+      var submitted = '';
+      if (seat.envelope && seat.submitted) {
+        submitted = '<br><span class="dsub">what the cog actually sent: ' +
+          esc(String(seat.submitted).slice(0, 120)) + '</span>';
+      }
+      html += '<div class="dline"><span class="dname">' + esc(seat.alias) +
+        '</span> \u2014 ' + esc(seat.name || '') +
+        (seat.fallback ? ' <span class="dfall">[fallback: ' +
+          esc(seat.fallback) + ']</span>' : '') + badge +
+        '<br>' + esc((seat.words || []).join(' \u00b7 ')) +
+        (seat.notes ? '<br><i>' + esc(seat.notes) + '</i>' : '') +
+        submitted +
+        '</div>';
+    });
+    body.innerHTML = html;
+  }
+
+  // ---- the killfeed ------------------------------------------------------
+  function renderFeed(s) {
+    var feed = $('killfeed');
+    if (!feed || !s.beats) return;
+    var show = !!s.sp0 || s.ph === 'gameover';
+    var lines = [];
+    s.beats.forEach(function (b) {
+      if (!show && b.t > s.t) return;
+      lines.push('<div class="kf ' + (b.k || 'game') + '">' +
+        esc(b.label || b.k) + '</div>');
+    });
+    var html = lines.slice(-8).join('');
+    if (feedShown.html !== html) {
+      feedShown.html = html;
+      feed.innerHTML = html;
+    }
+  }
+
+  // ---- the endcard war panel ---------------------------------------------
+  function renderEndcardExtras(s) {
+    var panel = $('bc22-mutation');
+    var war = s.bc22_war;
+    if (!panel || !war) return;
+    var F = (window.ChromeCommon && window.ChromeCommon.fmtStat) || null;
+    function stat(value, kind) {
+      // ENDCARD FIX 3: every number the card prints goes through ONE
+      // formatter, so a raw unrounded float can never reach a spectator.
+      return window.fmtStat ? window.fmtStat(value, kind) : String(value | 0);
+    }
+    var html = '';
+    war.forEach(function (faction) {
+      var d = faction.damage || {};
+      var anom = faction.anomaly_losses || {};
+      var perGold = faction.gold_transmuted > 0
+        ? (faction.lead_spent_transmuting / faction.gold_transmuted) : 0;
+      html += '<div class="clan"><b>' + esc(faction.alias) + '</b> \u2014 ' +
+        'archons ' + stat(faction.archons_start, 'int') + ' started / ' +
+        stat(faction.archons_lost, 'int') + ' lost / ' +
+        stat(faction.archons_end, 'int') + ' left, ' +
+        stat(faction.archon_relocations, 'int') + ' walked' +
+        '<br>lead ' + stat(faction.lead_mined, 'int') + ' mined \u00b7 ' +
+        stat(faction.lead_reclaimed, 'int') + ' reclaimed \u00b7 ' +
+        stat(faction.squares_mined_dry, 'int') + ' squares mined dry' +
+        '<br>gold ' + stat(faction.gold_transmuted, 'int') +
+        ' transmuted at ' + stat(perGold, 'rate') + ' lead apiece \u00b7 ' +
+        stat(faction.gold_mined, 'int') + ' picked up' +
+        '<br>laboratories ' + stat(faction.labs_built, 'int') + ' built / ' +
+        stat(faction.labs_finished, 'int') + ' finished \u00b7 watchtowers ' +
+        stat(faction.watchtowers_built, 'int') + ' / ' +
+        stat(faction.watchtowers_finished, 'int') +
+        '<br>mutations ' + stat(faction.mutations_l2, 'int') +
+        ' to level two, ' + stat(faction.mutations_l3, 'int') +
+        ' to level three \u00b7 ' + stat(faction.transforms, 'int') +
+        ' transforms' +
+        '<br>built \u26cf' + stat(faction.miners_built, 'int') + ' \u2692' +
+        stat(faction.builders_built, 'int') + ' \u2694' +
+        stat(faction.soldiers_built, 'int') + ' \u2726' +
+        stat(faction.sages_built, 'int') +
+        '<br>damage soldier ' + stat(d.soldier || 0, 'int') + ' / sage ' +
+        stat(d.sage || 0, 'int') + ' / watchtower ' +
+        stat(d.watchtower || 0, 'int') +
+        ' \u00b7 repairs ' + stat(faction.repairs, 'int') + ' for ' +
+        stat(faction.hp_repaired, 'int') + ' health' +
+        '<br>anomalies: ' + stat(anom.charge || 0, 'int') +
+        ' droids to the charge, ' + stat(anom.fury_hp || 0, 'int') +
+        ' turret health to the fury, ' + stat(anom.abyss_lead || 0, 'int') +
+        ' lead to the abyss \u00b7 ' +
+        stat(faction.anomalies_dodged, 'int') + ' dodged' +
+        '</div>';
+    });
+    panel.innerHTML = html;
+  }
+
+  window.Bc22Block = {
+    attach: function (host) {
+      api = host;
+      wireDoctrines();
+    },
+    // True while a bc22 replay is on screen; the inherited block asks before
+    // it draws its own year's readouts.
+    active: function (s) { return s && s.year === 'bc22'; },
+    onFrame: function (s) {
+      if (s.year !== 'bc22') return;
+      buildBc22BeatButtons(s);
+      // The board is where the story is -- so the first frame that advances
+      // the playhead closes the panel, unless the viewer opened it by hand.
+      if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {
+        setDoctrinesOpen(false);
+      }
+      lastFrame = s.t;
+      renderArchons(s);
+      renderAnomaly(s);
+      renderEcon(s);
+      renderUnits(s);
+      renderDoctrines(s);
+      renderFeed(s);
+      applyBc22BeatSpoilers(s);
+      renderEndcardExtras(s);
+    }
+  };
+})();
+</script>
+
 <script>
 (function () {
   'use strict';
@@ -5226,6 +5810,16 @@ html[data-year="bc23"] .beat-marker.end         { background: #ffffff; }
   // BC23 HOOK (1 of 2): the same two lines for the sixth year.
   if (window.Bc23Block) {
     window.Bc23Block.attach({
+      C: C,
+      send: send,
+      seek: function (frac) { seek(frac); },
+      dismissEndcard: function () { dismissEndcard(); }
+    });
+  }
+
+  // BC22 HOOK (1 of 2): the same two lines for the seventh year.
+  if (window.Bc22Block) {
+    window.Bc22Block.attach({
       C: C,
       send: send,
       seek: function (frac) { seek(frac); },
@@ -5455,6 +6049,83 @@ html[data-year="bc23"] .beat-marker.end         { background: #ffffff; }
   }
 
   // ---- endcard ----------------------------------------------------------
+  //
+  // THE FOUR SHARED-ENDCARD FIXES (bc25's and bc23's phase-60 verifications
+  // both found these and both handed them forward; they are one template, so
+  // they are fixed here for EVERY year in one commit).
+  //
+  // FIX 1 -- THIS YEAR'S NOUNS, NOT BC26'S. The card used to say "rat king",
+  // "cheese" and "cats" whatever the replay was. The noun table is keyed by
+  // `data-year` and `tests/test_viewer.nim` asserts the bc26 nouns are absent
+  // from every non-bc26 branch.
+  // FIX 2 -- NO CLIPPING OR OVERFLOW AT 1280x800: the card's body scrolls
+  // rather than running off the bottom, and `viewer_smoke.mjs
+  // --killfeed-overlap` asserts `#endcard`'s scrollHeight against its
+  // clientHeight after the 100 % seek.
+  // FIX 3 -- NO RAW UNROUNDED FLOATS: every number the card prints goes
+  // through `fmtStat`, and `tests/test_viewer.nim` greps the rendered card
+  // text for /\d\.\d{3,}/ and fails on a hit.
+  // FIX 4 -- NO EMPTY MOTTOS and no "a accelerating"-class grammar: a blank
+  // motto renders NOTHING (no empty quotes, no orphan dash), and every
+  // generated phrase is a complete clause built in the year's own
+  // `plainWords` rather than an article concatenated with an enum string.
+  window.fmtStat = function (value, kind) {
+    var n = Number(value);
+    if (!isFinite(n)) return '0';
+    if (kind === 'rate') return (Math.round(n * 10) / 10).toFixed(1);
+    if (kind === 'pct') return Math.round(n) + ' %';
+    if (kind === 'tenths') return (Math.round(n) / 10).toFixed(1);
+    return String(Math.round(n));
+  };
+
+  var ENDCARD_NOUNS = {
+    bc26: { unit: 'rat king', units: 'rat kings', res: 'cheese' },
+    bc20: { unit: 'HQ', units: 'HQs', res: 'soup' },
+    bc21: { unit: 'Enlightenment Center', units: 'Enlightenment Centers',
+            res: 'influence' },
+    bc22: { unit: 'archon', units: 'archons', res: 'lead' },
+    bc23: { unit: 'headquarters', units: 'headquarters', res: 'adamantium' },
+    bc24: { unit: 'duck', units: 'ducks', res: 'crumbs' },
+    bc25: { unit: 'tower', units: 'towers', res: 'chips' }
+  };
+
+  function endcardNouns(year) {
+    return ENDCARD_NOUNS[year] || ENDCARD_NOUNS.bc26;
+  }
+
+  // The win condition in PLAIN WORDS, per year, from the game's own
+  // `end_reason`. bc26's three reasons are one branch among seven, not the
+  // default every year falls into.
+  function endcardWinCondition(s, last, games) {
+    if (!last) return '';
+    var nouns = endcardNouns(s.year);
+    var alias = (s.aliases || [])[last.winner] || 'nobody';
+    var tail = ' in game ' + games + ', round ' + last.rounds_played;
+    switch (last.end_reason) {
+      case 'kings_destroyed':
+        return alias + ' destroyed every enemy ' + nouns.unit + tail;
+      case 'cats_cleared':
+        return 'every cat was cleared and the points decided it';
+      case 'annihilated':
+        return alias + ' destroyed the last enemy ' + nouns.unit + tail;
+      case 'more_archons':
+        return 'the Singularity came at round ' + last.rounds_played +
+          ' and ' + alias + ' had more archons left';
+      case 'more_gold_net_worth':
+        return 'archons were level, and ' + alias + ' won on gold net worth';
+      case 'more_lead_net_worth':
+        return 'archons and gold were level, and ' + alias +
+          ' won on lead net worth';
+      case 'coin_flip':
+        return 'everything was level and the world RNG decided it';
+      case 'abandoned':
+        return 'the wall clock ran out and the finished games were scored';
+      default:
+        return 'the game ended on ' +
+          String(last.end_reason || '').replace(/_/g, ' ') + tail;
+    }
+  }
+
   var endcardShown = false;
   function dismissEndcard() {
     if (!endcardShown) return;
@@ -5471,33 +6142,41 @@ html[data-year="bc23"] .beat-marker.end         { background: #ffffff; }
     $('ec-headline').textContent = winner < 0 ? 'DRAWN'
       : (s.aliases[winner] + ' — ' + s.names[winner]).toUpperCase();
     var last = (r.games || [])[(r.games || []).length - 1];
-    $('ec-wincond').textContent = last
-      ? (last.end_reason === 'kings_destroyed'
-          ? s.aliases[last.winner] + ' destroyed every enemy rat king in game ' +
-            (r.games.length) + ', round ' + last.rounds_played
-          : last.end_reason === 'cats_cleared'
-            ? 'every cat was cleared and the points decided it'
-            : 'the round limit ran out and the points decided it')
-      : '';
-    var betrayal = 'the alliance held';
-    (r.games || []).forEach(function (g, i) {
-      if (g.backstab_round >= 0) {
-        betrayal = s.aliases[g.backstab_by] + ' betrayed in game ' + (i + 1) +
-          ', round ' + g.backstab_round;
-      }
-    });
-    var e = s.econ || [{}, {}];
-    $('ec-how').innerHTML =
-      esc(betrayal) + '<br>' +
-      'score ' + scores[0] + ' — ' + scores[1] +
-      ' · kings built ' + (e[0].kings_built || 0) + '/' + (e[1].kings_built || 0) +
-      ' · cheese delivered ' + (e[0].cheese || 0) + '/' + (e[1].cheese || 0) +
-      ' · cats damaged ' + (e[0].cat_damage || 0) + '/' + (e[1].cat_damage || 0);
+    $('ec-wincond').textContent =
+      endcardWinCondition(s, last, (r.games || []).length);
+    var how = 'score ' + window.fmtStat(scores[0]) + ' \u2014 ' +
+      window.fmtStat(scores[1]);
+    if (s.year === 'bc26' || !s.year) {
+      var betrayal = 'the alliance held';
+      (r.games || []).forEach(function (g, i) {
+        if (g.backstab_round >= 0) {
+          betrayal = s.aliases[g.backstab_by] + ' betrayed in game ' + (i + 1) +
+            ', round ' + g.backstab_round;
+        }
+      });
+      var e = s.econ || [{}, {}];
+      how = esc(betrayal) + '<br>' + how +
+        ' \u00b7 kings built ' + window.fmtStat(e[0].kings_built || 0) + '/' +
+        window.fmtStat(e[1].kings_built || 0) +
+        ' \u00b7 cheese delivered ' + window.fmtStat(e[0].cheese || 0) + '/' +
+        window.fmtStat(e[1].cheese || 0) +
+        ' \u00b7 cats damaged ' + window.fmtStat(e[0].cat_damage || 0) + '/' +
+        window.fmtStat(e[1].cat_damage || 0);
+    } else if (last) {
+      how += ' \u00b7 ' + (r.games || []).length + ' game' +
+        ((r.games || []).length === 1 ? '' : 's') + ' played \u00b7 ' +
+        window.fmtStat(last.rounds_played) + ' rounds in the last one';
+    }
+    $('ec-how').innerHTML = how;
     var teams = '';
     for (var slot = 0; slot < 2; slot++) {
       var d = (s.doctrines || [])[slot] || {};
+      // FIX 4: a blank motto renders NOTHING — no empty quotes, no orphan
+      // dash. Every clause in `words` is already a complete phrase.
+      var motto = d.motto ? '<br><i>\u201c' + esc(d.motto) + '\u201d</i>' : '';
       teams += '<div class="ec-team"><b>' + esc(s.aliases[slot]) + '</b> ' +
-        esc(s.names[slot]) + '<br>' + esc((d.words || []).join(', ')) + '</div>';
+        esc(s.names[slot]) + '<br>' + esc((d.words || []).join(', ')) +
+        motto + '</div>';
     }
     $('ec-teams').innerHTML = teams;
     // `.on` is the class the INHERITED rule uses (#endcard.on { display: flex }
@@ -5528,7 +6207,7 @@ html[data-year="bc23"] .beat-marker.end         { background: #ffffff; }
       var railBottom = -Infinity;
       ['econ', 'bc20-soup', 'bc20-units', 'bc21-influence', 'bc21-units',
        'bc24-crumbs', 'bc24-levels', 'bc25-towers', 'bc25-econ',
-       'bc23-econ', 'bc23-units']
+       'bc23-econ', 'bc23-units', 'bc22-econ', 'bc22-units']
         .forEach(function (id) {
           var el = document.getElementById(id);
           if (!el || !el.offsetParent) return;
@@ -5659,6 +6338,7 @@ html[data-year="bc23"] .beat-marker.end         { background: #ffffff; }
     var isBc24 = !!(window.Bc24Block && window.Bc24Block.active(s));
     var isBc25 = !!(window.Bc25Block && window.Bc25Block.active(s));
     var isBc23 = !!(window.Bc23Block && window.Bc23Block.active(s));
+    var isBc22 = !!(window.Bc22Block && window.Bc22Block.active(s));
     if (window.Bc20Block) window.Bc20Block.onFrame(s);
     // BC21 HOOK (2 of 2).
     if (window.Bc21Block) window.Bc21Block.onFrame(s);
@@ -5668,7 +6348,8 @@ html[data-year="bc23"] .beat-marker.end         { background: #ffffff; }
     if (window.Bc25Block) window.Bc25Block.onFrame(s);
     // BC23 HOOK (2 of 2).
     if (window.Bc23Block) window.Bc23Block.onFrame(s);
-    if (!isBc20 && !isBc21 && !isBc23 && !isBc24 && !isBc25) {
+    if (window.Bc22Block) window.Bc22Block.onFrame(s);
+    if (!isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 && !isBc25) {
       buildBeatButtons(s);
       renderCoop(s);
       renderEcon(s);
@@ -5679,7 +6360,9 @@ html[data-year="bc23"] .beat-marker.end         { background: #ffffff; }
     renderGameChips(s);
     C.renderClock(s);
     C.renderTransport(s);
-    if (!isBc20 && !isBc21 && !isBc23 && !isBc24 && !isBc25) applyBeatSpoilers(s);
+    if (!isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 && !isBc25) {
+      applyBeatSpoilers(s);
+    }
     $('clock-caption').textContent = s.ph === 'gameover'
       ? 'Match over'
       : 'game ' + s.game + ' of ' + s.games + ' — ' + s.map;

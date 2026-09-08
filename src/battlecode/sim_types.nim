@@ -13,12 +13,44 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV09"
+  GameVersion* = "GV10"
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV10 — the `bc22` year module: Battlecode 2022 "Mutation" ported
+    ##        from battlecode22 at commit 6ed05b67 (oracle jar 2.2.1, whose
+    ##        own `SPEC_VERSION` really is "2.2.1", so the string is a second
+    ##        pin beside the sha256): the four-step round loop over a DYNAMIC
+    ##        append-ordered exec list whose INITIAL archons are id-ascending
+    ##        (the map files carry ids below the 10 000 IDGenerator floor, so
+    ##        A and B alternate in the opening order), BOTH COOLDOWNS STARTING
+    ##        A ROBOT'S LIFE AT ZERO, the seven robot types with their exact
+    ##        actions, the FLOAT64 TRUNCATING rubble cooldown multiplier read
+    ##        at the square the charge is made on (the DESTINATION for a move),
+    ##        the PROTOTYPE/TURRET/PORTABLE modes with the transform's SINGLE
+    ##        cooldown counter and the mutation's double one, the lead economy
+    ##        with its +2 passive BEFORE the anomaly and its +5-only-on-a-
+    ##        non-empty-square regeneration AFTER it, the laboratory's tabled
+    ##        `20 - 18*exp(-k*n)` transmutation curve, the four anomalies with
+    ##        their measured float32 truncations (CHARGE kills nobody under
+    ##        twenty droids and ranks BOTH teams together in trove hash order,
+    ##        ABYSS spares a square holding nine or fewer, FURY spares
+    ##        PORTABLE and PROTOTYPE and skips the archon rung, VORTEX draws
+    ##        from a live `Random(mapSeed)`), and the round-2000 Singularity
+    ##        ladder, behind `game_config.year`. bc26, bc20, bc21, bc23, bc24
+    ##        AND bc25 SEMANTICS ARE UNCHANGED: nothing a GV04..GV09 recording
+    ##        carries changed meaning. The one year-neutral behaviour change
+    ##        this version makes — the TOLERANT DOCTRINE-SHEET ENVELOPE UNWRAP
+    ##        in `sheet.nim`, which now also accepts a `doctrine` key and a
+    ##        single object-valued key — CANNOT REACH A RECORDING, because
+    ##        `replay.nim` re-validates the recorded APPLIED sheet wrapped in
+    ##        `{"sheet": ...}` and an applied sheet is always a flat object of
+    ##        known keys. That is why `ReplayCompatibleGameVersions` is
+    ##        EXTENDED rather than reset and every hosted bc26, bc20, bc21,
+    ##        bc23, bc24 and bc25 replay keeps rendering.
     ##
     ## GV09 — the `bc23` year module: Battlecode 2023 "Tempest" ported from
     ##        battlecode23 at commit af42086e (oracle jar 3.0.15, pinned by
@@ -156,7 +188,7 @@ const
     ##        formation, squeaks, cats, backstab, float32-narrowed scoring.
 
   ReplayCompatibleGameVersions* = ["GV04", "GV05", "GV06", "GV07", "GV08",
-                                   GameVersion]
+                                   "GV09", GameVersion]
     ## Versions whose recordings this build can still re-derive. A replay
     ## carrying anything else is refused with a readable message rather than
     ## silently re-simulated under different rules.
@@ -202,6 +234,8 @@ type
     scExamplefuncsplayer25 = "examplefuncsplayer25"
     scLemonade = "lemonade"
     scExamplefuncsplayer23 = "examplefuncsplayer23"
+    scWololo = "wololo"
+    scExamplefuncsplayer22 = "examplefuncsplayer22"
 
   ConfigError* = object of CatchableError
     ## An unusable `game_config`. The container exits 2 on this, per ctf.

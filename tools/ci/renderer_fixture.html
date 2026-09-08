@@ -67,7 +67,7 @@
   // unit and doctrine panels, or bc24's flag, crumb, level and doctrine
   // panels.
   var SIZES = [[360, 640], [720, 900], [1280, 720]];
-  var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23'];
+  var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22'];
 
   function runes(text) { return Array.from(text); }
   function repeatRunes(text, count) {
@@ -405,6 +405,73 @@
       '<br>' + BC23_WORDS[m23] + '<br><i>' + notes + '</i></div>';
   }
 
+  // --- the bc22 row: the same full-cap strings through bc22's own words ---
+  // The markup below is renderArchons / renderAnomaly / renderEcon /
+  // renderUnits / renderDoctrines in client/replay_broadcast.html reproduced
+  // element for element and class for class, so the fixture measures the real
+  // rules and not a lookalike.
+  var BC22_WORDS = [
+    'banks lead for a laboratory and spams sages, grows miners steadily ' +
+      'with the lead it can see, leaves one lead on every square so it ' +
+      'regenerates for ever, turns almost all of its attack budget into ' +
+      'gold for sages, commissions its first laboratory at round 120, ' +
+      'transmutes only when the laboratory is nearly alone, spends gold on ' +
+      'level-three mutations, builds watchtowers at the frontier',
+    'rushes soldiers from round one, saturates the map with miners, leaves ' +
+      'one lead on every square so it regenerates for ever, spends its ' +
+      'whole attack budget on soldiers, commissions its first laboratory at ' +
+      'round 300, stops transmuting once 12 friendly robots crowd the ' +
+      'laboratory, spends gold on sages, puts one watchtower beside each ' +
+      'archon, ignores the anomaly schedule entirely'
+  ];
+  // The stat-box numbers are MEASURED, not invented: the widest value each
+  // field reached in a `wololo` mirror over the sixteen maps of the `mixed`
+  // (the bc22 variant's own pool) and `small` pools, 2000 rounds, both seat
+  // assignments — lead 21708, gold 4817, lead still on the map 25351, squares
+  // mined dry 388, soldiers 105, miners 113, robots lost 471. A readout sized
+  // for four digits and fed five is a readout that reads short.
+  var bc22Archons = '<span class="ash">ASH 4</span>' +
+    '<span class="pips">\u25cf\u25d5<span class="portable">[\u25d1]</span>\u25d4</span>' +
+    '<span class="lost">archons \u00b7 3 lost / 2 lost</span>' +
+    '<span class="pips">\u25cf\u25cf\u25d5\u25d1</span>' +
+    '<span class="basil">4 BASIL</span>';
+  var bc22Anomaly = '<span class="next fury">FURY in 37</span>' +
+    '<span class="tl"><b>A</b><b>C</b><b>F</b><b>V</b>ACFVACFVA</span>' +
+    '<span class="sing">SINGULARITY round 2000 \u2014 588 to go</span>';
+  var bc22Econ = '';
+  for (var e22 = 0; e22 < 2; e22++) {
+    bc22Econ += '<div class="row"><span class="who">' + ALIASES[e22] +
+      '</span><span class="pb">\u25c621708</span>' +
+      '<span class="au">\u27264817</span>' +
+      '<span class="lab">lab 2 Pb/Au \u00b7 lab 11 Pb/Au</span>' +
+      '<span class="dry">388 dry</span></div>';
+  }
+  bc22Econ += '<div class="row"><span class="who">map</span>' +
+    '<span>25351 lead left on 140 squares</span></div>';
+  var bc22Units = '';
+  for (var u22 = 0; u22 < 2; u22++) {
+    bc22Units += '<div class="row"><span class="who">' + ALIASES[u22] +
+      '</span><span class="sol">\u2694105</span>' +
+      '<span class="min">\u26cf113</span><span>\u269212</span>' +
+      '<span class="sag">\u272637</span><span>\u26974</span>' +
+      '<span>\u26ed13</span>' +
+      '<span class="pro">+6 building</span>' +
+      '<span class="lbl">lost 471</span></div>';
+  }
+  // BOTH SEATS AT THE FULL 280-RUNE CAP AT ONCE, plus the fallback badge and
+  // the SUBMITTED-VS-APPLIED badge: the widest line the panel can ever hold.
+  var bc22Doctrines = '';
+  for (var m22 = 0; m22 < 2; m22++) {
+    bc22Doctrines += '<div class="dline"><span class="dname">' +
+      ALIASES[m22] + '</span> \u2014 ' + NAMES[m22] +
+      (m22 === 1 ? ' <span class="dfall">[fallback: timeout]</span>' : '') +
+      ' <span class="dbadge">envelope: doctrine \u00b7 11 of 11 knobs ' +
+      'defaulted</span>' +
+      '<br>' + BC22_WORDS[m22] + '<br><i>' + notes + '</i>' +
+      '<br><span class="dsub">what the cog actually sent: ' +
+      notes.slice(0, 120) + '</span></div>';
+  }
+
   document.body.innerHTML =
     '<div id="viewport"><div id="stage"><div id="chrome">' +
       '<div id="scorebug">' +
@@ -417,6 +484,7 @@
           '<button type="button" id="bc24-doctrines-toggle" hidden>doctrines</button>' +
           '<button type="button" id="bc25-doctrines-toggle" hidden>doctrines</button>' +
           '<button type="button" id="bc23-doctrines-toggle" hidden>doctrines</button>' +
+          '<button type="button" id="bc22-doctrines-toggle" hidden>doctrines</button>' +
         '</div></div>' +
         '<div class="plates" id="plates-r">' + plate(1, 'basil') + '</div>' +
       '</div>' +
@@ -477,6 +545,14 @@
         '<button type="button" id="bc23-doctrines-close" ' +
         'aria-label="Dismiss doctrines">&times;</button>' +
         '<div id="bc23-doctrines-body">' + bc23Doctrines + '</div></div>' +
+      '<div id="bc22-archons">' + bc22Archons + '</div>' +
+      '<div id="bc22-anomaly">' + bc22Anomaly + '</div>' +
+      '<div id="bc22-units">' + bc22Units + '</div>' +
+      '<div id="bc22-econ">' + bc22Econ + '</div>' +
+      '<div id="bc22-doctrines" role="region" aria-label="Doctrines">' +
+        '<button type="button" id="bc22-doctrines-close" ' +
+        'aria-label="Dismiss doctrines">&times;</button>' +
+        '<div id="bc22-doctrines-body">' + bc22Doctrines + '</div></div>' +
     '</div></div></div>';
 
   // The verdict: nothing may leave the frame, and nothing may hide text
@@ -538,7 +614,11 @@
         '#bc25-econ *, #bc25-doctrines, #bc25-doctrines *',
       bc23: '#scorebug .plate, #scorebug .plate *, #bc23-islands, ' +
         '#bc23-islands *, #bc23-econ, #bc23-econ *, #bc23-units, ' +
-        '#bc23-units *, #bc23-doctrines, #bc23-doctrines *'
+        '#bc23-units *, #bc23-doctrines, #bc23-doctrines *',
+      bc22: '#scorebug .plate, #scorebug .plate *, #bc22-archons, ' +
+        '#bc22-archons *, #bc22-anomaly, #bc22-anomaly *, #bc22-econ, ' +
+        '#bc22-econ *, #bc22-units, #bc22-units *, #bc22-doctrines, ' +
+        '#bc22-doctrines *'
     };
     var filled = document.querySelectorAll(FILLED[year]);
     for (var j = 0; j < filled.length; j++) {

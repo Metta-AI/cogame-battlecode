@@ -9,7 +9,7 @@
   "episode_timeout_minutes": 20,
   "game": {
     "name": "battlecode",
-    "description": "Battlecode, played by doctrine. Two cogs each write one sealed JSON strategy sheet and a deterministic Nim port of an official Battlecode rule set plays the whole match from those two sheets. Variant `bc26` is 2026 \"Uneasy Alliances\" — rat clans allied against NPC cats until one of them betrays. Variant `bc20` is 2020 \"Soup\" — the water rises every round, and a team either terraforms its way above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt. Variant `bc21` is 2021 \"Campaign\" — Enlightenment Centers bid influence for votes and spend it on politicians, slanderers and muckrakers, and the election is decided at round 1500. Variant `bc24` is 2024 \"Breadwars\" — 50 identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off. Variant `bc25` is 2025 “Chromatic Conflict” — paint robots colour a grid, build money, paint and defense towers by painting exact patterns onto ruins, and win by owning 70 % of the map. Variant `bc23` is 2023 “Tempest” — carriers mine adamantium and mana from sky wells, launchers fight the only real war, and a faction wins by ferrying reality anchors onto 75 % of the sky islands.",
+    "description": "Battlecode, played by doctrine. Two cogs each write one sealed JSON strategy sheet and a deterministic Nim port of an official Battlecode rule set plays the whole match from those two sheets. Variant `bc26` is 2026 \"Uneasy Alliances\" — rat clans allied against NPC cats until one of them betrays. Variant `bc20` is 2020 \"Soup\" — the water rises every round, and a team either terraforms its way above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt. Variant `bc21` is 2021 \"Campaign\" — Enlightenment Centers bid influence for votes and spend it on politicians, slanderers and muckrakers, and the election is decided at round 1500. Variant `bc24` is 2024 \"Breadwars\" — 50 identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off. Variant `bc25` is 2025 “Chromatic Conflict” — paint robots colour a grid, build money, paint and defense towers by painting exact patterns onto ruins, and win by owning 70 % of the map. Variant `bc23` is 2023 “Tempest” — carriers mine adamantium and mana from sky wells, launchers fight the only real war, and a faction wins by ferrying reality anchors onto 75 % of the sky islands. Variant `bc22` is 2022 “Mutation” — miners dig lead out of a map that only regenerates the squares you do not empty, laboratories turn lead into gold at a price that rises with company, and anomalies strike every two hundred rounds until the Singularity takes the weaker side at round 2000.",
     "owner": "daveey@gmail.com",
     "replay_viewer": {
       "bundle": "static-replay-viewer"
@@ -79,6 +79,14 @@
           }
         },
         {
+          "id": "rules-bc22.md",
+          "title": "Battlecode 2022 “Mutation”: rules, knobs and divergences",
+          "content": {
+            "type": "uri",
+            "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/RULES-BC22.md"
+          }
+        },
+        {
           "id": "replay.md",
           "title": "Replay format",
           "content": {
@@ -122,7 +130,8 @@
             "bc21",
             "bc24",
             "bc25",
-            "bc23"
+            "bc23",
+            "bc22"
           ]
         },
         "pool": {
@@ -220,6 +229,7 @@
         "year",
         "policy_kind",
         "sheet_defaults_applied",
+        "sheet_envelope",
         "fallbacks",
         "decision_ms",
         "sim_seconds",
@@ -337,7 +347,10 @@
                   "more_reality_anchors",
                   "more_elixir_net_worth",
                   "more_mana_net_worth",
-                  "more_adamantium_net_worth"
+                  "more_adamantium_net_worth",
+                  "more_archons",
+                  "more_gold_net_worth",
+                  "more_lead_net_worth"
                 ]
               },
               "cooperation_at_end": {
@@ -1679,6 +1692,318 @@
               "wells_total": {
                 "type": "integer",
                 "description": "bc23: wells on the map"
+              },
+              "archons_start": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "archons_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "archons_lost": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "archon_relocations": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "lead_mined": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "gold_mined": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "lead_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "gold_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "lead_net_worth_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "gold_net_worth_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "lead_reclaimed": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "gold_reclaimed": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "squares_mined_dry": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "builders_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "sages_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "labs_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "labs_finished": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "watchtowers_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "watchtowers_finished": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "mutations_l2": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "mutations_l3": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "transmutes": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "gold_transmuted": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "lead_spent_transmuting": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "repairs": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "hp_repaired": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "envisions": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "sage_damage": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "soldier_damage": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "watchtower_damage": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "transforms": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "rounds_with_a_lab": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "anomaly_losses_charge": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "anomaly_losses_fury_hp": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "anomaly_losses_abyss_lead": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "anomalies_dodged": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "archons_per_side": {
+                "type": "integer"
+              },
+              "lead_on_map_start": {
+                "type": "integer"
+              },
+              "lead_on_map_end": {
+                "type": "integer"
+              },
+              "lead_squares_start": {
+                "type": "integer"
+              },
+              "rubble_mean": {
+                "type": "integer"
+              },
+              "anomalies_scheduled": {
+                "type": "integer"
+              },
+              "vortexes_scheduled": {
+                "type": "integer"
+              },
+              "singularity_round": {
+                "type": "integer"
               }
             }
           }
@@ -1742,6 +2067,14 @@
         },
         "game_version": {
           "type": "string"
+        },
+        "sheet_envelope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "maxItems": 2
         }
       }
     },
@@ -1770,7 +2103,7 @@
       "id": "awu",
       "name": "awu",
       "type": "player",
-      "description": "the strong published baseline of whichever year the variant selects — distilled-awubot on bc26, Bowl of Chowder on bc20, California Roll on bc21, Gone Sharkin' on bc24, SPAARK on bc25, lemonade on bc23",
+      "description": "the strong published baseline of whichever year the variant selects — distilled-awubot on bc26, Bowl of Chowder on bc20, California Roll on bc21, Gone Sharkin' on bc24, SPAARK on bc25, lemonade on bc23, wololo on bc22",
       "image": "{{PLAYER_IMAGE}}",
       "run": [
         "/bin/battlecode-player"
@@ -1793,7 +2126,7 @@
       "id": "scaffold",
       "name": "scaffold",
       "type": "player",
-      "description": "the weak scaffold baseline of whichever year the variant selects — the ported example bot (examplefuncsplayer on bc20, examplefuncsplayer21 on bc21), examplefuncsplayer24 on bc24, examplefuncsplayer25 on bc25, examplefuncsplayer23 on bc23",
+      "description": "the weak scaffold baseline of whichever year the variant selects — the ported example bot (examplefuncsplayer on bc20, examplefuncsplayer21 on bc21), examplefuncsplayer24 on bc24, examplefuncsplayer25 on bc25, examplefuncsplayer23 on bc23, examplefuncsplayer22 on bc22",
       "image": "{{PLAYER_IMAGE}}",
       "run": [
         "/bin/battlecode-player"
@@ -1955,6 +2288,33 @@
       "description": "Best of three on the mixed pool. Carriers mine adamantium and mana from wells and haul it home at half speed when they are full; launchers are the only unit that deals real damage, and they can shoot through the clouds that blind everyone. Pour 600 kg of the wrong resource into a well and it becomes elixir, which buys temporal boosters, destabilizers and the better kind of reality anchor. Win by anchoring 75 % of the sky islands — and an anchor only holds while your robots stand on the island.",
       "game_config": {
         "year": "bc23",
+        "pool": "mixed",
+        "gamesPerMatch": 3,
+        "seed": 0,
+        "maxRounds": 2000,
+        "num_agents": 2,
+        "attempt1Ms": 20000,
+        "retryMs": 12000,
+        "doctrineBudgetMs": 45000,
+        "perGameBudgetSeconds": 110,
+        "matchBudgetSeconds": 340,
+        "connectTimeoutMs": 25000,
+        "players": [
+          {
+            "name": "Clan Ash"
+          },
+          {
+            "name": "Clan Basil"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc22",
+      "name": "Battlecode 2022 — Mutation (2 seats)",
+      "description": "Best of three on the mixed pool. Miners dig lead out of the map, and the map only puts lead back on squares you did not empty — so the cheapest mistake in this year is mining the last unit off a deposit. Soldiers cost lead and deal three damage; sages cost gold, deal forty-five, and gold exists only because a laboratory makes it, more cheaply the lonelier it is. Anomalies strike every two hundred rounds — the abyss eats your bank, the charge kills whoever clumped hardest, the fury burns buildings that are standing still, and the vortex reshuffles the ground — and at round 2000 the Singularity takes the weaker side. Lose your last archon and you lose immediately.",
+      "game_config": {
+        "year": "bc22",
         "pool": "mixed",
         "gamesPerMatch": 3,
         "seed": 0,

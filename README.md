@@ -13,6 +13,7 @@ year**, chosen by `game_config.year`:
 | `bc24` | 2024 "Breadwars" | fifty identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off |
 | `bc25` | 2025 "Chromatic Conflict" | a paint war: the score IS the colour of the map, towers are painted into existence on ruins, and a resource pattern pays every mining tower you own if it survives fifty rounds |
 | `bc23` | 2023 "Tempest" | carriers mine adamantium and mana from sky wells and haul it home at a quarter speed when full; launchers are the only unit that deals real damage and they shoot through the clouds that blind everyone; pour 600 kg of the wrong resource into a well and it becomes elixir; win by ferrying reality anchors onto 75 % of the sky islands |
+| `bc22` | 2022 "Mutation" | archons build, repair and can get up and walk; every cooldown is scaled by the rubble under your feet; a laboratory is the only thing in the game that makes gold, and its price is how lonely it is; and every map ships a **public schedule** of four world-wide anomalies that eat metal, cull whoever clumped hardest, hollow out turrets and shuffle the rubble map |
 
 ---
 
@@ -212,6 +213,7 @@ bit-exact, with an empty divergence ledger.**
 | `src/battlecode/years/bc24/` | the 2024 rule set: `world.nim`, `skills.nim`, `traps.nim`, `flags.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/bc25/` | the 2025 rule set: `world.nim`, `units.nim`, `paint.nim`, `patterns.nim`, `towers.nim`, `comms.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/bc23/` | the 2023 rule set: `world.nim`, `units.nim`, `tempo.nim`, `wells.nim`, `islands.nim`, `currents.nim`, `comms.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
+| `src/battlecode/years/bc22/` | the 2022 rule set: `world.nim`, `units.nim`, `trove.nim` (the engine's own hash-table iteration order, because a rule reads it), `buildings.nim`, `economy.nim`, `anomaly.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/{registry,dispatch}.nim` | the year boundary: the ONE place the year-neutral machinery meets a year module |
 | `src/battlecode/rng.nim` | `java.util.Random` and `IDGenerator`, bit-exact |
 | `src/battlecode/{sheet,decide,llm,baselines}.nim` | the doctrine schema, the one sealed parallel batch, the provider ladder, the scripted table |
@@ -231,6 +233,12 @@ bit-exact, with an empty divergence ledger.**
   knobs, and its own §Divergences list.
 * [`docs/RULES-BC24.md`](docs/RULES-BC24.md) — the 2024 rule set, its ten
   knobs, THE TWO ROUNDING REGIMES, and its own §Divergences list.
+* [`docs/RULES-BC23.md`](docs/RULES-BC23.md) — the 2023 rule set, its twelve
+  knobs, and its own §Divergences list.
+* [`docs/RULES-BC22.md`](docs/RULES-BC22.md) — the 2022 rule set, its eleven
+  knobs, the DecisionOps budget that replaces bytecode metering, and its own
+  §Divergences list — including why the engine's trove iteration order is
+  ported rather than replaced.
 * [`docs/PARITY.md`](docs/PARITY.md) — the Java oracles, tier by tier, and
   every accepted divergence with its root cause.
 * [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — `cogame.battlecode.v1`: what a seat

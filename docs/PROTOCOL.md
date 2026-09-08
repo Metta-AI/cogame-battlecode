@@ -475,3 +475,64 @@ the four INTEGER knobs (`launcher_ratio`, `anchor_round`, `anchor_budget`,
 still means something. A sheet can never be rejected. **There is no `chassis`
 key**: a submitted one is recorded in `sheet_unknown_fields` and never
 honoured.
+
+## bc22
+
+`game_config.year = "bc22"` selects Battlecode 2022 "Mutation". The protocol
+id is **unchanged** (`cogame.battlecode.v1`): the wire shape is identical and
+only the year-dependent *payload* differs, so every existing bc26, bc20, bc21,
+bc23, bc24 and bc25 consumer keeps working without re-registering. The
+`game_version` in the envelope is **`GV10`**; `GV09` and every earlier value
+stay in `ReplayCompatibleGameVersions`, so an older replay still loads.
+
+### The bc22 observation
+
+One sealed one-shot brief per seat, recorded verbatim in the replay. There is
+**no per-round observation of any kind**: one doctrine, then the war.
+
+On top of the year-neutral envelope (`protocol`, `game_version`, `year`,
+`slot`, `alias`, `opponent_alias`, `team`, `seed`, `games`, `budget`) a bc22
+brief carries:
+
+| key | what it says |
+|---|---|
+| `games[].you_are` / `your_archons` / `enemy_archons` | which side this seat plays and both factions' archon spawns. They are PUBLIC: every map is symmetric and the engine's own map file puts them there |
+| `games[].start_separation` | the shortest Euclidean distance between an A archon and a B one — how far a soldier rush has to run |
+| `games[].terrain` | `rubble_mean`, `rubble_median`, `rubble_max` and `squares_over_50_rubble_pct`, because rubble is this year's whole tempo term |
+| `games[].lead` | the lead squares, their total, the richest square, the nearest one to this seat and how many sit inside an archon's vision at round 1 |
+| `games[].gold` | zero squares and zero total on every official map, with the note that a laboratory or a death drop is the only source |
+| `games[].anomaly_schedule` | **the full schedule, round by round and kind by kind.** It is public to every robot at all times in the real game, so it is public here |
+| `games[].singularity_round` | 2000 on every official map (`GameMapIO` hard-codes it; the field is not even in the map file) |
+| `rubble` | `floor((1 + rubble/10) * base)` and the note that rubble 60 is seven times the cost of bare ground |
+| `economy` | 200 lead per faction at round 1, +2 per archon per round, the **+5 every 20 rounds to every square that still holds at least 1**, the miner's five-mines-a-turn rate, the laboratory's `floor(20 - 18*exp(-k*n))` price and the 20 % reclaim drop |
+| `units` | all seven types with their exact costs, cooldowns, radii, per-level health, damage, healing and mutation prices |
+| `buildings` | the PROTOTYPE rule (80 % health, can neither act nor move; ten repairs to finish a laboratory, fifteen a watchtower), the TURRET/PORTABLE transform and its 100 cooldown, and the level-2/level-3 mutation ladder |
+| `anomalies` | all four global bodies with their **exact truncated arithmetic** — ABYSS's rounded-down 10 %, CHARGE's top 5 % of *all* droids by friends-visible over *both* teams (and its zero at 19 droids or fewer), FURY's TURRET-only 5 %, VORTEX's rubble permutation — plus the three sage versions and the fact that VORTEX is not one of them |
+| `comms` | 64 slots, 0…65535, and the note that a write is legal for **any robot, any time, no cooldown, no range test and no cost** (which is *not* true in 2023) |
+| `win` | destroy the last enemy archon, then the four-rung Singularity ladder, and the note that there is **no elimination** for losing droids |
+| `sheet_schema` | the eleven knobs, their values, ranges and defaults, generated from `knobs.nim` |
+| `scoring` | the 64/24/12 weights, the 200-per-game win bonus, and the note that the league ranks by `scores` |
+
+**Hidden**, always: the opponent's doctrine, sheet, notes and motto (sealed and
+simultaneous — never sent, in either direction, at any time); the opponent's
+real player name; every in-match state; the other seat's fallback status.
+
+### The bc22 reply
+
+The same envelope every year uses — `{"sheet": {...}, "notes": "...",
+"motto": "..."}` — with the eleven knobs of `docs/RULES-BC22.md`. Unknown key,
+wrong type or out-of-range value takes that field's default and is recorded;
+the five INTEGER knobs (`soldier_sage_ratio`, `lab_round`, `lab_solitude`,
+`mine_floor`, `retreat_hp`) **clamp** to their range instead, so "as much as
+possible" still means something. A sheet can never be rejected. **There is no
+`chassis` key**: a submitted one is recorded in `sheet_unknown_fields` and
+never honoured.
+
+### `sheet_envelope`
+
+Every year's `results.games[]`/replay now carries a `sheet_envelope` object —
+the year-neutral resolver in `src/battlecode/sheet.nim` — recording, per seat,
+how the reply was obtained (`llm`, `fallback`, `scripted`), how many fields
+were defaulted, how many clamped and how many were unknown. It is in the bc22
+manifest's `required` list and in `tools/ci/docker_smoke.sh`'s `CLOSED_KEYS`,
+so a year that stops emitting it fails the smoke.

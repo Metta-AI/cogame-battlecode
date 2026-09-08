@@ -807,6 +807,57 @@ async function main() {
     }
   }
 
+  // ------------------------------------------------------------------
+  // ENDCARD OVERFLOW (shared endcard fix 2). bc25's phase-60 verification
+  // found the winner's stat block cut off the bottom of the score screen at
+  // 1280x800 once a year's war panel and two full-cap doctrine blocks were on
+  // it, and handed the finding forward. This makes it a GATE: after the 100 %
+  // seek, at 1280x800, `#endcard` must not have more content than it can show
+  // -- either it fits, or its own scroll container is what is scrolling.
+  // ------------------------------------------------------------------
+  let endcardOverflow = null;
+  let endcardFailure = "";
+  if (loaded && args.killfeedOverlap) {
+    try {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await sleep(400);
+      const target = await scrubTarget(page);
+      if (target) {
+        const box = target.box;
+        await page.mouse.click(box.x + box.width - 2,
+                               box.y + box.height / 2);
+        await sleep(1200);
+      }
+      endcardOverflow = await page.evaluate(`(() => {
+        const el = document.getElementById('endcard');
+        if (!el) return { present: false };
+        const style = getComputedStyle(el);
+        return {
+          present: true,
+          shown: style.display !== 'none',
+          scrollHeight: el.scrollHeight,
+          clientHeight: el.clientHeight,
+          overflowY: style.overflowY,
+        };
+      })()`);
+      if (endcardOverflow && endcardOverflow.present && endcardOverflow.shown) {
+        const scrollable = endcardOverflow.overflowY === "auto" ||
+          endcardOverflow.overflowY === "scroll";
+        const fits =
+          endcardOverflow.scrollHeight <= endcardOverflow.clientHeight + 2;
+        if (!fits && !scrollable) {
+          endcardFailure =
+            `#endcard overflows at 1280x800 (scrollHeight ` +
+            `${endcardOverflow.scrollHeight} > clientHeight ` +
+            `${endcardOverflow.clientHeight}) and does not scroll ` +
+            `(overflow-y: ${endcardOverflow.overflowY})`;
+        }
+      }
+    } catch (error) {
+      record(`[endcard-overflow] ${error && error.message}`);
+    }
+  }
+
   let boundsFailure = "";
   if (args.strictTextBounds && canvasText && canvasText.never_inside > 0) {
     boundsFailure = `${canvasText.never_inside} string(s) were NEVER drawn inside the ` +
@@ -844,7 +895,9 @@ async function main() {
     soak,
     canvas_text: canvasText,
     killfeed_overlap: overlap,
-    failure: failure || boundsFailure || overlapFailure || null,
+    endcard_overflow: endcardOverflow,
+    failure: failure || boundsFailure || overlapFailure || endcardFailure ||
+      null,
     console_tail: consoleLog.slice(-30),
     screenshot: pngPath,
   };
@@ -853,8 +906,10 @@ async function main() {
   await browser.close().catch(() => {});
   if (hosted) await new Promise((r) => hosted.server.close(r));
 
-  if (!loaded || playFailure || boundsFailure || overlapFailure) {
-    console.error(`VIEWER SMOKE FAILED: ${failure || boundsFailure || overlapFailure}`);
+  if (!loaded || playFailure || boundsFailure || overlapFailure ||
+      endcardFailure) {
+    const why = failure || boundsFailure || overlapFailure || endcardFailure;
+    console.error(`VIEWER SMOKE FAILED: ${why}`);
     if (boundsFailure && canvasText) {
       console.error("  never drawn inside the canvas -- no room was reserved for these:");
       for (const sample of canvasText.never_inside_samples) {

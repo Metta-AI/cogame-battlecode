@@ -162,6 +162,96 @@ proc collectGameEvents(
       lost[1 - aSlot] = e.b
       events.add(ev("duel", game = gameIndex, round = e.round,
         fields = %*{"lost": [lost[0], lost[1]]}))
+    of "lab_built":
+      events.add(ev("lab_built", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": e.b div 100, "y": e.b mod 100,
+                    "finished": e.c == 1, "rate": intOrZero(e.s)}))
+    of "first_sage":
+      events.add(ev("first_sage", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "gold_spent_total": e.b}))
+    of "watchtower_built":
+      events.add(ev("watchtower_built", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": e.b div 100, "y": e.b mod 100,
+                    "finished": e.c == 1}))
+    of "mutation":
+      ## `e.s` carries `<leadCost>:<goldCost>`.
+      let parts = e.s.split(':')
+      events.add(ev("mutation", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "target": Bc22UnitNames[max(0, min(6, e.b))],
+                    "level": e.c,
+                    "cost_lead": (if parts.len > 0: intOrZero(parts[0])
+                                  else: 0),
+                    "cost_gold": (if parts.len > 1: intOrZero(parts[1])
+                                  else: 0)}))
+    of "gold_milestone":
+      events.add(ev("gold_milestone", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "gold_total": e.b, "rate": e.c}))
+    of "anomaly_struck":
+      ## `e.b` packs the two droid counts, `e.c` the two turret-HP losses and
+      ## `e.s` is `<leadLostA>:<leadLostB>:<rubbleChanged>`, all in TEAM order.
+      let aSlot = plan.sideAslots[gameIndex]
+      var droids = [0, 0]
+      droids[aSlot] = e.b div 1000
+      droids[1 - aSlot] = e.b mod 1000
+      var turret = [0, 0]
+      turret[aSlot] = e.c div 100000
+      turret[1 - aSlot] = e.c mod 100000
+      let parts = e.s.split(':')
+      var leadLost = [0, 0]
+      if parts.len > 1:
+        leadLost[aSlot] = intOrZero(parts[0])
+        leadLost[1 - aSlot] = intOrZero(parts[1])
+      events.add(ev("anomaly_struck", game = gameIndex, round = e.round,
+        fields = %*{"type": Bc22AnomalyNames[max(0, min(3, e.a))],
+                    "droids_lost": [droids[0], droids[1]],
+                    "turret_hp_lost": [turret[0], turret[1]],
+                    "lead_lost": [leadLost[0], leadLost[1]],
+                    "rubble_changed": parts.len > 2 and parts[2] == "1"}))
+    of "anomaly_dodged":
+      events.add(ev("anomaly_dodged", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "type": Bc22AnomalyNames[max(0, min(3, e.b))],
+                    "how": e.s, "saved": e.c}))
+    of "archon_lost":
+      events.add(ev("archon_lost", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "archons_left": e.b, "gold_dropped": e.c}))
+    of "archon_relocated":
+      ## `e.s` carries `<rubbleBefore>:<rubbleAfter>`.
+      let parts = e.s.split(':')
+      events.add(ev("archon_relocated", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "from_x": e.b div 100, "from_y": e.b mod 100,
+                    "to_x": e.c div 100, "to_y": e.c mod 100,
+                    "rubble_before": (if parts.len > 0: intOrZero(parts[0])
+                                      else: 0),
+                    "rubble_after": (if parts.len > 1: intOrZero(parts[1])
+                                     else: 0)}))
+    of "singularity":
+      ## `e.b` packs the two archon counts, `e.c` the two gold net worths and
+      ## `e.s` is `<leadA>:<leadB>`, all in TEAM order.
+      let aSlot = plan.sideAslots[gameIndex]
+      var archons = [0, 0]
+      archons[aSlot] = e.b div 100
+      archons[1 - aSlot] = e.b mod 100
+      var gold = [0, 0]
+      gold[aSlot] = e.c div 100000
+      gold[1 - aSlot] = e.c mod 100000
+      let parts = e.s.split(':')
+      var lead = [0, 0]
+      if parts.len > 1:
+        lead[aSlot] = intOrZero(parts[0])
+        lead[1 - aSlot] = intOrZero(parts[1])
+      events.add(ev("singularity", game = gameIndex, round = e.round,
+        fields = %*{"rung": Bc22RungNames[max(0, min(5, e.a))],
+                    "archons": [archons[0], archons[1]],
+                    "gold": [gold[0], gold[1]],
+                    "lead": [lead[0], lead[1]]}))
     of "backstab":
       events.add(ev("backstab", game = gameIndex, round = e.round,
         fields = %*{"by_alias": plan.aliasOfTeam(gameIndex, e.a),
@@ -243,6 +333,7 @@ proc collectGameEvents(
       let action =
         if plan.year == "bc25": Bc25ActionNames[e.b]
         elif plan.year == "bc23": Bc23ActionNames[e.b]
+        elif plan.year == "bc22": Bc22ActionNames[e.b]
         else: Bc24ActionNames[e.b]
       events.add(ev("first_action", game = gameIndex, round = e.c,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
@@ -280,7 +371,7 @@ proc collectGameEvents(
       ## bc24 spells the count `jailed` (its ducks go to jail); bc25 spells it
       ## `lost` (its robots die). Both ride the same event kind and the year
       ## on the replay header says which field to read.
-      if plan.year == "bc25" or plan.year == "bc23":
+      if plan.year == "bc25" or plan.year == "bc23" or plan.year == "bc22":
         events.add(ev("rout", game = gameIndex, round = e.round,
           fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                       "lost": e.b}))
@@ -434,7 +525,11 @@ func winBonusFor*(year: string): float =
   ## synthetic finals — with 100 it would be a `>=`; with 200 it is a `>`.
   ## bc23 pays 200 for the same reason, and its 60/22/10/5/3 weights are
   ## strictly super-increasing so the tiebreak property is provable as well.
-  if yearIdOf(year) in {yBc25, yBc23}: 200.0 else: 100.0
+  ## bc22 pays 200 for the third time and for a reason of its own: its
+  ## `points` can legitimately favour the LOSER on a narrow archon margin
+  ## (docs/RULES-BC22.md, Scoring), so only a bonus that dominates the whole
+  ## [0, 100] range keeps `results.scores` ordered with `results.wins`.
+  if yearIdOf(year) in {yBc25, yBc23, yBc22}: 200.0 else: 100.0
 
 proc scoresFor*(games: seq[GameOutcome],
                 year = "bc26"): array[2, float] =

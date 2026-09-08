@@ -295,4 +295,58 @@ block:
       decision.fallbackDetail[slot].len > 0 and
       decision.fallbackDetail[slot].runeLen <= MaxFallbackDetailRunes)
 
+# --- THE YEAR-NEUTRAL ENVELOPE RESOLVER, from the other side ----------------
+block:
+  ## LEARNINGS 2026-09-08 changed ONE shared thing: `validate` now resolves a
+  ## `doctrine` key and a single object-valued key as well as `sheet`. This
+  ## block is the proof that the change is ADDITIVE for the six shipped years:
+  ## every vector below parses to exactly the `Sheet` it parsed to before, and
+  ## `Sheet.envelope` records which rule fired.
+  for year in [YearBc26, YearBc20, YearBc21, YearBc24, YearBc25, YearBc23]:
+    let bare = validate(parseJson("""{}"""), year)
+    checkEq(year & ": an empty payload reports no envelope", bare.envelope, "")
+    checkEq("and — unlike bc22 — records NOTHING defaulted",
+      bare.defaultsApplied.len, 0)
+    let sheeted = validate(parseJson("""{"sheet":{}}"""), year)
+    checkEq(year & ": a `sheet` envelope is recorded as such",
+      sheeted.envelope, "sheet")
+    checkEq("and still records nothing defaulted",
+      sheeted.defaultsApplied.len, 0)
+    let doctrine = validate(parseJson("""{"doctrine":{}}"""), year)
+    checkEq(year & ": a `doctrine` envelope is NOW unwrapped too",
+      doctrine.envelope, "doctrine")
+    let named = validate(parseJson("""{"my_wrapper":{}}"""), year)
+    checkEq(year & ": and a single object-valued key", named.envelope,
+      "my_wrapper")
+    let two = validate(parseJson("""{"a":{},"b":{}}"""), year)
+    checkEq(year & ": two object-valued keys is ambiguous, so no unwrap",
+      two.envelope, "")
+
+block:
+  ## And the six shipped years' OWN knob vectors still parse to the same
+  ## doctrine they did before the change.
+  let bc26sheet = parseReply(
+    """{"sheet":{"cat_engagement":"hunt","king_count_target":5}}""")
+  checkEq("bc26's knobs still apply through a `sheet` envelope",
+    bc26sheet.doctrine.kingCountTarget, 5)
+  checkEq("and the envelope is recorded", bc26sheet.envelope, "sheet")
+  let flat = parseReply("""{"king_count_target":4}""")
+  checkEq("a BARE FLAT bc26 sheet needs no envelope", flat.envelope, "")
+  checkEq("and its knobs apply", flat.doctrine.kingCountTarget, 4)
+  let bc23sheet = parseReply(
+    """{"protocol":"x","doctrine":{"launcher_ratio":70}}""", YearBc23)
+  checkEq("and the protocol envelope that lost two bc23 league rounds is " &
+    "now unwrapped FOR BC23 TOO", bc23sheet.doctrine23.launcherRatio, 70)
+  checkEq("with the rule recorded", bc23sheet.envelope, "doctrine")
+
+block:
+  ## The one thing the change must NOT do: alter what a shipped year records
+  ## in `sheet_defaults_applied`. bc22 counts absent keys; nobody else does.
+  let bc22empty = parseReply("""{"sheet":{}}""", YearBc22)
+  checkEq("bc22 records all eleven of its knobs as defaulted",
+    bc22empty.defaultsApplied.len, 11)
+  for year in [YearBc26, YearBc20, YearBc21, YearBc24, YearBc25, YearBc23]:
+    let empty = parseReply("""{"sheet":{}}""", year)
+    checkEq(year & " still records NONE", empty.defaultsApplied.len, 0)
+
 finish("test_sheet")

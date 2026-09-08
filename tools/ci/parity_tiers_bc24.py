@@ -124,7 +124,13 @@ def main() -> int:
                                 f"({jpath.name} / {npath.name})")
                 continue
             jraw = jpath.read_text().splitlines()
-            nim = npath.read_text().splitlines()
+            # `strip_bytecodes` ON BOTH SIDES. Stripping only the Java side
+            # compares a line against itself plus a suffix the moment the Nim
+            # emitter grows a `bc=` column of its own, and every pair then
+            # "diverges" at round 1 on otherwise-identical lines. It is a
+            # no-op on today's Nim traces and it is the fix bc22 asked for.
+            nim = [strip_bytecodes(line)
+                   for line in npath.read_text().splitlines()]
             java = [strip_bytecodes(line) for line in jraw]
 
             peak, peak_round, peak_id = peak_bytecodes(jraw)
