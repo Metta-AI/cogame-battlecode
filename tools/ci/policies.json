@@ -220,5 +220,42 @@
       "PLAYER_SCRIPTED": "examplefuncsplayer23",
       "PLAYER_POLICY_LABEL": "examplefuncsplayer23"
     }
+  },
+  {
+    "name": "battlecode-bc22-rush",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a faction in Battlecode 2022 'Mutation'. History says this year is decided in the first four hundred rounds by soldiers: a soldier costs 75 lead, has 50 health and deals 3 damage at range 13, and an archon has 600 health and is the only thing that matters - kill the last one and you win instantly. Your doctrine: out-mine them early, out-soldier them by round 400, and never let a lab or an anomaly distract you. Set opening \"soldier_rush\" or \"miner_eco\", miner_count_curve \"steady\" or \"heavy\", soldier_sage_ratio high (80-100), lab_round late (900-1800), gold_use \"sages\" (it will rarely fire), watchtower_policy \"home\" so your archons are not naked, archon_relocate \"never\" or \"safety\", and retreat_hp low (0-25) so wounded soldiers keep trading. Set mine_floor to 1: the map adds 5 lead every 20 rounds to every square that still has at least 1 on it, so a miner that takes a square to zero has destroyed that deposit for the rest of the game - the single cheapest mistake in this year. Choose anomaly_play deliberately and say why: \"ignore\" is what every human team did. In notes, say which enemy archon you break first and what you do if the soldier war is even at round 800.",
+      "PLAYER_POLICY_LABEL": "rush"
+    }
+  },
+  {
+    "name": "battlecode-bc22-transmuter",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a faction in Battlecode 2022 'Mutation'. Everyone in 2022 rushed soldiers and ignored three things the engine actually rewards. First, gold: a laboratory turns lead into gold at 20 minus 18 times e to the minus 0.02 times the number of friendly robots it can see - 2 lead per gold standing alone, 11 in a crowd - and 20 gold is a sage, which deals 45 damage, fifteen times a soldier's. Second, anomalies: the schedule is public, a FURY only damages buildings in TURRET mode (a building in PORTABLE mode takes nothing), a CHARGE destroys the top 5% of ALL droids on the board ranked by how many friends each can see (so the side that clumps donates the victims, and under 20 droids it kills nobody), and an ABYSS takes 10% rounded down (so a square holding 9 or fewer lead loses nothing). Third, mutations: 80 gold turns an archon into 1944 health that repairs 6 a turn. Your doctrine: set opening \"sage_spam\" or \"miner_eco\", lab_round early (100-350), lab_solitude low (0-8) so your lab makes gold at 2 or 3 lead apiece, soldier_sage_ratio low-to-middling (10-45), gold_use \"sages\" or \"mutations\" and say which, anomaly_play \"time_pushes\", archon_relocate \"safety\", watchtower_policy \"home\" or \"forward\", mine_floor 1 or 2 and retreat_hp 40-70 so your gold units survive to shoot twice. In notes, say what your first 60 gold buys and which anomaly you intend to be standing on the right side of.",
+      "PLAYER_POLICY_LABEL": "transmuter"
+    },
+    "player": "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d"
+  },
+  {
+    "name": "battlecode-wololo",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "wololo",
+      "PLAYER_POLICY_LABEL": "wololo"
+    }
+  },
+  {
+    "name": "battlecode-examplefuncsplayer22",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "examplefuncsplayer22",
+      "PLAYER_POLICY_LABEL": "examplefuncsplayer22"
+    }
   }
 ]
