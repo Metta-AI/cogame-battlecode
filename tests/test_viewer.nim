@@ -814,8 +814,99 @@ block:
     "window.Bc25Block = {" in page)
   check("and the shared onText calls it",
     "if (window.Bc25Block) window.Bc25Block.onFrame(s);" in page)
-  check("and the bc26 branch is guarded off for bc25",
-    "if (!isBc20 && !isBc21 && !isBc24 && !isBc25) {" in page)
+  check("and the bc26 branch is guarded off for bc25 — and now for bc23 " &
+    "too, so the discriminator is six-way",
+    "if (!isBc20 && !isBc21 && !isBc23 && !isBc24 && !isBc25) {" in page)
+
+block:
+  ## THE BC23 GAME BLOCK. The same five obligations every year module before
+  ## it had to meet, plus the two `--statrail` ids.
+  let page = readFile("client/replay_broadcast.html")
+  checkEq("the bc23 block does not define `markBeat` at all — that name is " &
+    "`chrome_common.js`'s and a same-named function here would HOIST OVER " &
+    "it (the tandem 2026-08-23 collision)",
+    page.count("function markBeat"), 0)
+  for taken in ["function buildBeatButtons",
+                "function buildBc20BeatButtons",
+                "function buildBc21BeatButtons",
+                "function buildBc24BeatButtons",
+                "function buildBc25BeatButtons"]:
+    checkEq("the bc23 block does not redefine " & taken,
+      page.count(taken), 1)
+  checkEq("the bc23 builder is defined exactly once",
+    page.count("function buildBc23BeatButtons"), 1)
+  checkEq("and so is its spoiler gate",
+    page.count("function applyBc23BeatSpoilers"), 1)
+  check("the block registers on window.Bc23Block",
+    "window.Bc23Block = {" in page)
+  check("and the shared onText calls it",
+    "if (window.Bc23Block) window.Bc23Block.onFrame(s);" in page)
+  check("and the inherited block attaches the transport to it",
+    "window.Bc23Block.attach({" in page)
+  ## No `ChromeCommon` alias and no other year's game-block name is shadowed:
+  ## the bc23 block's own helpers are `renderIslands`, `renderUnits` and
+  ## `renderEndcardExtras` inside its OWN IIFE, and nothing it defines at
+  ## file scope collides.
+  for alias in ["window.Bc20Block = {",
+                "window.Bc21Block = {", "window.Bc24Block = {",
+                "window.Bc25Block = {"]:
+    checkEq("the bc23 block does not redeclare " & alias,
+      page.count(alias), 1)
+
+  ## `#bc23-doctrines` carries a dismiss control, an Escape binding, a
+  ## re-open chip and self-dismissal — and it sits OUTSIDE var(--band) (D3).
+  check("the doctrine overlay exists", "id=\"bc23-doctrines\"" in page)
+  check("with a dismiss control carrying an aria-label",
+    "id=\"bc23-doctrines-close\"" in page and
+    "aria-label=\"Dismiss doctrines\"" in page)
+  check("a re-open chip", "id=\"bc23-doctrines-toggle\"" in page)
+  check("an Escape binding scoped to bc23",
+    "getAttribute('data-year') !== 'bc23'" in page)
+  const SelfDismiss =
+    "if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {"
+  check("self-dismissal on the first advance", SelfDismiss in page)
+  const BandBound =
+    "max-height: calc(100% - var(--topband, 0px) - var(--band, 0px) - 46px)"
+  check("and it is bounded ABOVE the transport band, never inside it",
+    BandBound in page)
+
+  ## The two stat boxes sit above the band and are in the --statrail set.
+  check("#bc23-units is lifted above var(--band)",
+    "#bc23-units { bottom: calc(var(--band, 0px) + 76px); }" in page)
+  check("#bc23-econ too",
+    "#bc23-econ { bottom: calc(var(--band, 0px) + 8px); }" in page)
+  check("and relayout() MEASURES both of them into --statrail",
+    "'bc23-econ', 'bc23-units']" in page)
+
+  ## Every #bc23-* rule is scoped to the year, one way or the other.
+  var unscoped: seq[string]
+  for line in page.splitLines():
+    let t = line.strip()
+    if not t.startsWith("#bc23-"): continue
+    if "display: none" in t: continue
+    ## A bare `#bc23-x { ... }` rule is fine: the element only EXISTS on a
+    ## bc23 replay because `html:not([data-year="bc23"])` hides it. What is
+    ## forbidden is a rule that could restyle ANOTHER year's element, i.e. a
+    ## selector that does not begin with the `#bc23-` prefix.
+    if not t.startsWith("#bc23-"): unscoped.add(t)
+  checkEq("no bc23 CSS rule can reach another year's element",
+    unscoped.len, 0)
+  check("and the year switch hides the bc23 elements everywhere else",
+    "html:not([data-year=\"bc23\"]) #bc23-islands," in page)
+  check("and hides the other five years' elements on a bc23 replay",
+    "html[data-year=\"bc23\"] #bc25-coverage," in page)
+
+block:
+  ## EVERY emitted bc23 beat kind has CSS, and every one is scoped to
+  ## `html[data-year="bc23"]` so it cannot restyle another year's marker of
+  ## the same name (`build`, `game`, `rout`, `doctrine` and `end` all exist
+  ## for other years).
+  let page = readFile("client/replay_broadcast.html")
+  for kind in ["doctrine", "game", "build", "anchor", "island", "conquest",
+               "elixir", "boost", "destabilize", "duel", "rout", "end"]:
+    let rule = "html[data-year=\"bc23\"] .beat-marker." & kind
+    check("the page carries CSS for the bc23 `" & kind & "` beat, scoped",
+      rule in page)
 
 block:
   ## EVERY emitted bc25 beat kind has CSS, and every one is scoped to

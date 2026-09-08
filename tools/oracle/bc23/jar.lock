@@ -1,0 +1,10 @@
+{
+  "url": "https://releases.battlecode.org/maven/org/battlecode/battlecode23/3.0.15/battlecode23-3.0.15.jar",
+  "version": "3.0.15",
+  "bytes": 16982927,
+  "sha256": "5d4e42a51946cc1c2149426485bda8096ff1c088c77e3ed075c06ce5968ed72a",
+  "engine_commit": "af42086ecd09709dc603b2aaa9e9b98312c9ef79",
+  "spec_version": "3.0.14",
+  "jdk": "8",
+  "note": "GameConstants.SPEC_VERSION inside the RELEASED 3.0.15 jar is the literal string 3.0.14 -- the same string the pinned master sources carry -- which makes it useless as a version pin, so THE SHA256 AND THE SIZE ARE THE VERSION PIN and Tier B cross-checks every constant against the jar's own classes instead (docs/RULES-BC23.md Divergences item 12). There is NO version-string assertion anywhere in the job. The jar is SELF-CONTAINED: 11566 entries, every battlecode class, every bundled dependency INCLUDING net.sf.jsi and gnu.trove (so the dead-artifact problem that forced bc21's jsi shim does not arise), battlecode/instrumenter/bytecode/resources/MethodCosts.txt and all 103 .map23 map resources -- so this job needs no Gradle, no shim, no multi-file compile, no Maven download list and no deps.lock. IT MUST RUN ON TEMURIN 8: the jar bundles ASM 5.0.4 and under JDK 21 the instrumenter throws inside ClassReader.<init> on every player class load, no robot is ever built, and the job would exit 0 while proving nothing."
+}

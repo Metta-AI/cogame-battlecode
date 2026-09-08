@@ -183,5 +183,42 @@
       "PLAYER_SCRIPTED": "examplefuncsplayer25",
       "PLAYER_POLICY_LABEL": "examplefuncsplayer25"
     }
+  },
+  {
+    "name": "battlecode-bc23-duel",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a faction in Battlecode 2023 'Tempest'. History says this year is decided by the opening launcher duel: a launcher costs 45 kg of mana, hits any square within 16 units for 20 damage even through clouds, and nothing else in the game deals real damage. Your doctrine: win that duel and never give it back. Set opening \"launcher_rush\", launcher_ratio high (65-80), well_priority \"mana\", elixir_tech \"never\" - 600 kg of adamantium poured into a well is thirteen launchers you did not build. Set destabilizer_use \"siege\" so your spearhead sits on their nearest headquarters, retreat_on_launcher_loss \"never\" or \"regroup\", amplifier_use \"escort\" so a group four squares deep in their half still shares targets, and carrier_throw high (60-100): a full carrier throws for 50 damage, which is two and a half launcher hits, and the cargo is lost anyway if it dies. Keep anchor_budget low (0-20) but set anchor_round somewhere before 1200 and island_priority \"nearest\" - if neither side conquers 75% of the islands, round 2000 is decided first on islands held and then on anchors ever placed, so a faction with zero anchors can lose a game it dominated. In notes, say which enemy headquarters you break first and what you do if the duel is even at round 600.",
+      "PLAYER_POLICY_LABEL": "duel"
+    }
+  },
+  {
+    "name": "battlecode-bc23-alchemist",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a faction in Battlecode 2023 'Tempest'. You win outright by anchoring 75% of the sky islands, and every anchor you ever place is the second tiebreak at round 2000. Your doctrine: the islands and the elixir nobody used. Set opening \"carrier_eco\" or \"balanced\", well_priority \"balanced\", anchor_round early (100-350) and anchor_budget high (45-70): a standard anchor is 80 kg of adamantium and 80 kg of mana, it has 250 health, and each round its health moves by the percentage of the island your robots occupy minus theirs - so an anchor without a garrison is a loan, not a purchase. Set island_priority \"safe\" or \"contested\" and say which. Set elixir_tech \"early\" or \"mid\" and elixir_spend \"accelerating_anchors\": pour 600 kg of adamantium into a mana well and it becomes an elixir well; 300 kg of elixir buys an accelerating anchor with 750 health that also cuts the cooldowns of every ally within 4 units of the island by 15% and heals them 6 a round. Keep launcher_ratio in the middle (35-50) and destabilizer_use \"defend\" - you are not trying to win the duel, you are trying to survive it while your islands tick. Set retreat_on_launcher_loss \"home\" so wounded launchers heal on your own islands, and amplifier_use \"one\". In notes, say which islands you intend to hold at round 2000 and how many carriers are garrisoning them.",
+      "PLAYER_POLICY_LABEL": "alchemist"
+    },
+    "player": "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d"
+  },
+  {
+    "name": "battlecode-lemonade",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "lemonade",
+      "PLAYER_POLICY_LABEL": "lemonade"
+    }
+  },
+  {
+    "name": "battlecode-examplefuncsplayer23",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "examplefuncsplayer23",
+      "PLAYER_POLICY_LABEL": "examplefuncsplayer23"
+    }
   }
 ]

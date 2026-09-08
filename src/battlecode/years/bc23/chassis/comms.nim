@@ -80,6 +80,11 @@ proc publish*(w: World, side: Side, r: Robot) =
   if not simcomms.canWriteSharedArray(w, r, 0, 0): return
   var writes = 0
   if r.kind == rtHeadquarters:
+    ## A HEADQUARTERS PUBLISHES ON A CADENCE, not every round. It can always
+    ## write, so publishing every round drowns out every other writer and
+    ## `amplifier_use` loses its teeth on `array_writes` — which is the one
+    ## statistic that knob actually buys.
+    if w.currentRound mod 10 != 0: return
     for k in 0 ..< min(4, side.homeHqs.len):
       if writes >= 4: break
       discard w.writeSlot(side, r, SlotHqBase + k, packLoc(side.homeHqs[k]))

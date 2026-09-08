@@ -52,6 +52,14 @@ proc runLauncher*(w: World, side: Side, r: Robot) =
         RobotSpecs[rtLauncher].actionRadiusSquared:
       return
 
+  ## A RETREAT OUTRANKS THE STAND-OFF. A launcher whose group has just lost a
+  ## member pulls back even from a fight it is already in — that is the whole
+  ## point of `retreat_on_launcher_loss`, and behind the fire guard the knob
+  ## had no measurable teeth.
+  if retreating(w, side):
+    discard w.moveToward(side, r, retreatTarget(w, side, r))
+    return
+
   ## DO NOT WALK INTO A FREE SHOT. A launcher that steps from outside r2<=16
   ## to inside it hands the enemy — who takes its turn later in the exec
   ## order — one unanswered 20 damage, every engagement, for ever. Measured:
@@ -71,10 +79,6 @@ proc runLauncher*(w: World, side: Side, r: Robot) =
   let threat = defendHome(w, side, r)
   if threat.x >= 0:
     discard w.moveToward(side, r, threat)
-    return
-
-  if retreating(w, side):
-    discard w.moveToward(side, r, retreatTarget(w, side, r))
     return
 
   ## Keep the stand-off when the enemy's group is bigger: step away rather

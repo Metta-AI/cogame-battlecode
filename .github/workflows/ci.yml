@@ -20,12 +20,12 @@ name: CI
 
 on:
   push:
-    # `bc20-year-module`, `bc21-year-module`, `bc24-year-module` and
-    # `bc25-year-module` are the branches the second, third, fourth and fifth
-    # year modules land on. main's trigger semantics are untouched; this only
-    # adds branches.
-    branches: [ main, bc20-year-module, bc21-year-module, bc24-year-module,
-                bc25-year-module ]
+    # `bc20-year-module`, `bc21-year-module`, `bc23-year-module`,
+    # `bc24-year-module` and `bc25-year-module` are the branches the second,
+    # third, sixth, fourth and fifth year modules land on. main's trigger
+    # semantics are untouched; this only adds branches.
+    branches: [ main, bc20-year-module, bc21-year-module, bc23-year-module,
+                bc24-year-module, bc25-year-module ]
   pull_request:
   workflow_dispatch:
 
@@ -70,6 +70,21 @@ env:
   # shim, no Maven download list and no deps.lock in that job. There is no JDK
   # in any image stage.
   BC25_COMMIT: "28975a487c1a30ed2b5bed644fe6ecd2c3dd1482"
+  # The Battlecode 2023 sources the `bc23` year module is a port OF. Used at
+  # CI time by the constants generator, the map converter, the sprite cutter
+  # and the bc23 parity oracle; the PUBLISHED FAT JAR (sha256 AND size pinned
+  # in tools/oracle/bc23/jar.lock) is used only by that oracle, and it is
+  # SELF-CONTAINED -- 11566 entries, every battlecode class, every bundled
+  # dependency INCLUDING net.sf.jsi and gnu.trove, and all 103 .map23
+  # resources -- so there is no Gradle, no jsi shim, no Maven download list
+  # and no deps.lock in that job. There is no JDK in any image stage.
+  #
+  # THE ORACLE RUNS ON TEMURIN 8 AND THAT IS NOT NEGOTIABLE: the jar bundles
+  # ASM 5.0.4, and under JDK 21 the instrumenter throws inside
+  # ClassReader.<init> on every player class load, no robot is ever built,
+  # and the job exits 0 (docs/PARITY.md section bc23).
+  BC23_COMMIT: "af42086ecd09709dc603b2aaa9e9b98312c9ef79"
+  BC23_JAR_URL: "https://releases.battlecode.org/maven/org/battlecode/battlecode23/3.0.15/battlecode23-3.0.15.jar"
 
 jobs:
   # ---------------------------------------------------------------------
@@ -266,6 +281,41 @@ jobs:
           echo "official .map25 files parsed: ${parsed}"
           test "${parsed}" = "75" || {
             echo "::error::expected all 75 .map25 files to parse, got ${parsed}"
+            exit 1; }
+
+      # The bc23 year module is generated from a SIXTH pinned checkout, and
+      # every generated artefact is re-generated here and byte-diffed: the
+      # constants table, all twenty-two converted maps and the sprite atlas
+      # cut from the 2023 client. A hand-edited generated file fails the
+      # build.
+      - name: Fetch the pinned Battlecode 2023 sources
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/engine23
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode23/archive/${BC23_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/engine23
+          echo "BC23_DIR=/tmp/engine23/battlecode23-${BC23_COMMIT}" >> "$GITHUB_ENV"
+
+      - name: The bc23 generated files match the pinned 2023 sources
+        run: |
+          set -euo pipefail
+          python3 tools/gen_year_constants.py --year bc23 --engine "$BC23_DIR" --check
+          python3 tools/convert_maps_bc23.py --engine "$BC23_DIR" \
+            --out data/maps/bc23 --check
+          python3 tools/build_sprite_atlas_bc23.py --engine "$BC23_DIR" \
+            --out data --check
+          # And EVERY ONE of the 103 official `.map23` flatbuffers reads with
+          # the converter's own vtable walk, not only the 22 that are
+          # committed: a reader that only works on the maps we ship is a
+          # reader nobody can extend the pool with. Three of the 103 (`Frog`,
+          # `Orbit`, `Rewind`) carry an OVER-LONG per-tile vector, which
+          # `GameMapIO.deserialize` truncates and the converter truncates too.
+          parsed="$(python3 tools/convert_maps_bc23.py --engine "$BC23_DIR" \
+            --parse-all 2>&1 >/dev/null | grep -oE '^[0-9]+' | head -1)"
+          echo "official .map23 files parsed: ${parsed}"
+          test "${parsed}" = "103" || {
+            echo "::error::expected all 103 .map23 files to parse, got ${parsed}"
             exit 1; }
 
       - name: Run tests
@@ -1547,6 +1597,289 @@ jobs:
   # Packaging smoke: the production image builds, and one real episode runs
   # end to end in raw docker with the certification fixture's seat mix.
   # ---------------------------------------------------------------------
+  # THE bc23 PARITY ORACLE. The published 2023 fat jar as a CI-ONLY
+  # differential test, on TEMURIN 8 -- and that is not a preference: the jar
+  # bundles ASM 5.0.4 and under JDK 21 the instrumenter throws inside
+  # ClassReader.<init> on EVERY player class load, no robot is ever built,
+  # and the job would exit 0 while proving nothing (docs/PARITY.md section
+  # bc23). There is no JDK in any image stage -- only here.
+  #
+  # MEASURED IN THE SANDBOX BEFORE THIS JOB WAS WRITTEN: all six trace pairs
+  # are bit-exact for WHOLE 2000-round games, 96k-270k trace lines a side,
+  # with the traced bytecode peak at 5-7 % of the limit and ZERO mid-turn
+  # cut-offs. That is why tools/ci/parity_ledger_bc23.json ships EMPTY.
+  # ---------------------------------------------------------------------
+  parity-oracle-bc23:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache nimby toolchain and nimcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nimby
+            ~/.cache/nim
+          key: nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-${{ hashFiles('nimby.lock') }}
+          restore-keys: |
+            nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-
+
+      - name: Install nimby and Nim
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/nimby" \
+            "https://github.com/treeform/nimby/releases/download/${NIMBY_VERSION}/nimby-Linux-X64"
+          chmod +x "$HOME/.local/bin/nimby"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/nimby" use "$NIM_VERSION"
+
+      - name: Sync Nim dependencies
+        run: nimby --global sync nimby.lock
+
+      - name: Regenerate nim.cfg from the synced package tree
+        run: |
+          set -euo pipefail
+          rm -f nim.cfg
+          for pkg in "$HOME"/.nimby/pkgs/*; do
+            [ -e "$pkg" ] || continue
+            if [ -d "$pkg/src" ]; then
+              echo "--path:\"$pkg/src\"" >> nim.cfg
+            else
+              echo "--path:\"$pkg\"" >> nim.cfg
+            fi
+          done
+          echo '--path:"src"' >> nim.cfg
+
+      # TEMURIN 8. NOT NEGOTIABLE. See the job comment.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+
+      - name: The JDK really is 8
+        run: |
+          set -euo pipefail
+          java -version 2>&1 | tee /tmp/javaver
+          javac -version 2>&1 | tee -a /tmp/javaver
+          grep -q '1\.8\.' /tmp/javaver || {
+            echo "::error::this oracle MUST run on Temurin 8: the jar bundles"
+            echo "::error::ASM 5.0.4 and under a newer JDK the instrumenter"
+            echo "::error::throws on every player class load, no robot is ever"
+            echo "::error::built, and this job would be green while proving"
+            echo "::error::nothing (docs/PARITY.md section bc23)."
+            exit 1; }
+          # And `--release` must NOT be used: it arrived in JDK 9 and dies
+          # with "invalid flag" here in seconds (the bc21 lesson). This
+          # asserts the trap rather than trusting a comment.
+          if javac --release 8 -version >/dev/null 2>&1; then
+            echo "::error::this javac accepts --release, so it is not 8"
+            exit 1
+          fi
+          echo "javac rejects --release, as a JDK-8 javac must"
+
+      - name: Fetch the pinned Battlecode 2023 sources and the published jar
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/engine23 /tmp/oracle23
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode23/archive/${BC23_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/engine23
+          echo "BC23_DIR=/tmp/engine23/battlecode23-${BC23_COMMIT}" >> "$GITHUB_ENV"
+          curl -fsSL -o /tmp/oracle23/battlecode23.jar "${BC23_JAR_URL}"
+
+      - name: Build the oracle (jar sha256 AND size verified, JDK 8, no javac flags)
+        run: |
+          set -euo pipefail
+          ./tools/oracle/bc23/build_oracle.sh /tmp/oracle23/battlecode23.jar \
+            /tmp/oracle23/build
+
+      # Tier B, part 1: every GameConstants field, PRINTED from the jar's own
+      # classes -- and NO VERSION-STRING ASSERTION, because the released
+      # 3.0.15 jar reports SPEC_VERSION = "3.0.14" (measured). The sha256 and
+      # the size are the version pin; these constants are the cross-check.
+      - name: The jar's own constants, and its useless SPEC_VERSION
+        run: |
+          set -euo pipefail
+          javac -nowarn -encoding UTF-8 -cp /tmp/oracle23/battlecode23.jar \
+            -d /tmp/oracle23/build/classes tools/JavaBc23Tables.java
+          timeout 600 java -cp \
+            "/tmp/oracle23/battlecode23.jar:/tmp/oracle23/build/classes" \
+            JavaBc23Tables constants | tee /tmp/oracle23/constants.txt
+          spec="$(grep '^SPEC_VERSION=' /tmp/oracle23/constants.txt | cut -d= -f2)"
+          echo "the RELEASED 3.0.15 jar reports SPEC_VERSION=${spec}"
+          test "${spec}" = "3.0.14" || {
+            echo "::error::the jar's SPEC_VERSION moved to ${spec}. The pin is"
+            echo "::error::the sha256 in tools/oracle/bc23/jar.lock, so this is"
+            echo "::error::only a note -- but the note is now wrong and"
+            echo "::error::docs/RULES-BC23.md Divergences item 12 needs a fix."
+            exit 1; }
+          # Every constant the generated table claims, against the JAR.
+          python3 - <<'PY'
+          import pathlib, re
+          jar = {}
+          for line in pathlib.Path("/tmp/oracle23/constants.txt").read_text().splitlines():
+              if "=" not in line:
+                  continue
+              k, v = line.split("=", 1)
+              jar[k] = v
+          src = pathlib.Path("src/battlecode/years/bc23/constants.nim").read_text()
+          def camel(name):
+              parts = name.split("_")
+              return parts[0].capitalize() + "".join(p.capitalize() for p in parts[1:])
+          bad = []
+          checked = 0
+          for name, value in sorted(jar.items()):
+              m = re.search(r"^  " + re.escape(camel(name)) +
+                            r"\*: (\w+) = (.+)$", src, re.M)
+              if not m:
+                  continue
+              kind, literal = m.group(1), m.group(2).strip()
+              checked += 1
+              if kind == "string":
+                  want = literal.strip('"')
+                  if want != value:
+                      bad.append(f"{name}: nim {want!r} jar {value!r}")
+              elif kind in ("float32", "float64"):
+                  if abs(float(literal) - float(value)) > 1e-6:
+                      bad.append(f"{name}: nim {literal} jar {value}")
+              else:
+                  if int(literal) != int(float(value)):
+                      bad.append(f"{name}: nim {literal} jar {value}")
+          print(f"cross-checked {checked} GameConstants fields against the jar")
+          if checked < 40:
+              raise SystemExit(f"::error::only {checked} fields cross-checked")
+          for b in bad:
+              print(f"::error::{b}")
+          if bad:
+              raise SystemExit(1)
+          PY
+
+      # Tier B, part 2 (BLOCKING): the WHOLE FINITE ARITHMETIC DOMAIN,
+      # regenerated from the jar's own classes and BYTE-DIFFED against the
+      # committed table. bc23 has no transcendental anywhere, so this tier is
+      # not a sample: the RobotType and Anchor tables, both carrier weight
+      # tables at every reachable weight, THE ENTIRE cooldown-multiplier
+      # lattice, the float32 conquest threshold at every island count and the
+      # island occupancy formula at every pair. `tests/test_bc23_tempo.nim`
+      # asserts the NIM side against the same bytes on every test run.
+      - name: Tier B (BLOCKING) — the WHOLE finite arithmetic domain, byte-diffed
+        run: |
+          set -euo pipefail
+          timeout 600 java -cp \
+            "/tmp/oracle23/battlecode23.jar:/tmp/oracle23/build/classes" \
+            JavaBc23Tables tables > /tmp/oracle23/tables.json
+          if ! diff -u data/bc23/tables.json /tmp/oracle23/tables.json; then
+            echo "::error::data/bc23/tables.json is not what the jar's own"
+            echo "::error::classes emit. Re-run tools/JavaBc23Tables.java and"
+            echo "::error::commit the result."
+            exit 1
+          fi
+          echo "Tier B: the committed arithmetic table IS the jar's own output"
+
+      - name: Build the Nim trace emitter
+        run: |
+          set -euo pipefail
+          nim c --hints:off -d:release --path:src \
+            -o:/tmp/oracle23/parity_trace_bc23 tools/parity_trace_bc23.nim
+
+      # WHOLE 2000-ROUND GAMES on the six `small` pairs. Every `java`
+      # invocation is wrapped in `timeout 600`, because the sandboxed player
+      # threads are NON-DAEMON and a driver that throws without System.exit()
+      # hangs for ever (measured).
+      - name: Run both engines on the six pairs (whole 2000-round games)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle23/traces
+          for MAP in Quiet SmallElements Lantern Spin Sneaky Barcode; do
+            timeout 600 java -Xmx2g -XX:+UseSerialGC \
+              -cp "/tmp/oracle23/battlecode23.jar:/tmp/oracle23/build/classes" \
+              battlecode.world.Bc23Trace "$MAP" 2000 examplefuncsplayer23 \
+              /tmp/oracle23/build/classes \
+              > "/tmp/oracle23/traces/examplefuncsplayer23.${MAP}.java" \
+              2> "/tmp/oracle23/traces/${MAP}.java.log"
+            tail -1 "/tmp/oracle23/traces/${MAP}.java.log"
+            /tmp/oracle23/parity_trace_bc23 "$MAP" 2000 \
+              > "/tmp/oracle23/traces/examplefuncsplayer23.${MAP}.nim"
+            echo "${MAP}: java $(wc -l < "/tmp/oracle23/traces/examplefuncsplayer23.${MAP}.java") lines," \
+                 "nim $(wc -l < "/tmp/oracle23/traces/examplefuncsplayer23.${MAP}.nim") lines"
+          done
+
+      # EVERY GAME REALLY RAN. This is the step that catches the JDK-21 ASM
+      # trap from the other side: the driver exits 3 when no robot is built,
+      # and this asserts the rounds and the unit count as well, so a harness
+      # that produced a few hundred empty lines cannot be green.
+      - name: Every game really ran (the ASM trap)
+        run: |
+          set -euo pipefail
+          for MAP in Quiet SmallElements Lantern Spin Sneaky Barcode; do
+            log="/tmp/oracle23/traces/${MAP}.java.log"
+            rounds="$(sed -n 's/.* rounds=\([0-9]*\) .*/\1/p' "$log" | tail -1)"
+            built="$(sed -n 's/.* built=\([0-9]*\).*/\1/p' "$log" | tail -1)"
+            pct="$(sed -n 's/.* peak_pct=\([0-9]*\) .*/\1/p' "$log" | tail -1)"
+            echo "${MAP}: rounds=${rounds} built=${built} peak_bytecode=${pct}%"
+            test "${rounds:-0}" -ge 1900 || {
+              echo "::error::${MAP} only reached round ${rounds}. Under a JDK"
+              echo "::error::newer than 8 the instrumenter kills every robot as"
+              echo "::error::it spawns and the trace is a few hundred empty"
+              echo "::error::lines."
+              exit 1; }
+            test "${built:-0}" -ge 100 || {
+              echo "::error::${MAP} built only ${built} robots in 2000 rounds."
+              exit 1; }
+            test "${pct:-100}" -le 50 || {
+              echo "::error::${MAP} peaked at ${pct}% of a bytecode limit,"
+              echo "::error::above the 50% headroom bound. Past that point the"
+              echo "::error::comparison is no longer defined."
+              exit 1; }
+          done
+
+      - name: Tier A and Tier C (both BLOCKING)
+        run: |
+          set -euo pipefail
+          python3 tools/ci/parity_tiers_bc23.py \
+            --dir /tmp/oracle23/traces \
+            --maps Quiet SmallElements Lantern Spin Sneaky Barcode \
+            --bots examplefuncsplayer23 \
+            --ledger tools/ci/parity_ledger_bc23.json \
+            --summary "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+      - name: Upload the traces (first 200 divergent lines and a digest)
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle23/upload
+          cd /tmp/oracle23/traces
+          for MAP in Quiet SmallElements Lantern Spin Sneaky Barcode; do
+            j="examplefuncsplayer23.${MAP}.java"
+            n="examplefuncsplayer23.${MAP}.nim"
+            [ -f "$j" ] && [ -f "$n" ] || continue
+            # A 2000-round trace is 18-22 MB a side; only the first 200
+            # divergent lines and a gzipped digest are uploaded.
+            sed -E 's/ bc=[0-9]+//' "$j" > "/tmp/j.$$"
+            diff "/tmp/j.$$" "$n" | head -200 \
+              > "/tmp/oracle23/upload/${MAP}.diff.txt" || true
+            head -400 "$j" | gzip -9 \
+              > "/tmp/oracle23/upload/${MAP}.java.head.gz"
+            head -400 "$n" | gzip -9 \
+              > "/tmp/oracle23/upload/${MAP}.nim.head.gz"
+            cp "${MAP}.java.log" "/tmp/oracle23/upload/" || true
+            rm -f "/tmp/j.$$"
+          done
+          ls -la /tmp/oracle23/upload
+
+      - name: Upload the parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-bc23
+          path: /tmp/oracle23/upload
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ---------------------------------------------------------------------
   docker-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -1760,6 +2093,124 @@ jobs:
           SMOKE_CONTRACT_PROBE: "0"
         run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
 
+      # A SIXTH EPISODE: bc23. 800 rounds and not 600, and the reason is the
+      # year: the default `anchor_round` is 400, so the window has to be long
+      # enough for the strong chassis to actually build, ferry and plant an
+      # anchor -- which is the one signature of this year the smoke asserts
+      # across the pair. 800 rounds still records ~30 s of playback, which
+      # outlasts the viewer smoke's 15 s soak (the ecos 2026-08-23 scar).
+      # The seed is PINNED so the map cannot drift: `tests/test_bc23_maps.nim`
+      # asserts that seed 1009 on the `small` pool draws exactly `Quiet`
+      # (20x20, four islands, one headquarters a side), the smallest map in
+      # the pool.
+      - name: Raw-Docker episode smoke (bc23, scripted vs scripted)
+        env:
+          SMOKE_SLUG: ${{ env.SLUG }}
+          SMOKE_EXPECT_YEAR: bc23
+          # The manifest declares exactly the two players the certification
+          # fixture seats, and `PLAYER_SCRIPTED` resolves per year: on bc23
+          # `awu` is lemonade and `scaffold` is examplefuncsplayer23
+          # (src/battlecode/baselines.nim).
+          SMOKE_PLAYER_IDS: awu,scaffold
+          SMOKE_CONFIG_OVERRIDE: >-
+            {"year":"bc23","pool":"small","seed":1009,"gamesPerMatch":1,
+             "maxRounds":800,"perGameBudgetSeconds":70,
+             "matchBudgetSeconds":80,"connectTimeoutMs":15000}
+          # THE PER-SEAT FLOOR, AND IT IS MEASURED, NOT GUESSED. Phase 20 ran
+          # exactly this episode and read the per-seat statistics off the
+          # replay: units_built [37, 42], adamantium_mined [3617, 118],
+          # mana_mined [203, 25], damage_dealt [5340, 2]. The committed
+          # floors sit at roughly half the WEAK seat's value.
+          #
+          # TWO OF THE DESIGN NOTE'S FOUR NUMBERS ARE ABOVE WHAT A CORRECT
+          # EPISODE PRODUCES and are therefore committed lower, with the
+          # measurement beside them: the note asks for mana_mined 40 (the
+          # weak seat mines 25 -- it collects on a coin flip from whatever
+          # well it happens to stand beside, and `Quiet` has two adamantium
+          # wells a side against one mana well) and damage_dealt 20 (the weak
+          # seat deals 2 -- its launcher attacks the square ONE STEP EAST OF
+          # ITSELF rather than the enemy it just sensed, which is upstream's
+          # own bug and may not be "fixed" because that bot is one side of
+          # the differential oracle). The note's own rule is "never above
+          # what a correct episode produces", and this is that case.
+          SMOKE_REQUIRE_STATS: >-
+            {"units_built":20,"adamantium_mined":60,"mana_mined":12,
+             "damage_dealt":1}
+          SMOKE_REPLAY_OUT: ${{ github.workspace }}/dist/smoke/replay-bc23.json
+          SMOKE_CONTRACT_PROBE: "0"
+        run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
+
+      # THE ACROSS-THE-PAIR HALF, and for this year it is the half that
+      # matters. The signatures of 2023 -- DEPOSITING cargo at a
+      # headquarters, taking an anchor, planting it and holding an island --
+      # are things only a seat playing WELL does: measured, the upstream
+      # example bot never calls `transferResource` or `takeAnchor` AT ALL, so
+      # asserting them per-seat would be asserting that the weak floor is not
+      # weak. Together these five make an idle win machine-visible, which is
+      # exactly what the 2026-09-03 round-1 degenerate match lacked.
+      #
+      # IF `islands_captured >= 1` EVER STOPS HOLDING, THE FIX IS TO RAISE
+      # THE SMOKE'S `maxRounds` UNTIL IT DOES -- never to drop the
+      # assertion. An episode of this year in which nobody ever anchors an
+      # island is not this game being played.
+      - name: The bc23 episode really played bc23
+        run: |
+          set -euo pipefail
+          # Read from the REPLAY, whose `result` block is the results
+          # document verbatim: `dist/smoke/results.json` is overwritten by
+          # every episode in turn and naming it here would make this
+          # assertion depend on which episode happened to run last (the bc24
+          # fix).
+          sum() { jq -r "[.result.games[0].$1[]] | add" \
+            dist/smoke/replay-bc23.json; }
+          built="$(sum units_built)"
+          banked="$(sum resources_banked)"
+          ancbuilt="$(sum anchors_built)"
+          ancplaced="$(sum anchors_placed)"
+          captured="$(sum islands_captured)"
+          # Measured on this exact episode: 79 units built, 3480 kg banked,
+          # 5 anchors built, 3 placed and 3 islands captured between the two
+          # seats. The floors are the design note's own 60/200/1/1/1.
+          echo "across the two seats: units=${built} banked=${banked}" \
+               "anchors built=${ancbuilt} placed=${ancplaced}" \
+               "islands captured=${captured}"
+          test "${built}" -ge 60 || {
+            echo "::error::the bc23 smoke episode built ${built} robots"
+            echo "::error::between the two seats. A faction with five build"
+            echo "::error::actions a turn does not build twenty."
+            exit 1; }
+          test "${banked}" -ge 200 || {
+            echo "::error::${banked} kg was DEPOSITED into a headquarters in"
+            echo "::error::the whole episode. In this year a resource joins"
+            echo "::error::the team total the moment it is mined but a"
+            echo "::error::headquarters can only spend from its OWN"
+            echo "::error::stockpile, so a faction whose carriers never"
+            echo "::error::deposit looks rich and builds nothing."
+            exit 1; }
+          test "${ancbuilt}" -ge 1 || {
+            echo "::error::nobody built a reality anchor in the whole episode."
+            exit 1; }
+          test "${ancplaced}" -ge 1 || {
+            echo "::error::an anchor was built and never delivered: an anchor"
+            echo "::error::weighs a carrier's whole capacity, so the ferry is"
+            echo "::error::the path this asserts."
+            exit 1; }
+          test "${captured}" -ge 1 || {
+            echo "::error::no island changed hands in the whole episode."
+            echo "::error::RAISE maxRounds until it does; do NOT drop this."
+            exit 1; }
+
+      # THE PACING NUMBER the next year module sizes its own probe from, and
+      # the number that decided this year's own `--timeout 120 --soak 15`
+      # (docs/RULES-BC23.md, "What this year measures").
+      - name: Print the bc23 episode's simulated seconds per round
+        run: |
+          set -euo pipefail
+          jq -r '"bc23 smoke: sim_seconds=\(.result.sim_seconds) " +
+                 "rounds=\(.result.games[0].rounds_played) " +
+                 "wall=\(.result.wall_clock_seconds)s"' \
+            dist/smoke/replay-bc23.json
+
       # THE ACROSS-THE-SEATS HALF of the bc25 substance assertion. Three
       # signatures of this year -- building a tower beyond the starting two,
       # upgrading one, and colouring a real share of the map -- are things
@@ -1849,12 +2300,12 @@ jobs:
             echo "::error::whole episode, and one heal is worth 80."
             exit 1; }
 
-      - name: All five smoke replays are present and are different years
+      - name: All six smoke replays are present and are different years
         run: |
           set -euo pipefail
           for f in dist/smoke/replay.json dist/smoke/replay-bc20.json \
                    dist/smoke/replay-bc21.json dist/smoke/replay-bc24.json \
-                   dist/smoke/replay-bc25.json; do
+                   dist/smoke/replay-bc25.json dist/smoke/replay-bc23.json; do
             test -s "$f" || { echo "::error::$f is missing"; exit 1; }
           done
           y26="$(jq -r .year dist/smoke/replay.json)"
@@ -1862,14 +2313,17 @@ jobs:
           y21="$(jq -r .year dist/smoke/replay-bc21.json)"
           y24="$(jq -r .year dist/smoke/replay-bc24.json)"
           y25="$(jq -r .year dist/smoke/replay-bc25.json)"
-          echo "replay.json year=$y26  bc20=$y20  bc21=$y21  bc24=$y24  bc25=$y25"
+          y23="$(jq -r .year dist/smoke/replay-bc23.json)"
+          echo "replay.json year=$y26  bc20=$y20  bc21=$y21  bc24=$y24" \
+               "bc25=$y25  bc23=$y23"
           test "$y26" = "bc26" || { echo "::error::replay.json is not bc26"; exit 1; }
           test "$y20" = "bc20" || { echo "::error::replay-bc20.json is not bc20"; exit 1; }
           test "$y21" = "bc21" || { echo "::error::replay-bc21.json is not bc21"; exit 1; }
           test "$y24" = "bc24" || { echo "::error::replay-bc24.json is not bc24"; exit 1; }
           test "$y25" = "bc25" || { echo "::error::replay-bc25.json is not bc25"; exit 1; }
-          if [ "$(printf '%s\n' "$y26" "$y20" "$y21" "$y24" "$y25" | sort -u | wc -l)" -ne 5 ]; then
-            echo "::error::the five smoke replays are not five different years"
+          test "$y23" = "bc23" || { echo "::error::replay-bc23.json is not bc23"; exit 1; }
+          if [ "$(printf '%s\n' "$y26" "$y20" "$y21" "$y24" "$y25" "$y23" | sort -u | wc -l)" -ne 6 ]; then
+            echo "::error::the six smoke replays are not six different years"
             exit 1
           fi
 
@@ -1979,7 +2433,7 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx --yes playwright@1.55.0 install --with-deps chromium
 
-      - name: Load the bundle in a real browser (ALL FIVE years' replays)
+      - name: Load the bundle in a real browser (ALL SIX years' replays)
         run: |
           set -euo pipefail
           # A for-loop, not `ls … | head -1`: under `set -o pipefail` an unmatched
@@ -1989,7 +2443,8 @@ jobs:
           for candidate in dist/smoke/replay.json dist/smoke/replay-bc20.json \
                            dist/smoke/replay-bc21.json \
                            dist/smoke/replay-bc24.json \
-                           dist/smoke/replay-bc25.json; do
+                           dist/smoke/replay-bc25.json \
+                           dist/smoke/replay-bc23.json; do
             if [ -f "${candidate}" ]; then replays="${replays} ${candidate}"; fi
           done
           test -n "${replays}" || {
@@ -2027,8 +2482,16 @@ jobs:
           # the Worker, and bc25 is 2000 rounds over a growing unit population
           # and a whole-map paint array (docs/RULES-BC25.md, "What this year
           # measures"). Decided here rather than discovered at phase 60.
+          # bc23 GETS THE SAME LONGER LEASH, and it is the year that needs
+          # it most: it is THE HEAVIEST YEAR MODULE IN THIS REPO. Measured in
+          # phase 20, a full 2000-round game on the pool's largest map costs
+          # 1.45-2.95 ms/round with 207-451 robots alive at the end, and the
+          # measured Java mirror carries 121-157 robots against bc25's 26-29
+          # (docs/RULES-BC23.md, "What this year measures"). Decided here
+          # rather than discovered at phase 60.
           if [ "${replay}" = "dist/smoke/replay-bc24.json" ] || \
-             [ "${replay}" = "dist/smoke/replay-bc25.json" ]; then
+             [ "${replay}" = "dist/smoke/replay-bc25.json" ] || \
+             [ "${replay}" = "dist/smoke/replay-bc23.json" ]; then
             node tools/ci/viewer_smoke.mjs \
               --bundle dist/static-replay-viewer \
               --replay "${replay}" \
@@ -2098,7 +2561,7 @@ jobs:
       # The wasm module itself, under node: wasm32-only failures (int overflow
       # traps, address-space exhaustion) are invisible to the native tests --
       # and a brand-new year module is exactly where one would live.
-      - name: Smoke the emitted wasm module under node (all five years)
+      - name: Smoke the emitted wasm module under node (all six years)
         run: |
           set -euo pipefail
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
@@ -2129,6 +2592,14 @@ jobs:
             "${{ github.workspace }}/dist/smoke/replay-bc25.json"
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
             "${{ github.workspace }}/tests/fixtures/replay-bc25.json"
+          # bc23: the smoke episode this run produced, and the COMMITTED bc23
+          # fixture -- which is the one that carries ALL TWELVE beat kinds
+          # (tests/test_bc23_beats.nim asserts emission, label and style
+          # against exactly these bytes).
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/dist/smoke/replay-bc23.json"
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/tests/fixtures/replay-bc23.json"
 
       # The text the CI replay never carries. Every replay CI produces is
       # SCRIPTED, so its notes and motto are the short strings baselines.nim

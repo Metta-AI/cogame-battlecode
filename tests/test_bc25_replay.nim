@@ -308,10 +308,19 @@ block:
 
 block:
   ## The committed fixture still re-derives at this GameVersion.
+  ##
+  ## The recorded `game_version` is asserted against
+  ## `ReplayCompatibleGameVersions`, not against `GameVersion` itself — the
+  ## form bc20, bc21 and bc24 already use. Adding a year bumps the version
+  ## for reasons that have nothing to do with bc25, and re-recording four
+  ## older fixtures to change one string would hide the assertion that
+  ## actually matters: `rederives` re-simulates every round of this file
+  ## against today's bc25 rules and must match exactly.
   let text = readFile("tests/fixtures/replay-bc25.json")
   let doc = parseReplay(text)
   checkEq("the fixture is bc25", doc.year, "bc25")
-  checkEq("at the current GameVersion", doc.gameVersion, GameVersion)
+  check("at a GameVersion this build still loads",
+    doc.gameVersion in ReplayCompatibleGameVersions)
   checkEq("and it re-derives clean", rederives(text), -1)
 
 finish("test_bc25_replay")

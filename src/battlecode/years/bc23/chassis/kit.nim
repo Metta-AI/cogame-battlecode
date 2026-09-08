@@ -25,12 +25,16 @@
 ## * **avoid a cloud unless the destination is a cloud** — a cloud costs 20 %
 ##   on every cooldown and collapses vision to r² ≤ 4 in both directions.
 
-import std/tables
+import std/[algorithm, tables]
 import ../world, ../comms, ../knobs
 
 export world, comms, knobs
 
 const
+  ElixirRunners* = 4
+    ## How many carriers the elixir programme claims. Three of a fleet of
+    ## twenty or more keeps the build queue fed while still pouring 600 kg
+    ## into a well inside a few hundred rounds.
   NavNodeBudget* = 160
     ## The BFS cap, in expanded nodes. Chosen against
     ## `tests/test_bc23_perf.nim`'s 100-second gate on a 60x30 board.
@@ -69,6 +73,12 @@ type
     elixirTarget*: Loc
     hasElixirTarget*: bool
     elixirPoured*: int
+    elixirRunners*: seq[int]
+      ## The carrier ids currently running the elixir programme. A CLAIMED
+      ## ROLE and not an id-modulo test: measured, `id mod 3 == 0` left the
+      ## faction with ZERO runners by round 800 (the ids come out of the
+      ## engine's shuffled 4096-blocks, and the surviving population is not
+      ## uniform in them), and the 600 kg transformation stalled at 446.
     strikeCentre*: Loc
     strikeRound*: int
     regroupUntil*: int
@@ -138,6 +148,25 @@ proc refreshCensus*(w: World, side: Side) =
   for islandIdx in dead: side.anchorClaims.del(islandIdx)
   if side.ferryClaim >= 0 and not w.existsRobot(side.ferryClaim):
     side.ferryClaim = -1
+  ## The elixir role: drop the dead, then top up from the live carriers in
+  ## ascending id so the choice is deterministic.
+  var alive: seq[int]
+  for id in side.elixirRunners:
+    if w.existsRobot(id) and w.robotsById[id].kind == rtCarrier:
+      alive.add(id)
+  side.elixirRunners = alive
+  if side.elixirRunners.len < ElixirRunners:
+    var candidates: seq[int]
+    for id in w.execOrder:
+      let r = w.robotsById[id]
+      if r.team != side.team or r.kind != rtCarrier: continue
+      if id == side.ferryClaim: continue
+      if id in side.elixirRunners: continue
+      candidates.add(id)
+    candidates.sort()
+    for id in candidates:
+      if side.elixirRunners.len >= ElixirRunners: break
+      side.elixirRunners.add(id)
 
 proc observe*(w: World, side: Side, r: Robot) =
   ## Fold everything this robot can sense into the faction's memory: static

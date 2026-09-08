@@ -62,7 +62,11 @@ proc pickIsland*(w: World, side: Side, from0: Loc): int =
       for h in side.enemyHqs:
         nearestEnemy = min(nearestEnemy, chebyshev(h, isl.tiles[0]))
       if nearestEnemy == high(int): nearestEnemy = 0
-      score = 200 - min(200, nearestEnemy) + chebyshev(from0, isl.tiles[0])
+      ## THE SAFETY TERM HAS TO DOMINATE THE WALK. Weighted 1:1 the ferry's
+      ## own distance decided every choice on a 20x20 board and the knob had
+      ## no measurable teeth at all.
+      score = (200 - min(200, nearestEnemy)) * 8 +
+        chebyshev(from0, isl.tiles[0])
     if score < best:
       best = score
       result = islandIdx

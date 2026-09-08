@@ -65,11 +65,9 @@ proc strikeTarget*(w: World, side: Side, r: Robot): Loc =
       if d < best:
         best = d
         result = isl.tiles[0]
-    for l in side.knownWells:
-      let d = chebyshev(r.loc, l) + 4
-      if d < best:
-        best = d
-        result = l
+    ## Our own islands and, failing that, HOME — not the contested wells.
+    ## `hold` that camps a midfield well is `defend` with a different name,
+    ## and the measured carrier damage it dealt was higher than `siege`'s.
   of duDefend:
     ## Intercept anything sensed INSIDE OUR OWN HALF; otherwise hold a picket
     ## a third of the way out.

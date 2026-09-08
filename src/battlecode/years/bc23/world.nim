@@ -699,12 +699,14 @@ proc doPlaceAnchor*(w: World, r: Robot): bool {.discardable.} =
       w.stats.acceleratingAnchorsPlaced[ord(r.team)] += 1
     if w.stats.firstAnchorRound[ord(r.team)] == 0:
       w.stats.firstAnchorRound[ord(r.team)] = w.currentRound
+    var nearestEnemyHq = -1
     for hqId in w.headquarters[ord(r.team.other())]:
-      if w.existsRobot(hqId):
-        w.stats.capturedDistanceSum[ord(r.team)] +=
-          chebyshev(r.loc, w.robotsById[hqId].loc)
-        w.stats.capturedDistanceCount[ord(r.team)] += 1
-        break
+      if not w.existsRobot(hqId): continue
+      let d = chebyshev(r.loc, w.robotsById[hqId].loc)
+      if nearestEnemyHq < 0 or d < nearestEnemyHq: nearestEnemyHq = d
+    if nearestEnemyHq >= 0:
+      w.stats.capturedDistanceSum[ord(r.team)] += nearestEnemyHq
+      w.stats.capturedDistanceCount[ord(r.team)] += 1
     w.registerAnchorPlaced(r.team)
     discard w.beat(BeatIslandCaptured, "island_captured", ord(r.team),
       w.islands[islandIdx].id, w.islandsOwned(r.team),
@@ -1070,10 +1072,20 @@ proc newWorld*(spec: MapSpec, maxRounds: int): World =
   w.islandIndex = initTable[int, int]()
   w.tempo = initTempoField(size)
 
-  ## The initial headquarters, in the map file's ASCENDING ID order — which is
-  ## the order `LiveMap`'s constructor imposes and therefore the initial exec
-  ## order.
-  for b in spec.initialBodies:
+  ## The initial headquarters in ASCENDING ID order. `LiveMap`'s constructor
+  ## SORTS its initial bodies by id (`LiveMap.java:105`) before the world ever
+  ## sees them, and that order IS the initial `dynamicBodyExecOrder` — i.e.
+  ## the order the headquarters take their turns in. THE SORT IS HERE AND NOT
+  ## ONLY IN THE CONVERTER, because a hand-written `MapSpec` (every test
+  ## fixture, and `parseMapSpec` on a file whose rows were reordered) must get
+  ## the engine's order too.
+  var bodies = spec.initialBodies
+  for i in 1 ..< bodies.len:
+    var j = i
+    while j > 0 and bodies[j - 1].id > bodies[j].id:
+      swap(bodies[j - 1], bodies[j])
+      dec j
+  for b in bodies:
     let team = if b.team == 1: teamA else: teamB
     w.spawnRobot(b.id, RobotType(b.kind), loc(b.x, b.y), team)
 

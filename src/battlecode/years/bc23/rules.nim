@@ -343,14 +343,17 @@ proc emitConquestBeats(w: World) =
 proc runRound*(w: World, sides: array[2, Side],
                chassis: array[2, ChassisKind23]) =
   w.processBeginningOfRound()
-  for t in 0 .. 1:
-    w.lostThisRound[t] = 0
-    w.launchersLostThisRound[t] = 0
+  ## THE CHASSIS'S ROUND-LEVEL BOOKKEEPING RUNS BEFORE THE COUNTERS ARE
+  ## CLEARED, because `retreat_on_launcher_loss` reads LAST round's losses. It
+  ## ran after the reset once and the knob silently had no teeth at all.
   when not defined(bc23Scenario):
     for t in 0 .. 1:
       case chassis[t]
       of ckLemonade: beginRound(w, sides[t])
       of ckExamplefuncsplayer23: discard
+  for t in 0 .. 1:
+    w.lostThisRound[t] = 0
+    w.launchersLostThisRound[t] = 0
 
   ## Rules 2 and 3. THE ARRAY BEING ITERATED IS A SNAPSHOT taken before the
   ## sweep (`dynamicBodyExecOrder.toArray()`), so a robot built this round

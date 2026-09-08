@@ -15,6 +15,13 @@ import ../world, kit, anchors, elixir, comms as chcomms
 
 export kit
 
+func isElixirRunner*(side: Side, r: Robot): bool =
+  ## A CLAIMED ROLE, refreshed once a round by `kit.refreshCensus`. Three
+  ## carriers run the elixir programme; the rest keep feeding the
+  ## headquarters, because a fleet that all pours into the well starves the
+  ## build queue — the same failure the deposit rule exists to stop.
+  r.id in side.elixirRunners
+
 func anchorPending*(w: World, side: Side): bool =
   side.doctrine.anchorBudget > 0 and
     w.currentRound >= side.doctrine.anchorRound and
@@ -46,6 +53,16 @@ func wantsResource(side: Side, w: World, r: Robot): Resource =
   ## adamantium total stays lower, so every carrier keeps mining adamantium,
   ## so it never has the 80 mana a standard anchor costs and never anchors an
   ## island at all. A fixed split is what makes `balanced` actually balanced.
+  ## AN ELIXIR RUNNER MINES THE OPPOSITE RESOURCE, whatever the doctrine's
+  ## well priority says, because 600 kg of the OPPOSITE resource is what
+  ## transforms a well. Measured: with the runners mining whatever the split
+  ## gave them the transformation reached 279 of 600 by round 500 and the
+  ## sink never opened at all.
+  if side.isElixirRunner(r) and side.hasElixirTarget and
+      elixirRunning(w, side):
+    let target = w.wellAtLoc(side.elixirTarget)
+    if target.present and target.kind != resElixir:
+      return opposite(target.kind)
   case side.doctrine.wellPriority
   of wpAdamantium: resAdamantium
   of wpMana: resMana
@@ -53,13 +70,23 @@ func wantsResource(side: Side, w: World, r: Robot): Resource =
     ## While the anchor programme is WAITING on a resource, the whole fleet
     ## fetches it: an anchor is 80 adamantium AND 80 mana, and a fleet that
     ## keeps mining the one the headquarters already has never buys one.
+    ## Otherwise THE FLEET SPLIT IS THE `launcher_ratio` SPLIT, biased by the
+    ## opening: mana buys launchers and adamantium buys carriers, so a
+    ## doctrine that asks for eighty per cent launchers has to be MINING for
+    ## them. Measured: a fixed 50/50 split left `launcher_ratio` with no teeth
+    ## on the launcher census at all, because the census is mana-bound and not
+    ## decision-bound.
     if anchorPending(w, side):
       if hqShortfall(w, side, resMana) >= hqShortfall(w, side, resAdamantium):
         resMana
       else:
         resAdamantium
-    elif (r.id and 1) == 0: resAdamantium
-    else: resMana
+    elif side.doctrine.opening == opLauncherRush and w.currentRound <= 400:
+      resMana
+    elif side.doctrine.opening == opCarrierEco and w.currentRound <= 400:
+      resAdamantium
+    elif (r.id mod 100) < side.doctrine.launcherRatio: resMana
+    else: resAdamantium
 
 proc wellTarget*(w: World, side: Side, r: Robot): Loc =
   ## The well a free carrier walks to: the doctrine's preferred resource
@@ -78,7 +105,10 @@ proc wellTarget*(w: World, side: Side, r: Robot): Loc =
     ## the nearer adamantium well every time and never built a launcher —
     ## measured, and the reason this number is 40.
     if well.kind != want: score += 40
-    if well.kind == resElixir: score -= 10
+    ## ELIXIR IS THE TECH THE DOCTRINE PAID FOR. Once a well has flipped,
+    ## every carrier prefers it strongly: at -10 the fleet kept mining the
+    ## nearer adamantium and the elixir sink never opened at all.
+    if well.kind == resElixir: score -= 60
     if well.upgraded: score -= 12
     if w.getCloud(l): score += 3
     if score < best:
@@ -127,16 +157,18 @@ proc depositAt(w: World, side: Side, r: Robot): bool =
   false
 
 proc pourElixir(w: World, side: Side, r: Robot): bool =
-  ## The elixir programme's deposit: 40 kg loads of the OPPOSITE resource into
-  ## the target well, until it flips.
+  ## The elixir programme's deposit: carrier loads of the OPPOSITE resource
+  ## into the target well, until it flips.
   if not side.hasElixirTarget: return false
   if not r.isActionReady(): return false
   let target = side.elixirTarget
   let well = w.wellAtLoc(target)
-  if well.kind != resMana: return false
-  if r.adamantium <= 0: return false
+  if not well.present or well.kind == resElixir: return false
+  let need = opposite(well.kind)
+  let held = r.resourceOf(need)
+  if held <= 0: return false
   if not r.loc.isAdjacentTo(target): return false
-  w.doTransferResource(r, target, resAdamantium, r.adamantium)
+  w.doTransferResource(r, target, need, held)
 
 proc runFerry(w: World, side: Side, r: Robot): bool =
   ## Take an anchor from a headquarters, walk it to the island `anchors.nim`
@@ -172,9 +204,22 @@ proc runFerry(w: World, side: Side, r: Robot): bool =
 
   ## Not carrying one: only ONE carrier at a time is the ferry, and only when
   ## a headquarters actually holds an anchor.
-  if side.ferryClaim >= 0 and side.ferryClaim != r.id: return false
-  if w.anchorsInStock(side.team) <= 0: return false
+  ##
+  ## THE CLAIM IS RELEASED THE MOMENT THE CLAIMANT LOADS UP. A claim held by a
+  ## carrier that is busy mining locks every other carrier out of the ferry
+  ## role: measured, on `Sneaky` the faction built two anchors and delivered
+  ## NEITHER for two thousand rounds.
+  if side.ferryClaim >= 0 and side.ferryClaim != r.id:
+    if w.existsRobot(side.ferryClaim):
+      let holder = w.robotsById[side.ferryClaim]
+      if holder.weight > 0 and holder.totalAnchors == 0:
+        side.ferryClaim = -1
+      else:
+        return false
+    else:
+      side.ferryClaim = -1
   if r.weight > 0: return false          ## must be completely empty
+  if w.anchorsInStock(side.team) <= 0: return false
   ## Walk to the nearest friendly headquarters that holds one, and take it.
   var target = loc(-1, -1)
   var best = high(int)
@@ -230,11 +275,9 @@ proc runCarrier*(w: World, side: Side, r: Robot) =
   if r.weight >= HaulThreshold or
       (r.weight > 0 and not r.isActionReady() and
        chebyshev(r.loc, home) <= 2):
-    ## ONE CARRIER IN THREE runs the elixir programme; the rest keep feeding
-    ## the headquarters. A fleet that all pours into the well starves the
-    ## build queue, which is the same failure the deposit rule exists to stop.
     if elixirRunning(w, side) and side.hasElixirTarget and
-        r.adamantium > 0 and (r.id mod 3) == 0:
+        side.isElixirRunner(r) and
+        r.resourceOf(opposite(w.wellAtLoc(side.elixirTarget).kind)) > 0:
       if pourElixir(w, side, r): return
       discard w.moveToward(side, r, side.elixirTarget)
       return
@@ -245,8 +288,9 @@ proc runCarrier*(w: World, side: Side, r: Robot) =
     discard w.moveToward(side, r, home)
     return
 
-  if (r.id mod 3) == 0 and r.weight >= HaulThreshold and
-      elixirRunning(w, side) and side.hasElixirTarget and r.adamantium > 0:
+  if side.isElixirRunner(r) and r.weight >= HaulThreshold and
+      elixirRunning(w, side) and side.hasElixirTarget and
+      r.resourceOf(opposite(w.wellAtLoc(side.elixirTarget).kind)) > 0:
     if pourElixir(w, side, r): return
     discard w.moveToward(side, r, side.elixirTarget)
     return
@@ -254,14 +298,27 @@ proc runCarrier*(w: World, side: Side, r: Robot) =
   ## Otherwise: mine. Collect from any adjacent well — INCLUDING THE ONE WE
   ## ARE STANDING ON, because `isAdjacentTo` includes the robot's own tile.
   if r.isActionReady():
-    for l in w.locationsWithinRadiusSquared(
-        r.loc, RobotSpecs[rtCarrier].actionRadiusSquared):
-      if not r.loc.isAdjacentTo(l): continue
-      if not w.isWell(l): continue
-      if w.canCollectResource(r, l, -1):
-        if w.doCollectResource(r, l, -1):
-          w.noteFirstAction(side.team, Bc23ActionCollect)
-          return
+    ## A STRICT `well_priority` collects ITS OWN RESOURCE ONLY. Without this
+    ## the opportunistic adjacent-well collect quietly undoes the knob: a
+    ## `mana` doctrine walking past an adamantium well still filled up on
+    ## adamantium, and the measured spread on `adamantium_mined` was 13 %
+    ## instead of the note's 30 %. Elixir is always taken — it is the one
+    ## resource no doctrine can mine on purpose.
+    let strict = side.doctrine.wellPriority != wpBalanced
+    let want = wantsResource(side, w, r)
+    for pass in 0 .. 1:
+      for l in w.locationsWithinRadiusSquared(
+          r.loc, RobotSpecs[rtCarrier].actionRadiusSquared):
+        if not r.loc.isAdjacentTo(l): continue
+        if not w.isWell(l): continue
+        let kind = w.wellAtLoc(l).kind
+        if pass == 0 and kind != want and kind != resElixir: continue
+        if pass == 1 and strict and kind != want and kind != resElixir:
+          continue
+        if w.canCollectResource(r, l, -1):
+          if w.doCollectResource(r, l, -1):
+            w.noteFirstAction(side.team, Bc23ActionCollect)
+            return
 
   if r.weight > 0 and chebyshev(r.loc, home) <= 1:
     if depositAt(w, side, r):
