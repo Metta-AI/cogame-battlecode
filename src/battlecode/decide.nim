@@ -60,7 +60,7 @@ proc chassisForSeat*(year: string, seat: SeatPolicy): ScriptedChassis =
 
 proc chassisNameFor*(year: string, seat: SeatPolicy, sheet: Sheet): string =
   case yearIdOf(year)
-  of yBc20, yBc21, yBc24, yBc25:
+  of yBc20, yBc21, yBc24, yBc25, yBc23:
     (if seat.isLlm: $strongChassisFor(year)
      else: baselineName(baselineForSeat(year, seat)))
   of yBc26: $sheet.doctrine.chassis
@@ -436,12 +436,91 @@ chassis. That is not yours to choose: there is no `chassis` knob, and a reply
 that sends one has it ignored.
 """
 
+const Bc23Preamble* = """
+You command a faction in Battlecode 2023, "Tempest": a two-faction grid war on
+a symmetric map between 20x20 and 60x60, 2000 rounds a game, best of three.
+
+You do not move a single robot. Before the war you write ONE DOCTRINE — a JSON
+sheet of twelve named knobs — and a deterministic simulation then plays the
+whole match from it while you watch.
+
+THE WORLD
+- Each faction starts with 1 to 4 HEADQUARTERS. They are INDESTRUCTIBLE, they
+  cannot move, each has its own stockpile, and each may take UP TO FIVE
+  ACTIONS IN ONE TURN (action cooldown 2 against a limit of 10).
+- Everything runs off two resources and a third you have to manufacture.
+  Wells of ADAMANTIUM and MANA sit on the map; pour 600 kg of the OPPOSITE
+  resource into a well and it becomes an ELIXIR well. Pour 1400 kg of a well's
+  own type into it and its rate goes from 1 to 3.
+- CARRIER (50 Ad, 150 hp, capacity 40): mines 1 kg per action from a well it
+  stands on or beside, carries it home, and hands it to a headquarters. Its
+  movement cooldown is floor(5 + 3*cargo/8), so a full carrier is half the
+  speed of an empty one. It can THROW its whole cargo at an enemy within
+  r2<=9 for floor(5*cargo/4) damage — up to 50 — and the cargo is destroyed
+  whether it hits or not, off your team total.
+- LAUNCHER (45 Mn, 200 hp): hits one square within r2<=16 for 20 damage, even
+  a robot it cannot see. IT IS THE ONLY UNIT THAT DEALS REAL DAMAGE.
+- AMPLIFIER (30 Ad + 15 Mn, 120 hp): lets friendly robots within r2<=20 WRITE
+  the faction's 64-slot shared array.
+- DESTABILIZER (200 Ex, 300 hp): marks a square; every tile within r2<=15 of
+  it gives the ENEMY +10% cooldowns for five rounds and then deals 50 damage
+  to whatever enemy stands there.
+- BOOSTER (150 Ex, 400 hp): gives every ALLY within r2<=20 of where it stood
+  -10% cooldowns for ten rounds, stacking three deep. The patch does not
+  follow the booster.
+- CLOUDS add 20% to every cooldown and collapse vision to r2<=4 — BOTH WAYS,
+  so a robot in a cloud is also hidden. CURRENTS shove every robot standing on
+  one, one square, at the end of every round.
+
+HOW A GAME ENDS
+- You win outright by holding 75% of the SKY ISLANDS. A headquarters builds an
+  anchor (standard = 80 Ad + 80 Mn, 250 health; accelerating = 300 Ex, 750
+  health), an EMPTY carrier takes it — an anchor weighs the carrier's whole
+  capacity — walks onto an island tile and plants it.
+- An anchor's health moves every round by (percent of the island's tiles YOUR
+  robots occupy) minus (percent THEIRS occupy). At zero the island goes
+  neutral. AN ANCHOR WITHOUT A GARRISON IS A LOAN, NOT A PURCHASE.
+- If nobody conquers 75% by round 2000 the match is decided on a five-rung
+  ladder, first difference wins: more islands held, then more anchors EVER
+  placed, then more elixir, then more mana, then more adamantium, then a coin
+  flip.
+- THERE IS NO ELIMINATION. Headquarters cannot be destroyed and a faction with
+  no robots at all plays on to round 2000.
+
+YOUR DOCTRINE — twelve knobs, and nothing else
+  opening                  "launcher_rush" | "carrier_eco" | "balanced"
+                                                        default "balanced"
+  launcher_ratio           20..80 (% of build decisions) default 45
+  well_priority            "adamantium" | "mana" | "balanced"
+                                                        default "balanced"
+  elixir_tech              "never" | "mid" | "early"     default "mid"
+  elixir_spend             "accelerating_anchors" | "boosters" | "destabilizers"
+                                                        default "accelerating_anchors"
+  anchor_round             1..1800                       default 400
+  anchor_budget            0..100 (% of income)          default 35
+  island_priority          "nearest" | "contested" | "safe"
+                                                        default "nearest"
+  amplifier_use            "never" | "one" | "escort"    default "one"
+  destabilizer_use         "hold" | "defend" | "siege"   default "defend"
+  retreat_on_launcher_loss "never" | "regroup" | "home"  default "regroup"
+  carrier_throw            0..100                        default 25
+
+No setting of any knob makes your faction idle: it always keeps at least three
+carriers per headquarters mining and DEPOSITING, always builds a launcher when
+mana allows and the census is short, always spends a headquarters' spare
+actions, always answers an enemy launcher sensed near one of its own
+headquarters, and always takes a lethal carrier throw inside r2<=9. Your
+faction is driven by the `lemonade` chassis. That is not yours to choose:
+there is no `chassis` knob, and a reply that sends one has it ignored.
+"""
+
 proc preambleFor*(year: string): string =
   case yearIdOf(year)
   of yBc20: Bc20Preamble
   of yBc21: Bc21Preamble
   of yBc24: Bc24Preamble
   of yBc25: Bc25Preamble
+  of yBc23: Bc23Preamble
   of yBc26: SystemPreamble
 
 proc briefFor*(
@@ -612,6 +691,100 @@ proc briefFor*(
       "win_bonus_per_game": 200,
       "games": plan.maps.len,
       "note": "shares are float32; points truncate to an integer"
+    }
+  of yBc23:
+    payload["economy"] = %*{
+      "start_per_headquarters": {"adamantium": 200, "mana": 200},
+      "passive_per_headquarters_every_5_rounds":
+        {"adamantium": 6, "mana": 6},
+      "well_rate": 1, "upgraded_well_rate": 3,
+      "well_upgrade_cost_same_resource": 1400,
+      "well_to_elixir_cost_opposite_resource": 600,
+      "carrier_capacity": 40, "anchor_weight": 40,
+      "note": "a resource thrown into a well leaves your team total for good"
+    }
+    payload["units"] = %*{
+      "headquarters": {"hp": "indestructible", "action_cd": 2, "action_r2": 9,
+        "vision_r2": 34,
+        "does": "builds robots and anchors (UP TO FIVE ACTIONS A TURN), " &
+                "stores resources, deals 4 damage to every enemy within " &
+                "r2<=9 at the end of every round"},
+      "carrier": {"ad": 50, "hp": 150, "capacity": 40, "action_cd": 10,
+        "action_r2": 9, "vision_r2": 20,
+        "move_cd": "floor(5 + 3*cargo/8) - a full carrier is half the speed " &
+                   "of an empty one",
+        "does": "mines 1 (or 3 from an upgraded well) per action from a well " &
+                "it stands on or beside, carries resources and anchors, " &
+                "plants anchors, and can THROW its whole cargo for " &
+                "floor(5*cargo/4) damage - up to 50 - losing the cargo " &
+                "whether it hits or not"},
+      "launcher": {"mn": 45, "hp": 200, "damage": 20, "action_cd": 10,
+        "action_r2": 16, "vision_r2": 20, "move_cd": 20,
+        "does": "the only real attacker; hits any square within r2<=16, " &
+                "even a robot it cannot see"},
+      "amplifier": {"ad": 30, "mn": 15, "hp": 120, "action_cd": "none",
+        "vision_r2": 34, "move_cd": 15,
+        "does": "lets friendly robots within r2<=20 WRITE the shared array"},
+      "destabilizer": {"ex": 200, "hp": 300, "damage": 50, "action_cd": 70,
+        "action_r2": 13, "move_cd": 25,
+        "does": "marks a square: every tile within r2<=15 of it gives the " &
+                "ENEMY +10% cooldowns for 5 rounds, then deals 50 damage to " &
+                "whatever enemy stands there"},
+      "booster": {"ex": 150, "hp": 400, "action_cd": 140, "move_cd": 25,
+        "does": "gives every ALLY within r2<=20 of where it stood -10% " &
+                "cooldowns for 10 rounds; stacks 3 deep; the patch does not " &
+                "follow the booster"}
+    }
+    payload["anchors"] = %*{
+      "standard": {"ad": 80, "mn": 80, "health": 250,
+                   "heals_allies_within_r2_4": 4},
+      "accelerating": {"ex": 300, "health": 750,
+                       "heals_allies_within_r2_4": 6,
+                       "cooldowns": "-15% for allies within r2<=4 of the island"},
+      "how": "a headquarters builds it; an EMPTY carrier takes it (it weighs " &
+             "the carrier's whole capacity), walks onto an island tile and " &
+             "plants it",
+      "holding": "every round an anchor's health moves by (percent of the " &
+                 "island's tiles you occupy) - (percent they occupy), capped " &
+                 "at its max; at 0 the island goes neutral and either side " &
+                 "can plant",
+      "override": "you may replace your OWN anchor (it returns to full " &
+                  "health) but that does NOT count as a new anchor placed " &
+                  "for the tiebreak"
+    }
+    payload["tempo"] = %*{
+      "cloud": "+20% cooldowns and vision collapses to r2<=4 - both ways, " &
+               "so a robot in a cloud is also hidden",
+      "stacking": "ADDITIVE on a per-tile, per-team multiplier: 1.00 +0.20 " &
+                  "cloud -0.10 per boost (max 3) +0.10 per destabilise " &
+                  "(max 2) -0.15 accelerating anchor",
+      "applied": "round(base_cooldown * multiplier), read at the tile you " &
+                 "end up on"
+    }
+    payload["comms"] = %*{
+      "shared_array": 64, "max_value": 65535,
+      "write_rule": "a headquarters or an amplifier may always write; any " &
+                    "other robot needs a friendly amplifier within r2<=20, a " &
+                    "friendly headquarters within r2<=9, or one of YOUR " &
+                    "islands within r2<=4",
+      "read_rule": "always", "cost": "none"
+    }
+    payload["win"] = %*{
+      "instant": "hold 75% of the sky islands (see islands_to_win per map)",
+      "at_round_2000": ["more islands held", "more anchors ever placed",
+                        "more elixir", "more mana", "more adamantium",
+                        "coin flip"],
+      "note": "there is NO elimination: headquarters cannot be destroyed and " &
+              "a side with no robots plays on to round 2000"
+    }
+    payload["sheet_schema"] = bc23SheetSchema()
+    payload["scoring"] = %*{
+      "weights": {"islands_share": 60, "anchors_share": 22,
+                  "elixir_share": 10, "mana_share": 5, "adamantium_share": 3},
+      "win_bonus_per_game": 200,
+      "games": plan.maps.len,
+      "note": "shares are float32; points truncate to an integer; the " &
+              "league ranks by scores, which the win bonus dominates"
     }
   of yBc26:
     payload["scoring"] = %*{

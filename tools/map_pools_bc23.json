@@ -1,0 +1,7 @@
+{
+  "small": ["Quiet", "SmallElements", "Lantern", "Spin", "Sneaky", "Barcode"],
+  "mixed": ["AllElements", "DefaultMap", "Cave", "MoonPhases", "Eyelands",
+            "Rectangle", "Scatter", "HideAndSeek", "Rainbow", "IslandHopping"],
+  "large": ["Spiderweb", "ThirtyFive", "Target", "Spots", "Forest",
+            "Grievance"]
+}

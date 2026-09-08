@@ -28,6 +28,11 @@ from years/bc25/towers as t25 import nil
 from years/bc25/units as u25 import nil
 from years/bc25/constants as c25 import nil
 from years/bc25/rules as r25 import nil
+from years/bc23/world as w23 import nil
+from years/bc23/units as u23 import nil
+from years/bc23/islands as i23 import nil
+from years/bc23/constants as c23 import nil
+from years/bc23/rules as r23 import nil
 
 const
   PlaybackSpeeds* = [1, 2, 3, 4, 8, 16]
@@ -135,6 +140,11 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
   ## the replay header's year. Every other kind below belongs to exactly one
   ## year.
   let isBc25 = doc.year == "bc25"
+  let isBc23 = doc.year == "bc23"
+  ## The bc23-only kinds below (`anchor_built`, `island_captured`,
+  ## `island_lost`, `conquest_progress`, `well_transformed`, `well_upgraded`,
+  ## `first_elixir_unit`, `boost_field`, `destabilize_hit`, `duel`) need no
+  ## discriminator, because no other year emits them.
   for e in doc.events:
     ## Pre-match events carry `ms` and `game = -1`, not a round. The two
     ## doctrine kinds still have a beat (every year's stylesheet ships
@@ -159,14 +169,21 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       of "drone_water_drop": "drop"
       of "hq_buried": "bury"
       of "hq_drowned": "drown"
-      of "first_action": (if isBc25: "build" else: "")
+      of "first_action": (if isBc25 or isBc23: "build" else: "")
       of "tower_built": "tower"
       of "tower_upgraded": "upgrade"
       of "tower_lost": "siege"
       of "srp_completed", "srp_active", "srp_broken": "srp"
       of "coverage": "coverage"
       of "starved": "starve"
-      of "rout": (if isBc25: "rout" else: "")
+      of "rout": (if isBc25 or isBc23: "rout" else: "")
+      of "anchor_built": "anchor"
+      of "island_captured", "island_lost": "island"
+      of "conquest_progress": "conquest"
+      of "well_transformed", "well_upgraded", "first_elixir_unit": "elixir"
+      of "boost_field": "boost"
+      of "destabilize_hit": "destabilize"
+      of "duel": "duel"
       of "doctrine_received", "doctrine_fallback": "doctrine"
       else: ""
     if kind.len == 0: continue
@@ -253,6 +270,53 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       label = e.fields{"alias"}.getStr() & " runs dry: " &
         $e.fields{"robots"}.getInt() & " robots end the round at zero paint" &
         " — game " & $(e.game + 1) & ", round " & $e.round
+    of "anchor_built":
+      label = e.fields{"alias"}.getStr() & " builds a " &
+        e.fields{"anchor"}.getStr() & " anchor — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "island_captured":
+      label = e.fields{"alias"}.getStr() & " anchors island " &
+        $e.fields{"island"}.getInt() & " (" &
+        $e.fields{"held_now"}.getInt() & " of the " &
+        $e.fields{"to_win"}.getInt() & " it needs) — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "island_lost":
+      label = "ANCHOR LOST — " & e.fields{"alias"}.getStr() & "'s island " &
+        $e.fields{"island"}.getInt() & " after " &
+        $e.fields{"held_for"}.getInt() & " rounds"
+    of "conquest_progress":
+      label = e.fields{"alias"}.getStr() & " holds " &
+        $e.fields{"held"}.getInt() & " of the " &
+        $e.fields{"to_win"}.getInt() & " islands it needs — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "well_transformed":
+      label = e.fields{"alias"}.getStr() & " turns the " &
+        e.fields{"from"}.getStr() & " well at " &
+        $e.fields{"x"}.getInt() & "," & $e.fields{"y"}.getInt() &
+        " into elixir — game " & $(e.game + 1) & ", round " & $e.round
+    of "well_upgraded":
+      label = e.fields{"alias"}.getStr() & " upgrades the " &
+        e.fields{"type"}.getStr() & " well at " &
+        $e.fields{"x"}.getInt() & "," & $e.fields{"y"}.getInt() &
+        " to rate 3 — game " & $(e.game + 1) & ", round " & $e.round
+    of "first_elixir_unit":
+      label = e.fields{"alias"}.getStr() & " fields its first " &
+        e.fields{"unit"}.getStr().replace("_", " ") & " — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "boost_field":
+      label = e.fields{"alias"}.getStr() & " boosts the field at " &
+        $e.fields{"x"}.getInt() & "," & $e.fields{"y"}.getInt() &
+        " (" & $e.fields{"stacks"}.getInt() & " deep) — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "destabilize_hit":
+      label = "DESTABILISED — " & e.fields{"alias"}.getStr() & " detonates at " &
+        $e.fields{"x"}.getInt() & "," & $e.fields{"y"}.getInt() &
+        " for " & $e.fields{"damage"}.getInt() & ", game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "duel":
+      label = "LAUNCHER DUEL — " & $e.fields{"lost"}[0].getInt() & " lost to " &
+        $e.fields{"lost"}[1].getInt() & ", game " & $(e.game + 1) &
+        ", round " & $e.round
     of "rout":
       label = "ROUT — " & e.fields{"alias"}.getStr() & " loses " &
         $e.fields{"lost"}.getInt() & " robots, game " &
@@ -964,6 +1028,188 @@ proc bc25ChromeJson*(
   }
   $node
 
+# ---------------------------------------------------------------------------
+#  bc23 — the islands readout, the economy, the census and the war panel
+# ---------------------------------------------------------------------------
+
+proc bc23Islands(w: w23.World, sideAslot: int): JsonNode =
+  ## `#bc23-islands`: THE HEADLINE READOUT AND THE YEAR'S WHOLE STORY. Both
+  ## factions' island tally, the conquest threshold, the neutral count and a
+  ## health pip per held island that empties as an anchor is ground down.
+  let toWin = u23.islandsToWin(w.islands.len)
+  var factions = newJArray()
+  for slot in 0 .. 1:
+    let team = u23.Team(if slot == sideAslot: 0 else: 1)
+    var pips = newJArray()
+    for isl in w.islands:
+      if i23.isOwnedBy(isl, team):
+        pips.add(%*{"id": isl.id, "pips": i23.healthPips(isl),
+                    "health": isl.health,
+                    "max": c23.AnchorSpecs[isl.anchor].totalHealth,
+                    "anchor": $isl.anchor})
+    factions.add(%*{
+      "alias": aliasFor(slot),
+      "held": w23.islandsOwned(w, team),
+      "captured": w.stats.islandsCaptured[ord(team)],
+      "lost": w.stats.islandsLost[ord(team)],
+      "anchors_placed": w.stats.totalAnchorsPlaced[ord(team)],
+      "to_win": max(0, toWin - w23.islandsOwned(w, team)),
+      "pips": pips
+    })
+  %*{
+    "factions": factions,
+    "islands": w.islands.len,
+    "islands_to_win": toWin,
+    "neutral": w23.islandsNeutral(w)
+  }
+
+proc bc23Econ(w: w23.World, sideAslot: int): JsonNode =
+  ## `#bc23-econ`: adamantium, mana and ELIXIR banked, cargo in flight, wells
+  ## worked and their rate, and the elixir-programme badge.
+  var worked = 0
+  var upgraded = 0
+  var elixirWells = 0
+  for well in w.wellAt:
+    if not well.present: continue
+    worked += 1
+    if well.upgraded: upgraded += 1
+    if well.kind == u23.resElixir: elixirWells += 1
+  var factions = newJArray()
+  for slot in 0 .. 1:
+    let team = u23.Team(if slot == sideAslot: 0 else: 1)
+    let t = ord(team)
+    factions.add(%*{
+      "alias": aliasFor(slot),
+      "adamantium": w.stats.adamantium[t],
+      "mana": w.stats.mana[t],
+      "elixir": w.stats.elixir[t],
+      "mined": w.stats.adamantiumMined[t] + w.stats.manaMined[t] +
+        w.stats.elixirMined[t],
+      "banked": w.stats.resourcesBanked[t],
+      "thrown": w.stats.resourcesThrown[t],
+      "cargo": w23.cargoWeight(w, team),
+      "wells_transformed": w.stats.wellsTransformed[t],
+      "wells_upgraded": w.stats.wellsUpgraded[t]
+    })
+  %*{
+    "factions": factions,
+    "wells": worked,
+    "wells_upgraded": upgraded,
+    "elixir_wells": elixirWells
+  }
+
+proc bc23Units(w: w23.World, sideAslot: int): JsonNode =
+  ## `#bc23-units`: the six-type census with the LAUNCHER COUNT EMPHASISED —
+  ## this is the year of the launcher duel — plus robots lost and the anchors
+  ## sitting unused in headquarters.
+  result = newJArray()
+  for slot in 0 .. 1:
+    let team = u23.Team(if slot == sideAslot: 0 else: 1)
+    let t = ord(team)
+    result.add(%*{
+      "alias": aliasFor(slot),
+      "headquarters": w23.robotCountByType(w, team, c23.rtHeadquarters),
+      "carriers": w23.robotCountByType(w, team, c23.rtCarrier),
+      "launchers": w23.robotCountByType(w, team, c23.rtLauncher),
+      "amplifiers": w23.robotCountByType(w, team, c23.rtAmplifier),
+      "destabilizers": w23.robotCountByType(w, team, c23.rtDestabilizer),
+      "boosters": w23.robotCountByType(w, team, c23.rtBooster),
+      "built": w.stats.unitsBuilt[t],
+      "lost": w.stats.robotsLost[t],
+      "anchors_in_stock": w23.anchorsInStock(w, team)
+    })
+
+proc bc23War(w: w23.World, sideAslot: int): JsonNode =
+  ## `#bc23-tempest`, the endcard war panel: everything the doctrines argued
+  ## about, per faction. Nothing here is stored in the replay — the wasm sim
+  ## re-derives every round.
+  result = newJArray()
+  for slot in 0 .. 1:
+    let team = u23.Team(if slot == sideAslot: 0 else: 1)
+    let t = ord(team)
+    result.add(%*{
+      "alias": aliasFor(slot),
+      "islands_captured": w.stats.islandsCaptured[t],
+      "islands_lost": w.stats.islandsLost[t],
+      "islands_held": w23.islandsOwned(w, team),
+      "rounds_holding": w.stats.roundsHoldingAnyIsland[t],
+      "anchors_built": w.stats.anchorsBuilt[t],
+      "anchors_placed": w.stats.totalAnchorsPlaced[t],
+      "anchors_lost": w.stats.anchorsLost[t],
+      "accelerating_anchors": w.stats.acceleratingAnchorsPlaced[t],
+      "adamantium_mined": w.stats.adamantiumMined[t],
+      "mana_mined": w.stats.manaMined[t],
+      "elixir_mined": w.stats.elixirMined[t],
+      "banked": w.stats.resourcesBanked[t],
+      "thrown": w.stats.resourcesThrown[t],
+      "wells_transformed": w.stats.wellsTransformed[t],
+      "wells_upgraded": w.stats.wellsUpgraded[t],
+      "carriers_built": w.stats.carriersBuilt[t],
+      "launchers_built": w.stats.launchersBuilt[t],
+      "amplifiers_built": w.stats.amplifiersBuilt[t],
+      "destabilizers_built": w.stats.destabilizersBuilt[t],
+      "boosters_built": w.stats.boostersBuilt[t],
+      "robots_lost": w.stats.robotsLost[t],
+      "damage": {"launcher": max(0, w.stats.damageDealt[t] -
+                                   w.stats.throwDamage[t] -
+                                   w.stats.hqDamage[t]),
+                 "throw": w.stats.throwDamage[t],
+                 "destabilizer": w.stats.destabilizeDamage[t],
+                 "headquarters": w.stats.hqDamage[t]},
+      "anchor_heals": w.stats.anchorHeals[t],
+      "array_writes": w.stats.arrayWrites[t],
+      "current_rides": w.stats.currentRides[t]
+    })
+
+proc bc23ChromeJson*(
+  doc: ReplayDoc, w: w23.World, view: ViewerState,
+  frame, totalFrames, gameIndex, sideAslot: int,
+  beats: JsonNode, gameChips: JsonNode, ended: bool
+): string =
+  ## One frame of bc23 chrome. `t` / `st` / `mx` / `mt` are the GENERIC
+  ## timeline keys `chrome_common.js` reads, unchanged, so the clock, the
+  ## transport and the scrubber are driven by the starter's own code; the
+  ## `bc23_*` keys are what the APPENDED bc23 game block draws.
+  let phase = if ended: "gameover" else: "playing"
+  let points = r23.gamePoints(w)
+  var node = %*{
+    "t": frame,
+    "st": 0,
+    "mx": max(1, totalFrames - 1),
+    "mt": 0,
+    "sp": view.speed,
+    "pl": view.playing,
+    "lp": view.loop,
+    "sk": view.skipLulls,
+    "ff": false,
+    "en": true,
+    "ph": phase,
+    "lob": 0,
+    "pov": -1,
+    "nim": GameVersion,
+    "year": "bc23",
+    "beats": beats,
+    "game": gameIndex + 1,
+    "games": doc.games.len,
+    "map": doc.plan.maps[min(gameIndex, doc.plan.maps.high)],
+    "round": w.currentRound,
+    "rounds": doc.plan.maxRounds,
+    "aliases": [AliasA, AliasB],
+    "names": [doc.names[0], doc.names[1]],
+    "sides": [(if sideAslot == 0: "A" else: "B"),
+              (if sideAslot == 0: "B" else: "A")],
+    "points": [points[(if sideAslot == 0: 0 else: 1)],
+               points[(if sideAslot == 0: 1 else: 0)]],
+    "bc23_islands": bc23Islands(w, sideAslot),
+    "bc23_econ": bc23Econ(w, sideAslot),
+    "bc23_units": bc23Units(w, sideAslot),
+    "bc23_war": bc23War(w, sideAslot),
+    "gamechips": gameChips,
+    "doctrines": doctrineWords(doc),
+    "result": doc.result
+  }
+  $node
+
 proc bc20ChromeJson*(
   doc: ReplayDoc, w: w20.World, view: ViewerState,
   frame, totalFrames, gameIndex, sideAslot: int,
@@ -1033,4 +1279,7 @@ proc sessionChromeJson*(
       beats, gameChips, ended)
   of yBc25:
     bc25ChromeJson(doc, s.w25, view, frame, totalFrames, gameIndex, sideAslot,
+      beats, gameChips, ended)
+  of yBc23:
+    bc23ChromeJson(doc, s.w23, view, frame, totalFrames, gameIndex, sideAslot,
       beats, gameChips, ended)

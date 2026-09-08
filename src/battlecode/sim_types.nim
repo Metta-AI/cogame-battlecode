@@ -13,12 +13,41 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV08"
+  GameVersion* = "GV09"
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV09 — the `bc23` year module: Battlecode 2023 "Tempest" ported from
+    ##        battlecode23 at commit af42086e (oracle jar 3.0.15, pinned by
+    ##        sha256 because BOTH the pinned sources and the released jar
+    ##        report the useless literal `SPEC_VERSION = "3.0.14"`): the
+    ##        four-step round loop over a DYNAMIC append-ordered exec list
+    ##        with by-value removal and a pre-sweep snapshot, the round-1
+    ##        +200/+200 per HEADQUARTERS, the six robot types and their exact
+    ##        actions with the engine's NON-UNIFORM charge order (move charges
+    ##        after the move at the DESTINATION; boost, destabilize and the
+    ##        three anchor verbs charge after their effect; everything else
+    ##        before), the five-action headquarters, the carrier's
+    ##        weight-driven movement cooldown and its inventory-emptying
+    ##        throw, wells with the 600 kg elixir transformation and the
+    ##        1400 kg rate upgrade, sky islands with the truncating occupancy
+    ##        formula, the mid-turn float32 conquest check and the anchor
+    ##        healing sweep, the additive per-tile per-team tempo multiplier
+    ##        in integer hundredths with the engine's asymmetric stack guards
+    ##        and the `cast + 4` destabiliser detonation, clouds that blind
+    ##        BOTH WAYS, currents as a deterministic worklist, the two 64-slot
+    ##        shared arrays with their write windows, and the six-rung end
+    ##        ladder, behind `game_config.year`. bc26, bc20, bc21, bc24 AND
+    ##        bc25 SEMANTICS ARE UNCHANGED: nothing a GV04, GV05, GV06, GV07
+    ##        or GV08 recording carries changed meaning — the sheet envelope,
+    ##        the results document and the replay all gained year-neutral
+    ##        shape without moving a byte an older recording holds — which is
+    ##        why `ReplayCompatibleGameVersions` is EXTENDED rather than reset
+    ##        and every hosted bc26, bc20, bc21, bc24 and bc25 replay keeps
+    ##        rendering.
     ##
     ## GV08 — the `bc25` year module: Battlecode 2025 "Chromatic Conflict"
     ##        ported from battlecode25 at commit 28975a48 (oracle jar 3.1.0,
@@ -126,7 +155,7 @@ const
     ##        round loop, cheese, kings, combat, ratnap/throw, traps, dirt,
     ##        formation, squeaks, cats, backstab, float32-narrowed scoring.
 
-  ReplayCompatibleGameVersions* = ["GV04", "GV05", "GV06", "GV07",
+  ReplayCompatibleGameVersions* = ["GV04", "GV05", "GV06", "GV07", "GV08",
                                    GameVersion]
     ## Versions whose recordings this build can still re-derive. A replay
     ## carrying anything else is refused with a readable message rather than
@@ -171,6 +200,8 @@ type
     scExamplefuncsplayer24 = "examplefuncsplayer24"
     scSpaark = "spaark"
     scExamplefuncsplayer25 = "examplefuncsplayer25"
+    scLemonade = "lemonade"
+    scExamplefuncsplayer23 = "examplefuncsplayer23"
 
   ConfigError* = object of CatchableError
     ## An unusable `game_config`. The container exits 2 on this, per ctf.

@@ -28,6 +28,9 @@ from years/bc24/constants as c24 import nil
 from years/bc25/world as w25 import nil
 from years/bc25/constants as c25 import nil
 from years/bc25/units as u25 import nil
+from years/bc23/world as w23 import nil
+from years/bc23/constants as c23 import nil
+from years/bc23/units as u23 import nil
 
 const
   TileSize* = 16
@@ -100,6 +103,23 @@ const
   Bc25BPrimary = rgba(0xb2, 0x8b, 0x52, 255)
   Bc25BSecondary = rgba(0x99, 0x77, 0x46, 255)
   Bc25RuinColor = rgba(0x2e, 0x23, 0x23, 255)
+
+  ## bc23's board is TERRAIN plus three overlays a spectator has to be able to
+  ## read at 6 px per tile: impassable storm squares, clouds (which blind and
+  ## slow BOTH sides and are the one place the spectator sees more than the
+  ## robots do), and directional currents. The tones are this repository's own
+  ## paintbot-derived palette, because the 2023 client draws its terrain from
+  ## photographic tiles that do not survive a 16 px cut.
+  Bc23TileColor = rgba(0x2a, 0x33, 0x42, 255)
+  Bc23WallColor = rgba(0x14, 0x18, 0x20, 255)
+  Bc23CloudColor = rgba(0x55, 0x62, 0x78, 255)
+  Bc23CurrentColor = rgba(0x3c, 0x4c, 0x66, 255)
+  Bc23IslandColor = rgba(0x3a, 0x46, 0x3c, 255)
+  Bc23IslandAColor = rgba(0x2f, 0x5c, 0x7a, 255)
+  Bc23IslandBColor = rgba(0x6e, 0x36, 0x33, 255)
+  Bc23WellAdColor = rgba(0x7a, 0x5a, 0x2e, 255)
+  Bc23WellMnColor = rgba(0x2e, 0x5a, 0x7a, 255)
+  Bc23WellExColor = rgba(0x6a, 0x33, 0x7a, 255)
 
 type
   Atlas = ref object
@@ -769,6 +789,164 @@ proc buildBc25Packet(r: Renderer, w: w25.World, gameIndex, sideAslot: int,
   packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
   packet
 
+# ---------------------------------------------------------------------------
+#  bc23 -- storm terrain, clouds, currents, wells, islands and six unit types
+# ---------------------------------------------------------------------------
+
+proc bc23UnitSprite(unit: w23.Robot): string =
+  ## Palette follows the CLIENT's own two team colours, blue = side A and
+  ## red = side B. Sides alternate every game, so the scorebug plate keeps the
+  ## ALIAS constant and recolours its swatch per game.
+  let tint = if unit.team == u23.teamA: "blue_" else: "red_"
+  case unit.kind
+  of c23.rtHeadquarters: tint & "headquarters"
+  of c23.rtCarrier: tint & "carrier"
+  of c23.rtLauncher: tint & "launcher"
+  of c23.rtDestabilizer: tint & "destabilizer"
+  of c23.rtBooster: tint & "booster"
+  of c23.rtAmplifier: tint & "amplifier"
+
+proc bc23WellSprite(well: w23.Well): string =
+  let base =
+    case well.kind
+    of u23.resAdamantium: "adamantium_well"
+    of u23.resMana: "mana_well"
+    of u23.resElixir: "elixir_well"
+    of u23.resNone: "adamantium_well"
+  if well.upgraded: base & "_upgraded" else: base
+
+proc bc23TerrainStage(w: w23.World): int =
+  ## The island tint and the well types both change during a game, so the
+  ## terrain sprite is re-cut on a fixed cadence rather than per round: eight
+  ## rounds is often enough that an island changing hands is visible as it
+  ## happens and rare enough that a 60x30 board is not re-rasterised
+  ## twenty-four times a second.
+  w.currentRound div 8
+
+proc renderBc23Terrain(r: Renderer, w: w23.World): Image =
+  result = newImage(w.width * TileSize, w.height * TileSize)
+  result.fill(Bc23TileColor)
+  let ctx = newContext(result)
+  for y in 0 ..< w.height:
+    for x in 0 ..< w.width:
+      let px = x * TileSize
+      ## The board's y axis grows NORTH; the canvas grows down.
+      let py = (w.height - 1 - y) * TileSize
+      let l = u23.loc(x, y)
+      let i = w23.idx(w, l)
+      var colour = Bc23TileColor
+      if w.walls[i]:
+        colour = Bc23WallColor
+      else:
+        let islandIdx = w23.islandAt(w, l)
+        if islandIdx >= 0:
+          colour =
+            case w.islands[islandIdx].owner
+            of 1: Bc23IslandAColor
+            of 2: Bc23IslandBColor
+            else: Bc23IslandColor
+        elif w.currents[i] != u23.dCenter:
+          colour = Bc23CurrentColor
+      ctx.fillStyle = colour
+      ctx.fillRect(rect(float32(px), float32(py),
+                        float32(TileSize), float32(TileSize)))
+      ## Clouds are a translucent haze ON TOP, so a spectator can see WHY a
+      ## launcher group lost track of a carrier.
+      if w.clouds[i]:
+        ctx.fillStyle = rgba(Bc23CloudColor.r, Bc23CloudColor.g,
+                             Bc23CloudColor.b, 110)
+        ctx.fillRect(rect(float32(px), float32(py),
+                          float32(TileSize), float32(TileSize)))
+      ## A current is drawn as a faint bar along its own direction: a
+      ## spectator who cannot see the currents cannot understand why a carrier
+      ## is drifting.
+      if w.currents[i] != u23.dCenter:
+        let d = w.currents[i]
+        ctx.fillStyle = rgba(0xa8, 0xc4, 0xe8, 90)
+        let cx = float32(px + TileSize div 2)
+        let cy = float32(py + TileSize div 2)
+        let ddx = float32(u23.dx(d)) * 5.0
+        let ddy = float32(-u23.dy(d)) * 5.0
+        ctx.fillRect(rect(cx + ddx - 1.5, cy + ddy - 1.5, 3.0, 3.0))
+      ## The boost / destabilise fields the doctrines paid elixir for: a
+      ## boosted patch reads warm, a destabilised one cold.
+      for t in 0 .. 1:
+        let hundredths = w.tempo.hundredths[t][i]
+        if hundredths < u23.BaseMultiplier:
+          ctx.fillStyle = rgba(0xff, 0xc4, 0x6a, 40)
+          ctx.fillRect(rect(float32(px), float32(py),
+                            float32(TileSize), float32(TileSize)))
+        elif hundredths > u23.BaseMultiplier and not w.clouds[i]:
+          ctx.fillStyle = rgba(0x6a, 0xc4, 0xff, 40)
+          ctx.fillRect(rect(float32(px), float32(py),
+                            float32(TileSize), float32(TileSize)))
+
+proc buildBc23Packet(r: Renderer, w: w23.World, gameIndex, sideAslot: int,
+                     chrome: string): seq[uint8] =
+  var packet: seq[uint8]
+  let newGame = r.terrainGame != gameIndex
+  let stage = bc23TerrainStage(w)
+
+  if newGame:
+    r.terrainGame = gameIndex
+    r.terrainStage = -1
+    r.liveObjects.clear()
+    r.prevRobotSprite.clear()
+    packet.addClearObjects()
+    packet.addLayer(MapLayerId, MapLayerKind, ZoomableFlag)
+    packet.addViewport(MapLayerId, w.width * TileSize, w.height * TileSize)
+
+  if r.terrainStage != stage:
+    r.terrainStage = stage
+    let terrain = r.renderBc23Terrain(w)
+    packet.addSprite(TerrainSpriteId, terrain.width, terrain.height,
+      straightPixels(terrain), "terrain")
+    packet.addObject(1, 0, 0, -32768, MapLayerId, TerrainSpriteId)
+
+  ## Wells, with their resource glyph and their rate. A well turns into the
+  ## elixir sprite the MOMENT it transforms, which is the single most
+  ## watchable event of the elixir programme.
+  var wellSeen = initHashSet[int]()
+  for i in 0 ..< w.wellAt.len:
+    if not w.wellAt[i].present: continue
+    let l = w23.indexToLoc(w, i)
+    let objectId = CheeseObjectBase + i
+    wellSeen.incl(objectId)
+    let sprite = r.spriteId(packet, bc23WellSprite(w.wellAt[i]))
+    r.addObj(packet, objectId, l.x * TileSize,
+      (w.height - 1 - l.y) * TileSize, 2, sprite)
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= CheeseObjectBase and objectId < TrapAObjectBase and
+        objectId notin wellSeen:
+      r.dropObj(packet, objectId)
+
+  ## Every live robot. Object ids are stable for a robot's whole life, so the
+  ## client's motion interpolation glides it between rounds instead of
+  ## teleporting it. A carrier that is FERRYING AN ANCHOR is badged, because
+  ## that carrier is the most important unit on the board.
+  var seen = initHashSet[int]()
+  for id in w.execOrder:
+    let unit = w.robotsById[id]
+    let objectId = RobotObjectBase + (id mod 20000)
+    seen.incl(objectId)
+    let sprite = r.spriteId(packet, bc23UnitSprite(unit))
+    r.addObj(packet, objectId, unit.loc.x * TileSize,
+      (w.height - 1 - unit.loc.y) * TileSize,
+      (if unit.kind == c23.rtHeadquarters: 4 else: 5), sprite)
+    if w23.totalAnchors(unit) > 0:
+      let badgeId = SoupObjectBase + (id mod 20000)
+      seen.incl(badgeId)
+      let badge = r.spriteId(packet,
+        (if unit.acceleratingAnchors > 0: "accelerating_anchor" else: "anchor"))
+      r.addObj(packet, badgeId, unit.loc.x * TileSize,
+        (w.height - 1 - unit.loc.y) * TileSize, 6, badge)
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= RobotObjectBase and objectId notin seen:
+      r.dropObj(packet, objectId)
+
+  packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
+  packet
+
 proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   ## The ONE place the renderer branches on the year. `Session` is an object
   ## variant, so the compiler checks that a new year gets an arm here.
@@ -778,3 +956,4 @@ proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   of yBc21: r.buildBc21Packet(s.w21, s.gameIndex, s.sideAslot, chrome)
   of yBc24: r.buildBc24Packet(s.w24, s.gameIndex, s.sideAslot, chrome)
   of yBc25: r.buildBc25Packet(s.w25, s.gameIndex, s.sideAslot, chrome)
+  of yBc23: r.buildBc23Packet(s.w23, s.gameIndex, s.sideAslot, chrome)
