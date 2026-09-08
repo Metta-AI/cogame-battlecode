@@ -11,6 +11,7 @@ year**, chosen by `game_config.year`:
 | `bc20` | 2020 "Soup" | the water rises every round, and a team either terraforms above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt |
 | `bc21` | 2021 "Campaign" | every round auctions one citizen's vote; influence buys units, buys votes, and is what an enemy politician takes when it converts your Enlightenment Center |
 | `bc24` | 2024 "Breadwars" | fifty identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off |
+| `bc25` | 2025 "Chromatic Conflict" | a paint war: the score IS the colour of the map, towers are painted into existence on ruins, and a resource pattern pays every mining tower you own if it survives fifty rounds |
 
 ---
 
@@ -208,6 +209,7 @@ bit-exact, with an empty divergence ledger.**
 | `src/battlecode/years/bc20/` | the 2020 rule set: `world.nim`, `flood.nim`, `pollution.nim`, `blockchain.nim`, `cows.nim`, `rules.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/bc21/` | the 2021 rule set: `world.nim`, `empower.nim`, `votes.nim`, `economy.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/bc24/` | the 2024 rule set: `world.nim`, `skills.nim`, `traps.nim`, `flags.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
+| `src/battlecode/years/bc25/` | the 2025 rule set: `world.nim`, `units.nim`, `paint.nim`, `patterns.nim`, `towers.nim`, `comms.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/{registry,dispatch}.nim` | the year boundary: the ONE place the year-neutral machinery meets a year module |
 | `src/battlecode/rng.nim` | `java.util.Random` and `IDGenerator`, bit-exact |
 | `src/battlecode/{sheet,decide,llm,baselines}.nim` | the doctrine schema, the one sealed parallel batch, the provider ladder, the scripted table |
@@ -223,6 +225,8 @@ bit-exact, with an empty divergence ledger.**
 * [`docs/RULES-BC20.md`](docs/RULES-BC20.md) — the 2020 rule set, its ten
   knobs, and its own §Divergences list.
 * [`docs/RULES-BC21.md`](docs/RULES-BC21.md) — the 2021 rule set, likewise.
+* [`docs/RULES-BC25.md`](docs/RULES-BC25.md) — the 2025 rule set, its ten
+  knobs, and its own §Divergences list.
 * [`docs/RULES-BC24.md`](docs/RULES-BC24.md) — the 2024 rule set, its ten
   knobs, THE TWO ROUNDING REGIMES, and its own §Divergences list.
 * [`docs/PARITY.md`](docs/PARITY.md) — the Java oracles, tier by tier, and

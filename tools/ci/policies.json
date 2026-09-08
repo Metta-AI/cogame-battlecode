@@ -146,5 +146,42 @@
       "PLAYER_SCRIPTED": "examplefuncsplayer24",
       "PLAYER_POLICY_LABEL": "examplefuncsplayer24"
     }
+  },
+  {
+    "name": "battlecode-bc25-coverage",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a clan of paint robots in Battlecode 2025. You win by painting 70% of the map, and if nobody does, round 2000 is decided by who painted more. Your doctrine: own the ground. Set opening \"paint_eco\", srp_priority high (55-90) - a Special Resource Pattern costs 200 chips and 25 painted tiles and then pays +3 per turn to EVERY mining tower you own, forever, so two patterns and eight towers is +48 a turn. Set unit_mix soldier-heavy (soldier 60-75, mopper 15-25, splasher 10-15): soldiers paint for 5 paint a tile at radius 3 and are the cheapest coverage in the game. Set splash_targets \"territory\" - a splasher repaints everything within radius 2 of its centre INCLUDING enemy paint, which is the only way to take ground back at scale. Set paint_reserve_floor high (40-60) so your robots never hit 0 paint: at 0 they cannot move, cannot act, and lose 20 health a turn. Set defense_tower_chokes \"never\" or \"late\" and tower_type_order with \"paint\" first - paint towers are what keep the soldiers painting. Set ruin_claim_radius wide (12-20) and upgrade_policy \"paint_first\". In notes, say which corner of the map you intend to own and what your paint income per round will be by round 500.",
+      "PLAYER_POLICY_LABEL": "coverage"
+    }
+  },
+  {
+    "name": "battlecode-bc25-siege",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a clan of paint robots in Battlecode 2025. Towers are the map: they spawn your robots, they mine your chips and paint, they shoot twice a turn for free, and a team with no towers and no robots loses on the spot. Your doctrine: build a wall of them and knock theirs down. Set opening \"tower_rush\" and tower_type_order with \"money\" first - a level-3 money tower is 40 chips a turn and a tower costs 1000/2500/5000 to build and upgrade. Set defense_tower_chokes \"early\": each live defense tower adds +5/+7/+9 to the single-target damage of EVERY tower you own, and a level-3 defense tower hits for 60 and earns you 40 chips every time it connects. Set upgrade_policy \"defense_first\" or \"money_first\". Set unit_mix splasher-heavy (soldier 30-45, mopper 15-25, splasher 30-45): a splasher does 100 damage to every enemy tower within radius 2 of its centre and a tower has 1000-3000 health, so splashers are your siege engine. Set splash_targets \"towers\", srp_priority low (0-20), ruin_claim_radius tight (4-9) and paint_reserve_floor low (10-25) - you are trading. In notes, say which enemy tower you break first and what you do if the rush stalls.",
+      "PLAYER_POLICY_LABEL": "siege"
+    },
+    "player": "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d"
+  },
+  {
+    "name": "battlecode-spaark",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "spaark",
+      "PLAYER_POLICY_LABEL": "spaark"
+    }
+  },
+  {
+    "name": "battlecode-examplefuncsplayer25",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "examplefuncsplayer25",
+      "PLAYER_POLICY_LABEL": "examplefuncsplayer25"
+    }
   }
 ]

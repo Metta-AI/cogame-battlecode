@@ -51,9 +51,15 @@ func scenarioTowerKind(index: int): TowerKind =
   else: tkDefense
 
 proc firstEnemy(w: World, r: Robot, r2: int): Loc =
+  ## `rc.getAllLocationsWithinRadiusSquared` CLAMPS its radius to
+  ## `VISION_RADIUS_SQUARED` and then FILTERS by `canSenseLocation`. Every
+  ## sweep in this file reproduces both, because the Java twin calls that
+  ## method and a sweep that saw one more tile than the engine's would
+  ## desynchronise the two bots on the first ruin at the edge of vision.
   result = loc(-1, -1)
-  for l in w.locationsWithinRadiusSquared(r.loc, r2):
+  for l in w.locationsWithinRadiusSquared(r.loc, min(r2, VisionRadiusSquared)):
     if not r.spend(1): break
+    if not w.canSenseLocation(r, l): continue
     let bot = w.getRobot(l)
     if bot != nil and bot.team != r.team:
       return l
@@ -67,17 +73,25 @@ proc scenarioTower(w: World, side: Side, r: Robot) =
   if single.x >= 0 and w.canTowerAttackArea(r):
     w.doTowerAttackArea(r)
 
+  ## The build schedule forces all three robot types early and then keeps a
+  ## trickle of soldiers going, because SOLDIERS ARE WHAT PAINT PATTERNS and a
+  ## scenario bot that spent its towers' paint on moppers would never raise a
+  ## tower and would prove nothing.
   var want = utSoldier
-  if w.currentRound >= 4 and w.currentRound < 8: want = utMopper
-  elif w.currentRound >= 8 and w.currentRound < 16: want = utSplasher
-  elif w.currentRound mod 3 == 0: want = utMopper
-  elif w.currentRound mod 7 == 0: want = utSplasher
+  if w.currentRound == 4: want = utMopper
+  elif w.currentRound == 8: want = utSplasher
+  elif w.currentRound mod 41 == 0: want = utMopper
+  elif w.currentRound mod 53 == 0: want = utSplasher
 
-  for l in w.locationsWithinRadiusSquared(r.loc, BuildRobotRadiusSquared):
-    if not r.spend(1): break
-    if w.canBuildRobot(r, want, l):
-      w.doBuildRobot(r, want, l)
-      break
+  ## THE TOWER RESERVE: never spend the chips a `completeTowerPattern` needs.
+  if w.getMoney(r.team) - UnitSpecs[want].moneyCost >=
+      UnitSpecs[utLevelOneMoneyTower].moneyCost:
+    for l in w.locationsWithinRadiusSquared(r.loc, BuildRobotRadiusSquared):
+      if not r.spend(1): break
+      if not w.canSenseLocation(r, l): continue
+      if w.canBuildRobot(r, want, l):
+        w.doBuildRobot(r, want, l)
+        break
 
   ## Tower->tower broadcast across an unpainted gap: no connectivity needed,
   ## and it fires from round 5 so the comms path is compared early.
@@ -94,9 +108,10 @@ proc scenarioSoldier(w: World, side: Side, r: Robot) =
   var seen = 0
   for l in w.locationsWithinRadiusSquared(r.loc, VisionRadiusSquared):
     if not r.spend(1): break
+    if not w.canSenseLocation(r, l): continue
     if not w.hasRuin(l): continue
     seen += 1
-    if w.hasTower(l): continue
+    if w.getRobot(l) != nil: continue
     if ruin.x < 0:
       ruin = l
       ruinIndex = w.idx(l)
@@ -106,6 +121,7 @@ proc scenarioSoldier(w: World, side: Side, r: Robot) =
   ## reachable this early.
   for l in w.locationsWithinRadiusSquared(r.loc, BuildTowerRadiusSquared):
     if not r.spend(1): break
+    if not w.canSenseLocation(r, l): continue
     if w.canUpgradeTower(r, l):
       w.doUpgradeTower(r, l)
       break
@@ -116,11 +132,16 @@ proc scenarioSoldier(w: World, side: Side, r: Robot) =
       let dir = r.loc.directionTo(ruin)
       if w.canMove(r, dir):
         w.doMove(r, dir)
-    if w.canMarkTowerPattern(r, kind, ruin) and
-        w.getMarker(r.team, ruin.translate(1, 0)) == MarkerNone:
+    let behind = ruin.translate(1, 0)
+    let behindMark =
+      if w.onTheMap(behind) and w.canSenseLocation(r, behind):
+        w.getMarker(r.team, behind)
+      else: MarkerNone
+    if w.canMarkTowerPattern(r, kind, ruin) and behindMark == MarkerNone:
       w.doMarkTowerPattern(r, kind, ruin)
     for l in w.locationsWithinRadiusSquared(ruin, BuildTowerRadiusSquared * 4):
       if not r.spend(1): break
+      if not w.canSenseLocation(r, l): continue
       let mark = w.getMarker(r.team, l)
       if mark == MarkerNone: continue
       let want = if mark == MarkerSecondary: secondaryPaint(r.team)
@@ -134,11 +155,11 @@ proc scenarioSoldier(w: World, side: Side, r: Robot) =
 
   ## The SRP lifecycle: mark, fill and complete a resource pattern centred on
   ## the soldier's own tile whenever it is a valid centre.
-  if w.isValidPatternCenter(r.loc, false):
+  block srp:
     if w.canCompleteResourcePattern(r, r.loc, r):
       w.doCompleteResourcePattern(r, r.loc)
-    elif w.getMarker(r.team, r.loc) == MarkerNone and
-        w.canMarkResourcePattern(r, r.loc):
+    elif w.canMarkResourcePattern(r, r.loc) and
+        w.getMarker(r.team, r.loc) == MarkerNone:
       w.doMarkResourcePattern(r, r.loc)
     else:
       for ddx in LoOffset .. HiOffset:
@@ -146,6 +167,7 @@ proc scenarioSoldier(w: World, side: Side, r: Robot) =
           if not r.spend(1): break
           let l = r.loc.translate(ddx, ddy)
           if not w.onTheMap(l): continue
+          if not w.canSenseLocation(r, l): continue
           let mark = w.getMarker(r.team, l)
           if mark == MarkerNone: continue
           let want = if mark == MarkerSecondary: secondaryPaint(r.team)
@@ -175,6 +197,7 @@ proc scenarioSoldier(w: World, side: Side, r: Robot) =
     for l in w.locationsWithinRadiusSquared(
         r.loc, UnitSpecs[utSoldier].actionRadiusSquared):
       if not r.spend(1): break
+      if not w.canSenseLocation(r, l): continue
       if not w.isPaintable(l): continue
       if paintIsTeam(w.getPaint(l), r.team): continue
       if hasPaintTeam(w.getPaint(l)): continue
@@ -182,9 +205,12 @@ proc scenarioSoldier(w: World, side: Side, r: Robot) =
         w.doAttackRobot(r, l)
         return
 
-  let dir = Dir(w.currentRound mod 8)
-  if w.canMove(r, dir):
-    w.doMove(r, dir)
+  ## A SOLDIER WITH A RUIN TO WORK DOES NOT WANDER. It has to stay beside the
+  ## pattern for the twenty-five turns it takes to paint it.
+  if ruin.x < 0:
+    let dir = Dir(w.currentRound mod 8)
+    if w.canMove(r, dir):
+      w.doMove(r, dir)
 
 proc scenarioMopper(w: World, side: Side, r: Robot) =
   ## Swing in all four cardinals across four consecutive rounds, then mop the
@@ -210,6 +236,7 @@ proc scenarioSplasher(w: World, side: Side, r: Robot) =
   for l in w.locationsWithinRadiusSquared(
       r.loc, UnitSpecs[utSplasher].actionRadiusSquared):
     if not r.spend(1): break
+    if not w.canSenseLocation(r, l): continue
     let bot = w.getRobot(l)
     let colour = w.getPaint(l)
     let interesting =

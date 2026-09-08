@@ -67,7 +67,7 @@
   // unit and doctrine panels, or bc24's flag, crumb, level and doctrine
   // panels.
   var SIZES = [[360, 640], [720, 900], [1280, 720]];
-  var YEARS = ['bc26', 'bc20', 'bc21', 'bc24'];
+  var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25'];
 
   function runes(text) { return Array.from(text); }
   function repeatRunes(text, count) {
@@ -85,7 +85,8 @@
   var inner = params.get('w');
   var yearParam = params.get('year');
   var year = (yearParam === 'bc20' || yearParam === 'bc21' ||
-              yearParam === 'bc24') ? yearParam : 'bc26';
+              yearParam === 'bc24' || yearParam === 'bc25')
+                ? yearParam : 'bc26';
 
   // ------------------------------------------------------------------
   // Parent: one iframe per width, each posting its own verdict back.
@@ -305,6 +306,44 @@
       '<br><i>' + notes + '</i></div>';
   }
 
+  // --- the bc25 row: the same full-cap strings through bc25's own words ---
+  var BC25_WORDS = [
+    'opens on paint economy, builds 65 % soldiers, 20 % moppers, ' +
+      '15 % splashers, banks 70 % of its chips for resource patterns, ' +
+      'builds paint, then money, then defense towers, claims ruins within ' +
+      '16 tiles, builds no defense towers, refills at 50 % paint, moppers ' +
+      'spend 30 % of their turns erasing enemy paint, splashers aim at ' +
+      'territory, upgrades paint towers first',
+    'rushes towers, builds 35 % soldiers, 20 % moppers, 45 % splashers, ' +
+      'never pays for a resource pattern, builds money, then defense, then ' +
+      'paint towers, claims ruins within 6 tiles, builds defense towers at ' +
+      'the chokes from round 200, refills at 15 % paint, moppers strip ' +
+      'robots rather than tiles, splashers aim at towers, upgrades defense ' +
+      'towers first'
+  ];
+  var bc25Towers = '';
+  for (var k25 = 0; k25 < 2; k25++) {
+    bc25Towers += '<div class="row"><span class="who">' + ALIASES[k25] +
+      '</span><span class="money">\u26c1\u26c1\u26c1</span>' +
+      '<span class="paint">\u2b22\u2b22</span>' +
+      '<span class="defense">\u271a</span>' +
+      '<span class="lbl">6/25 \u00b7 lost 3 \u00b7 +7</span></div>';
+  }
+  var bc25Econ = '';
+  for (var e25 = 0; e25 < 2; e25++) {
+    bc25Econ += '<div class="row"><span class="who">' + ALIASES[e25] +
+      '</span><span>\u25c8 18422 (+94)</span>' +
+      '<span>\u25cf 2140 (+38)</span>' +
+      '<span class="srp">SRP \u00d72 \u2192 +6/tower</span>' +
+      '<span class="pending"> \u23f114 \u23f141</span>' +
+      '<span class="lbl">23 bots</span></div>';
+  }
+  var bc25Doctrines = '';
+  for (var m25 = 0; m25 < 2; m25++) {
+    bc25Doctrines += '<div class="clan"><b>' + ALIASES[m25] + '</b> \u2014 ' +
+      NAMES[m25] + '<br>' + BC25_WORDS[m25] + '<br><i>' + notes + '</i></div>';
+  }
+
   document.body.innerHTML =
     '<div id="viewport"><div id="stage"><div id="chrome">' +
       '<div id="scorebug">' +
@@ -315,6 +354,7 @@
           '<button type="button" id="bc20-doctrines-toggle" hidden>doctrines</button>' +
           '<button type="button" id="bc21-doctrines-toggle" hidden>doctrines</button>' +
           '<button type="button" id="bc24-doctrines-toggle" hidden>doctrines</button>' +
+          '<button type="button" id="bc25-doctrines-toggle" hidden>doctrines</button>' +
         '</div></div>' +
         '<div class="plates" id="plates-r">' + plate(1, 'basil') + '</div>' +
       '</div>' +
@@ -355,6 +395,19 @@
         '<button type="button" id="bc24-doctrines-close" ' +
         'aria-label="Dismiss doctrines">&times;</button>' +
         '<div id="bc24-doctrines-body">' + bc24Doctrines + '</div></div>' +
+      '<div id="bc25-coverage"><span class="ash">ASH 41 %</span>' +
+        '<span class="bar"><span class="a" style="width:41%"></span>' +
+        '<span class="b" style="width:38%"></span>' +
+        '<span class="tick" style="left:70%"></span>' +
+        '<span class="tick" style="left:30%"></span></span>' +
+        '<span class="basil">38 % BASIL</span>' +
+        '<span class="towin">463 / 791 to win \u00b7 248 bare</span></div>' +
+      '<div id="bc25-towers">' + bc25Towers + '</div>' +
+      '<div id="bc25-econ">' + bc25Econ + '</div>' +
+      '<div id="bc25-doctrines">' +
+        '<button type="button" id="bc25-doctrines-close" ' +
+        'aria-label="Dismiss doctrines">&times;</button>' +
+        '<div id="bc25-doctrines-body">' + bc25Doctrines + '</div></div>' +
     '</div></div></div>';
 
   // The verdict: nothing may leave the frame, and nothing may hide text
@@ -410,7 +463,10 @@
         '#bc21-doctrines, #bc21-doctrines *',
       bc24: '#scorebug .plate, #scorebug .plate *, #bc24-flags, #bc24-flags *, ' +
         '#bc24-crumbs, #bc24-crumbs *, #bc24-levels, #bc24-levels *, ' +
-        '#bc24-doctrines, #bc24-doctrines *'
+        '#bc24-doctrines, #bc24-doctrines *',
+      bc25: '#scorebug .plate, #scorebug .plate *, #bc25-coverage, ' +
+        '#bc25-coverage *, #bc25-towers, #bc25-towers *, #bc25-econ, ' +
+        '#bc25-econ *, #bc25-doctrines, #bc25-doctrines *'
     };
     var filled = document.querySelectorAll(FILLED[year]);
     for (var j = 0; j < filled.length; j++) {
