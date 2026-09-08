@@ -879,16 +879,54 @@ block:
     "'bc23-econ', 'bc23-units']" in page)
 
   ## Every #bc23-* rule is scoped to the year, one way or the other.
+  ## THE WHOLE <style> BLOCK, not a line scan: a line scan reads the script's
+  ## own `s.year === 'bc23'` as a selector, and it never sees a one-line rule
+  ## whose `{` is not at the end of the line (r1-F24). Comments are stripped
+  ## first so the banner's prose is not mistaken for a rule.
+  let cssOpen = page.find("<style>")
+  let cssClose = page.find("</style>")
+  check("the page has exactly one <style> block",
+    cssOpen >= 0 and cssClose > cssOpen and
+    page.find("<style>", cssOpen + 1) < 0)
+  var css = page[cssOpen + len("<style>") ..< cssClose]
+  while true:
+    let a = css.find("/*")
+    if a < 0: break
+    let b = css.find("*/", a)
+    if b < 0: break
+    css = css[0 ..< a] & " " & css[b + 2 .. ^1]
   var unscoped: seq[string]
-  for line in page.splitLines():
-    let t = line.strip()
-    if not t.startsWith("#bc23-"): continue
-    if "display: none" in t: continue
-    ## A bare `#bc23-x { ... }` rule is fine: the element only EXISTS on a
-    ## bc23 replay because `html:not([data-year="bc23"])` hides it. What is
-    ## forbidden is a rule that could restyle ANOTHER year's element, i.e. a
-    ## selector that does not begin with the `#bc23-` prefix.
-    if not t.startsWith("#bc23-"): unscoped.add(t)
+  var scanned = 0
+  var sel = ""
+  for ch in css:
+    if ch notin {'{', '}', ';'}:
+      sel.add(ch)
+      continue
+    if ch == '{' and "bc23" in sel:
+      for part in sel.split(','):
+        let s = part.splitWhitespace().join(" ")
+        if "bc23" notin s: continue
+        ## `@keyframes bc23flash` names an animation, not an element.
+        if s.startsWith("@"): continue
+        inc scanned
+        ## A bare `#bc23-x { ... }` rule is fine: the element only EXISTS on
+        ## a bc23 replay because `html:not([data-year="bc23"])` hides it.
+        ## What is forbidden is a rule that could restyle ANOTHER year's
+        ## element, i.e. a selector that is neither `#bc23-` prefixed nor
+        ## `data-year` scoped.
+        if s.startsWith("#bc23-") or
+           s.startsWith("html[data-year=\"bc23\"] ") or
+           s.startsWith("html:not([data-year=\"bc23\"]) "):
+          continue
+        unscoped.add(s)
+    sel = ""
+  ## The scan must have REACHED the rules: an empty `unscoped` proves nothing
+  ## if the loop never looked at a bc23 selector. 87 selector parts name the
+  ## year at this landing; the floor is well below that so removing a rule is
+  ## not a failure while deleting the block is.
+  check("the bc23 selector scan is not vacuous", scanned >= 60)
+  checkEq("no bc23 CSS rule can reach another year's element",
+    unscoped.len, 0)
   checkEq("no bc23 CSS rule can reach another year's element",
     unscoped.len, 0)
   check("and the year switch hides the bc23 elements everywhere else",
