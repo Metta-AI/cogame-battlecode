@@ -19,14 +19,22 @@ proc sheets(): array[2, Sheet] =
   [baselineSheet("bc22", blWololo),
    baselineSheet("bc22", blExamplefuncsplayer22)]
 
-proc bc22Config(rounds = 700, games = 1, pool = "small"): GameConfig =
+proc bc22Config(rounds = 700, games = 1, pool = "small",
+                perGame = 0): GameConfig =
+  ## `perGame = 0` means "leave `defaultGameConfig()`'s 90 s alone", NOT "no
+  ## per-game budget": `playMatch` computes
+  ## `max(1, min(config.perGameBudgetSeconds, remaining))`, so a zero here is
+  ## clamped up to a ONE-SECOND per-game budget and the 2000-round blocks
+  ## abort on wall clock in a debug build (~4 s a game) while squeaking
+  ## through in release (~0 s). Same convention as
+  ## `tests/test_bc23_replay.nim`.
   result = defaultGameConfig()
   result.year = "bc22"
   result.pool = pool
   result.gamesPerMatch = games
   result.maxRounds = rounds
-  result.perGameBudgetSeconds = 0
-  result.matchBudgetSeconds = 600
+  if perGame > 0: result.perGameBudgetSeconds = perGame
+  result.matchBudgetSeconds = max(perGame * 2, 600)
 
 proc record(config: GameConfig, doctrines: array[2, Sheet], seed: int,
             onMaps: seq[string] = @[]):
@@ -69,6 +77,15 @@ proc record(config: GameConfig, doctrines: array[2, Sheet], seed: int,
   while deriver.advance(): discard
   (reason, deriver.mismatchRound < 0, games, reparsed, text)
 
+proc haveGame[T](name: string, games: seq[T]): bool =
+  ## A guard, not a convenience. When an episode aborts, `playMatch` returns
+  ## NO finished games, and every `games[0]` below then reads an empty seq:
+  ## an IndexDefect that kills the shard before the remaining assertions run
+  ## in a debug build, and an UNCHECKED out-of-bounds read in release. Assert
+  ## the seq first so a regression reads as a FAIL line, not as a crash.
+  check(name, games.len > 0)
+  games.len > 0
+
 # --- the written bytes ------------------------------------------------------
 block:
   let r = record(bc22Config(700), sheets(), 2029)
@@ -94,8 +111,9 @@ block:
     raw["seats"][0].hasKey("sheet_envelope"))
   check("and `sheet_envelope` is in the results document",
     raw["result"].hasKey("sheet_envelope"))
-  checkEq("the map sha is recorded so a viewer can prove its map bytes",
-    r.doc.games[0].mapSha.len, 64)
+  if haveGame("a game header was recorded", r.doc.games):
+    checkEq("the map sha is recorded so a viewer can prove its map bytes",
+      r.doc.games[0].mapSha.len, 64)
 
 block:
   ## A best-of-three that CLINCHES in two records TWO games with
@@ -160,11 +178,14 @@ block:
 block:
   let a = record(bc22Config(400), sheets(), 2029, @["chalice"])
   let b = record(bc22Config(400), sheets(), 2029, @["chalice"])
-  checkEq("identical hash chain", a.games[0].hashChain, b.games[0].hashChain)
-  checkEq("identical per-round chain", a.games[0].roundChains,
-    b.games[0].roundChains)
-  check("and the chain records EVERY round",
-    a.games[0].roundChains.len == a.games[0].roundsPlayed * ChainHexLen)
+  let okA = haveGame("the first determinism run played a game", a.games)
+  let okB = haveGame("and so did the second", b.games)
+  if okA and okB:
+    checkEq("identical hash chain", a.games[0].hashChain, b.games[0].hashChain)
+    checkEq("identical per-round chain", a.games[0].roundChains,
+      b.games[0].roundChains)
+    check("and the chain records EVERY round",
+      a.games[0].roundChains.len == a.games[0].roundsPlayed * ChainHexLen)
 
 block:
   var s = sheets()
@@ -172,16 +193,22 @@ block:
   s[0] = parseReply("""{"sheet":{"opening":"soldier_rush",
     "mine_floor":0,"lab_round":80}}""", YearBc22)
   let b = record(bc22Config(400), s, 5, @["chalice"])
-  check("changing a knob changes the hash chain",
-    a.games[0].hashChain != b.games[0].hashChain)
+  let okA = haveGame("the stock-knob run played a game", a.games)
+  let okB = haveGame("and so did the changed-knob run", b.games)
+  if okA and okB:
+    check("changing a knob changes the hash chain",
+      a.games[0].hashChain != b.games[0].hashChain)
 
 block:
   ## The MAP seed, not the episode seed, drives the world RNG.
   let s = sheets()
   let a = record(bc22Config(300), s, 3, @["chalice"])
   let b = record(bc22Config(300), s, 3, @["maze"])
-  check("different maps produce different chains",
-    a.games[0].hashChain != b.games[0].hashChain)
+  let okA = haveGame("the chalice run played a game", a.games)
+  let okB = haveGame("and so did the maze run", b.games)
+  if okA and okB:
+    check("different maps produce different chains",
+      a.games[0].hashChain != b.games[0].hashChain)
 
 var reDerived: seq[string]
 block:
@@ -189,8 +216,9 @@ block:
   let r = record(bc22Config(2000), sheets(), 3, @["chalice"])
   checkEq("the game completed", r.reason, epComplete)
   check("and re-derives", r.ok)
-  checkEq("ending on an annihilation", r.games[0].endReason, "annihilated")
-  reDerived.add(r.games[0].endReason)
+  if haveGame("the annihilation run played a game", r.games):
+    checkEq("ending on an annihilation", r.games[0].endReason, "annihilated")
+    reDerived.add(r.games[0].endReason)
 
 block:
   ## The Singularity rungs: a MIRROR that no side can break inside the cap.
@@ -205,14 +233,17 @@ block:
   var events: seq[MatchEvent]
   let (games, reason) = playMatch(config, plan, events)
   checkEq("the mirror completed", reason, epComplete)
-  check("on a Singularity rung",
-    games[0].endReason in ["more_archons", "more_gold_net_worth",
-                           "more_lead_net_worth", "coin_flip"])
-  reDerived.add(games[0].endReason)
+  if haveGame("the mirror played a game", games):
+    check("on a Singularity rung",
+      games[0].endReason in ["more_archons", "more_gold_net_worth",
+                             "more_lead_net_worth", "coin_flip"])
+    reDerived.add(games[0].endReason)
 
 block:
   ## THE WALL-CLOCK STOP is a load-bearing RECORD, applied by the same proc on
-  ## record and on playback. A zero-second budget abandons the first game.
+  ## record and on playback. A one-second budget abandons the first game —
+  ## and one second is the FLOOR `playMatch` clamps to, which is why the
+  ## other blocks must not ask for zero.
   var config = bc22Config(2000)
   config.perGameBudgetSeconds = 1
   config.matchBudgetSeconds = 1
