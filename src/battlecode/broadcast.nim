@@ -130,8 +130,20 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
   ## Every scrubber beat, with the ABSOLUTE frame it lands on. The game block
   ## turns each of these into a labelled, clickable `<button>`.
   result = newJArray()
+  ## `first_action` and `rout` are spelled the same by bc24 and bc25 but carry
+  ## different fields, so the beat vocabulary for those two kinds is chosen by
+  ## the replay header's year. Every other kind below belongs to exactly one
+  ## year.
+  let isBc25 = doc.year == "bc25"
   for e in doc.events:
-    if e.game < 0 or e.round < 0: continue
+    ## Pre-match events carry `ms` and `game = -1`, not a round. The two
+    ## doctrine kinds still have a beat (every year's stylesheet ships
+    ## `.beat-marker.doctrine`), and it lands on frame 0 — the start of
+    ## playback, which is when the sheets were read. Every other pre-match
+    ## kind falls out below on an empty beat kind.
+    let preMatch = e.game < 0 or e.round < 0
+    if preMatch and e.kind notin ["doctrine_received", "doctrine_fallback"]:
+      continue
     let kind =
       case e.kind
       of "backstab": "backstab"
@@ -147,6 +159,14 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       of "drone_water_drop": "drop"
       of "hq_buried": "bury"
       of "hq_drowned": "drown"
+      of "first_action": (if isBc25: "build" else: "")
+      of "tower_built": "tower"
+      of "tower_upgraded": "upgrade"
+      of "tower_lost": "siege"
+      of "srp_completed", "srp_active", "srp_broken": "srp"
+      of "coverage": "coverage"
+      of "starved": "starve"
+      of "rout": (if isBc25: "rout" else: "")
       of "doctrine_received", "doctrine_fallback": "doctrine"
       else: ""
     if kind.len == 0: continue
@@ -193,9 +213,59 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
     of "hq_drowned":
       label = "HQ DROWNED — " & e.fields{"alias"}.getStr() & ", game " &
         $(e.game + 1) & ", round " & $e.round
+    of "first_action":
+      label = e.fields{"alias"}.getStr() & " opens with " &
+        e.fields{"action"}.getStr().replace("_", " ") & " — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "tower_built":
+      label = e.fields{"alias"}.getStr() & " builds a " &
+        e.fields{"tower"}.getStr() & " tower (" &
+        $e.fields{"total"}.getInt() & " alive) — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "tower_upgraded":
+      label = e.fields{"alias"}.getStr() & " upgrades a " &
+        e.fields{"tower"}.getStr() & " tower to level " &
+        $e.fields{"level"}.getInt() & " — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "tower_lost":
+      label = "TOWER LOST — " & e.fields{"alias"}.getStr() & "'s " &
+        e.fields{"tower"}.getStr() & " tower, game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "srp_completed":
+      label = e.fields{"alias"}.getStr() & " completes a resource pattern at " &
+        $e.fields{"x"}.getInt() & "," & $e.fields{"y"}.getInt() &
+        " — game " & $(e.game + 1) & ", round " & $e.round
+    of "srp_active":
+      label = e.fields{"alias"}.getStr() & "'s resource pattern goes live: +" &
+        $e.fields{"income_bonus"}.getInt() & " a tower — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "srp_broken":
+      label = "SRP BROKEN — " & e.fields{"alias"}.getStr() & "'s pattern at " &
+        $e.fields{"x"}.getInt() & "," & $e.fields{"y"}.getInt() &
+        " after " & $e.fields{"age"}.getInt() & " rounds, game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "coverage":
+      ## The note's own feed line, word for word.
+      label = e.fields{"alias"}.getStr() & " passes " &
+        $(e.fields{"permille"}.getInt() div 10) & " % — " &
+        $e.fields{"tiles_from_win"}.getInt() & " tiles from the win"
+    of "starved":
+      label = e.fields{"alias"}.getStr() & " runs dry: " &
+        $e.fields{"robots"}.getInt() & " robots end the round at zero paint" &
+        " — game " & $(e.game + 1) & ", round " & $e.round
+    of "rout":
+      label = "ROUT — " & e.fields{"alias"}.getStr() & " loses " &
+        $e.fields{"lost"}.getInt() & " robots, game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "doctrine_received":
+      label = "Doctrine read for " & aliasFor(e.fields{"slot"}.getInt()) &
+        " (" & $e.fields{"latency_ms"}.getInt() & " ms)"
+    of "doctrine_fallback":
+      label = "DOCTRINE FALLBACK — " & aliasFor(e.fields{"slot"}.getInt()) &
+        " (" & e.fields{"cause"}.getStr().replace("_", " ") & ")"
     else: discard
     result.add(%*{
-      "t": frameOfGameRound(e.game, max(1, e.round)),
+      "t": (if preMatch: 0 else: frameOfGameRound(e.game, max(1, e.round))),
       "k": kind,
       "label": label,
       "game": e.game,

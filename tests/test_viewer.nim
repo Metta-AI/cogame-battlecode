@@ -829,6 +829,68 @@ block:
       rule in page)
 
 block:
+  ## ...and every one of those eleven kinds is really EMITTED. CSS for a beat
+  ## nothing produces is a stylesheet, not a readout: bc25 shipped eleven
+  ## `.beat-marker` rules against a `beatsFor` that had an arm for none of the
+  ## year's event kinds, so a whole match drew two scrubber markers and a
+  ## two-line killfeed (r1-F26). This asserts the EMISSION.
+  let page = readFile("client/replay_broadcast.html")
+  var raw = parseJson(readFile("tests/fixtures/replay-bc25.json"))
+  ## The committed fixture is a real 400-round scripted recording, so it
+  ## carries the kinds a game that length actually produces. The two loss
+  ## kinds, the rout and the two PRE-MATCH doctrine kinds (which no scripted
+  ## episode can emit, because no LLM was called) are appended here in exactly
+  ## the shape `match.nim`/`decide.nim` write them, so the note's whole beat
+  ## table is exercised.
+  let synthetic = @[
+    %*{"kind": "tower_lost", "game": 0, "round": 180, "alias": "Clan Basil",
+       "tower": "defense", "x": 7, "y": 9, "remaining": 4},
+    %*{"kind": "srp_broken", "game": 0, "round": 200, "alias": "Clan Ash",
+       "x": 5, "y": 5, "age": 37},
+    %*{"kind": "rout", "game": 0, "round": 210, "alias": "Clan Basil",
+       "lost": 6},
+    %*{"kind": "doctrine_received", "ms": 1180, "slot": 0, "attempt": 0,
+       "latency_ms": 1174, "defaults_applied": 2, "unknown_fields": 0},
+    %*{"kind": "doctrine_fallback", "ms": 33000, "slot": 1,
+       "cause": "timeout"}]
+  for extra in synthetic: raw["events"].add(extra)
+  let doc = parseReplay($raw)
+  ## The frame map is the identity on the round here, which is enough to see
+  ## WHICH frame each beat claims.
+  let beats = beatsFor(doc, proc (g, r: int): int = r)
+  var seen: seq[string]
+  for b in beats:
+    let k = b["k"].getStr()
+    if k notin seen: seen.add(k)
+    check("the `" & k & "` beat carries a label a button can announce",
+      b["label"].getStr().len > 0)
+    check("and the page styles it",
+      ("html[data-year=\"bc25\"] .beat-marker." & k) in page)
+  for kind in ["doctrine", "game", "build", "tower", "upgrade", "siege",
+               "srp", "coverage", "starve", "rout", "end"]:
+    check("a bc25 replay EMITS the `" & kind & "` beat", kind in seen)
+  ## The two doctrine beats are pre-match (`game = -1`): they land on frame 0
+  ## rather than being dropped by the in-game guard.
+  var doctrineBeats = 0
+  for b in beats:
+    if b["k"].getStr() != "doctrine": continue
+    doctrineBeats += 1
+    checkEq("the doctrine beat lands at the start of playback",
+      b["t"].getInt(), 0)
+  checkEq("both doctrine beats survive the pre-match filter", doctrineBeats, 2)
+  ## And the COMMITTED fixture on its own -- no synthetic help -- is already a
+  ## multi-kind feed, which is what the wasm-viewer smoke loads.
+  let fixtureBeats = beatsFor(
+    parseReplay(readFile("tests/fixtures/replay-bc25.json")),
+    proc (g, r: int): int = r)
+  var fixtureKinds: seq[string]
+  for b in fixtureBeats:
+    if b["k"].getStr() notin fixtureKinds: fixtureKinds.add(b["k"].getStr())
+  check("the committed bc25 fixture draws a scrubber full of beats",
+    fixtureBeats.len >= 20)
+  check("over many kinds, not just game/end", fixtureKinds.len >= 6)
+
+block:
   ## D3: the doctrine overlay is dismissible and sits OUTSIDE the transport
   ## band; the endcard stops at var(--band) and every seek dismisses it (both
   ## inherited and unchanged).
