@@ -1839,6 +1839,10 @@ jobs:
       - name: Tier A and Tier C (both BLOCKING)
         run: |
           set -euo pipefail
+          # The comparator's own negative control first: a trace pair that
+          # differs only in LENGTH must be reported as a divergence, in both
+          # directions. It read as bit-exact until r1-F26.
+          python3 tools/ci/parity_tiers_bc23.py --selftest
           python3 tools/ci/parity_tiers_bc23.py \
             --dir /tmp/oracle23/traces \
             --maps Quiet SmallElements Lantern Spin Sneaky Barcode \
