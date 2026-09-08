@@ -197,6 +197,36 @@ block:
   check("first_action really fired", saw > 0)
 
 block:
+  ## An ALL-SCRIPTED episode run to its natural end reports
+  ## `results.reason == "complete"` (r1-F39: `tools/ci/docker_smoke.sh`
+  ## asserted this against the real image, no in-tree test did). Three games,
+  ## alternating sides, exactly as the variant is configured.
+  var config = defaultGameConfig()
+  config.year = "bc25"
+  config.pool = "mixed"
+  config.gamesPerMatch = 3
+  config.maxRounds = 600
+  let s = sheets()
+  var plan = buildPlan(config, s, 5)
+  plan.chassis = Chassis
+  var events: seq[MatchEvent]
+  let (games, reason) = playMatch(config, plan, events)
+  var seats: array[2, SeatReport]
+  for slot in 0 .. 1:
+    seats[slot] = SeatReport(name: "seat" & $slot, alias: aliasFor(slot),
+      policyKind: "scripted", sheet: s[slot],
+      chassis: (if slot == 0: "spaark" else: "examplefuncsplayer25"))
+  let res = resultsJson(seats, games, plan, reason, 0.0, 0.0)
+  checkEq("the episode reason is `complete`", res{"reason"}.getStr(),
+    "complete")
+  checkEq("and nothing fell back to a doctrine it could not fetch",
+    res{"fallbacks"}, %*[0, 0])
+  check("the majority ended it", games.len in 2 .. 3)
+  for g in res{"games"}:
+    check("game " & g{"map"}.getStr() & " ended on a real end reason",
+      g{"end_reason"}.getStr() notin ["", "abandoned"])
+
+block:
   ## ...and so do the PRE-MATCH kinds, which carry `game = -1` and are
   ## therefore skipped by the loop above (r1-F12). They are produced by
   ## `decide`, not by the sim, so they are counted here against a doctrine
