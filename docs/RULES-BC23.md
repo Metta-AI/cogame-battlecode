@@ -312,6 +312,18 @@ with the reason. Nothing here is a bug list.
     a positive amount.** `assertCanTransferResource` checks the team only on a
     *negative* (withdrawing) amount; a positive transfer needs only "a well or
     a headquarter". The port reproduces that. Neither chassis does it.
+18. **The `first_action` event's field is `action`, not the design note's
+    `kind`.** `MatchEvent` flattens `fields` into the same JSON object as the
+    event's own `kind` key, so a field called `kind` SILENTLY OVERWRITES THE
+    EVENT KIND and the replay comes back carrying events of kind `"move"` and
+    `"spawn"` — the beat vocabulary check and every `beatsFor` arm then look
+    at the wrong string. bc24 and bc25 already emit `action` for the same
+    reason. The reason is stated at the emitter
+    (`src/battlecode/match.nim:236-241`), the reader agrees
+    (`src/battlecode/broadcast.nim:233-237` reads `e.fields{"action"}`), and
+    the vocabulary itself is the note's fifteen names
+    (`src/battlecode/years/dispatch.nim:138-142`). Recorded here rather than
+    "fixed", because fixing it would break the replay format.
 
 ## What this year measures, for the next one
 
