@@ -3296,10 +3296,22 @@ html:not([data-year="bc23"]) #bc23-tempest { display: none !important; }
 #bc23-islands .neutral { color: #6f6558; }
 
 /* The two stat boxes. BOTH ARE IN relayout()'s --statrail SET, so #killfeed
-   is lifted above them at every width and both zooms. */
+   is lifted above them at every width and both zooms.
+
+   `width: max-content`, NOT a fixed `min(300px, 46vw)`: the rows are
+   `white-space: nowrap` and a fixed 300 px box clipped them at every width
+   the renderer fixture measures. MEASURED, with the widest values a
+   `lemonade` mirror reaches over the sixteen `mixed` and `large` maps at
+   2000 rounds (adamantium 21708, banked 25446, cargo 26289, launchers 256,
+   robots lost 433): the econ row needs 647 px and the units row 387 px at
+   the 10 px font, against the 284 px the old box left them, and 225 px /
+   194 px against 150 px at the 9 px font under 640 px. The box now sizes to
+   its own content and `max-width` keeps it inside the frame, which is the
+   arrangement `#bc25-towers`/`#bc25-econ` already use. */
 #bc23-econ, #bc23-units {
   position: absolute; right: 8px;
-  width: min(300px, 46vw);
+  width: max-content; max-width: calc(100% - 16px);
+  box-sizing: border-box; overflow: hidden;
   font: 500 10px/1.35 var(--mono); color: #cdbfa6;
   background: rgba(12, 14, 20, .74); border: 1px solid #2a3342;
   border-radius: 6px; padding: 5px 7px; z-index: 5; pointer-events: none;
@@ -3324,11 +3336,19 @@ html:not([data-year="bc23"]) #bc23-tempest { display: none !important; }
 
 /* The doctrine overlay (D3): DISMISSIBLE, with a close control, an Escape
    binding, a re-open chip and self-dismissal on the first advance. It sits
-   above the board area and NEVER inside the transport band. */
+   above the board area and NEVER inside the transport band.
+
+   The `max-height` is the SMALLER of the band-bounded height and 46vh. The
+   band term alone left the panel 482 px tall in the 640 px featured-match
+   frame -- 75 % of it -- once BOTH seats carried a full-cap 280-rune
+   `notes`, and the board is the picture. 46vh is the bound `#bc25-doctrines`
+   already uses; the band term still keeps the panel out of the transport at
+   the short-and-wide sizes where it is the tighter of the two. */
 #bc23-doctrines {
   position: absolute; left: 8px; right: 8px;
   top: calc(var(--topband, 0px) + 34px);
-  max-height: calc(100% - var(--topband, 0px) - var(--band, 0px) - 46px);
+  max-height: min(46vh,
+    calc(100% - var(--topband, 0px) - var(--band, 0px) - 46px));
   overflow: auto;
   font: 500 11px/1.4 var(--mono); color: #d9cdb8;
   background: rgba(10, 12, 18, .9); border: 1px solid #2a3342;

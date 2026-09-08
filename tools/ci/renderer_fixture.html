@@ -67,7 +67,7 @@
   // unit and doctrine panels, or bc24's flag, crumb, level and doctrine
   // panels.
   var SIZES = [[360, 640], [720, 900], [1280, 720]];
-  var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25'];
+  var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23'];
 
   function runes(text) { return Array.from(text); }
   function repeatRunes(text, count) {
@@ -84,9 +84,7 @@
   var params = new URLSearchParams(location.search);
   var inner = params.get('w');
   var yearParam = params.get('year');
-  var year = (yearParam === 'bc20' || yearParam === 'bc21' ||
-              yearParam === 'bc24' || yearParam === 'bc25')
-                ? yearParam : 'bc26';
+  var year = YEARS.indexOf(yearParam) >= 0 ? yearParam : 'bc26';
 
   // ------------------------------------------------------------------
   // Parent: one iframe per width, each posting its own verdict back.
@@ -345,6 +343,68 @@
       BC25_WORDS[m25] + '<br><i>' + notes + '</i></div>';
   }
 
+  // --- the bc23 row: the same full-cap strings through bc23's own words ---
+  // #bc23-doctrines-body is the ONLY element in this coworld that draws a
+  // 280-rune LLM `notes`, it is scoped `html[data-year="bc23"]`, and until
+  // this row existed no gate had ever rendered it with a full-cap string at
+  // any width (r1-F18). The markup below is renderIslands / renderEcon /
+  // renderUnits / renderDoctrines in client/replay_broadcast.html
+  // (:4949-5042) reproduced element for element and class for class.
+  var BC23_WORDS = [
+    'a balanced opening, 60 % of its build on carriers, 40 % on launchers, ' +
+      'mines adamantium first, takes elixir tech from round 500, sends its ' +
+      'first anchor at 700, spends 30 % of its mana on anchors, holds the ' +
+      'nearest islands, amplifiers on the front, destabilizers at 12 tiles, ' +
+      'retreats a launcher at 40 % health, throws cargo to the front',
+    'all-in on launchers, 20 % of its build on carriers, 80 % on launchers, ' +
+      'mines mana first, never opens the elixir programme, sends its first ' +
+      'anchor at 1500, spends 5 % of its mana on anchors, contests the ' +
+      'farthest islands, no amplifiers, destabilizers on contact, never ' +
+      'retreats, never throws cargo'
+  ];
+  // The stat-box numbers are MEASURED, not invented: the widest value each
+  // field reached in a `lemonade` mirror over all sixteen maps of the
+  // `mixed` (the bc23 variant's own pool) and `large` pools, 2000 rounds,
+  // both seat assignments — adamantium 21708, mana 8501, elixir 7172,
+  // banked 25446, cargo in flight 26289, wells worked 24, launchers 256,
+  // carriers 59, robots lost 433. A readout sized for four digits and fed
+  // five is a readout that reads short.
+  var bc23Islands = '<span class="ash">ASH 9</span>' +
+    '<span class="pips">\u25cf\u25d5\u25d1\u25d4\u25cb\u25cf\u25d1\u25cf\u25d5</span>' +
+    '<span class="towin">/ 15 to win</span>' +
+    '<span class="pips">\u25cf\u25cf\u25d5\u25d1\u25cb\u25cf\u25d4\u25d1</span>' +
+    '<span class="basil">8 BASIL</span>' +
+    '<span class="neutral">\u00b7 3 neutral of 20</span>';
+  var bc23Econ = '';
+  for (var e23 = 0; e23 < 2; e23++) {
+    bc23Econ += '<div class="row"><span class="who">' + ALIASES[e23] +
+      '</span><span class="ad">\u25c621708</span>' +
+      '<span class="mn">\u25c78501</span>' +
+      '<span class="ex">\u27267172</span>' +
+      '<span class="prog">\u219125446 banked \u00b7 26289 in flight</span>' +
+      '<span class="lbl">2\u2192Ex \u00b7 4\u00d73</span></div>';
+  }
+  bc23Econ += '<div class="row"><span class="who">wells</span>' +
+    '<span>24 worked \u00b7 4 upgraded \u00b7 2 elixir</span></div>';
+  var bc23Units = '';
+  for (var u23 = 0; u23 < 2; u23++) {
+    bc23Units += '<div class="row"><span class="who">' + ALIASES[u23] +
+      '</span><span class="lau">\u2694256</span>' +
+      '<span class="car">\u26c159</span><span>\u25b312</span>' +
+      '<span>\u27398</span><span>\u27486</span>' +
+      '<span class="anc">\u26939</span>' +
+      '<span class="lbl">lost 433</span></div>';
+  }
+  // BOTH SEATS AT THE FULL 280-RUNE CAP AT ONCE, plus the fallback badge:
+  // the widest line the panel can ever be asked to hold.
+  var bc23Doctrines = '';
+  for (var m23 = 0; m23 < 2; m23++) {
+    bc23Doctrines += '<div class="dline"><span class="dname">' +
+      ALIASES[m23] + '</span> \u2014 ' + NAMES[m23] +
+      (m23 === 1 ? ' <span class="dfall">[fallback: timeout]</span>' : '') +
+      '<br>' + BC23_WORDS[m23] + '<br><i>' + notes + '</i></div>';
+  }
+
   document.body.innerHTML =
     '<div id="viewport"><div id="stage"><div id="chrome">' +
       '<div id="scorebug">' +
@@ -356,6 +416,7 @@
           '<button type="button" id="bc21-doctrines-toggle" hidden>doctrines</button>' +
           '<button type="button" id="bc24-doctrines-toggle" hidden>doctrines</button>' +
           '<button type="button" id="bc25-doctrines-toggle" hidden>doctrines</button>' +
+          '<button type="button" id="bc23-doctrines-toggle" hidden>doctrines</button>' +
         '</div></div>' +
         '<div class="plates" id="plates-r">' + plate(1, 'basil') + '</div>' +
       '</div>' +
@@ -409,6 +470,13 @@
         '<button type="button" id="bc25-doctrines-close" ' +
         'aria-label="Dismiss doctrines">&times;</button>' +
         '<div id="bc25-doctrines-body">' + bc25Doctrines + '</div></div>' +
+      '<div id="bc23-islands">' + bc23Islands + '</div>' +
+      '<div id="bc23-units">' + bc23Units + '</div>' +
+      '<div id="bc23-econ">' + bc23Econ + '</div>' +
+      '<div id="bc23-doctrines" role="region" aria-label="Doctrines">' +
+        '<button type="button" id="bc23-doctrines-close" ' +
+        'aria-label="Dismiss doctrines">&times;</button>' +
+        '<div id="bc23-doctrines-body">' + bc23Doctrines + '</div></div>' +
     '</div></div></div>';
 
   // The verdict: nothing may leave the frame, and nothing may hide text
@@ -467,7 +535,10 @@
         '#bc24-doctrines, #bc24-doctrines *',
       bc25: '#scorebug .plate, #scorebug .plate *, #bc25-coverage, ' +
         '#bc25-coverage *, #bc25-towers, #bc25-towers *, #bc25-econ, ' +
-        '#bc25-econ *, #bc25-doctrines, #bc25-doctrines *'
+        '#bc25-econ *, #bc25-doctrines, #bc25-doctrines *',
+      bc23: '#scorebug .plate, #scorebug .plate *, #bc23-islands, ' +
+        '#bc23-islands *, #bc23-econ, #bc23-econ *, #bc23-units, ' +
+        '#bc23-units *, #bc23-doctrines, #bc23-doctrines *'
     };
     var filled = document.querySelectorAll(FILLED[year]);
     for (var j = 0; j < filled.length; j++) {
@@ -504,15 +575,31 @@
     }
 
     // The strings must still be at their caps: one quietly shortened remark
-    // leaves this fixture passing while testing nothing.
-    var sub = document.querySelector('.plate-sub');
-    if (runes(sub.textContent).length !==
-        runes(NAMES[0]).length + 3 + MAX_MOTTO_RUNES) {
-      return 'the motto was shortened before it was measured';
+    // leaves this fixture passing while testing nothing. BOTH seats, not just
+    // the first — the case that hurts is a full-cap note on every seat at
+    // once, and a check that reads seat 0 only would pass a fixture that
+    // shortened seat 1 (r1-F18).
+    var subs = document.querySelectorAll('.plate-sub');
+    if (subs.length !== 2) {
+      return 'the fixture laid out ' + subs.length + ' scorebug plates, not 2';
+    }
+    for (var s = 0; s < subs.length; s++) {
+      if (runes(subs[s].textContent).length !==
+          runes(NAMES[s]).length + 3 + MAX_MOTTO_RUNES) {
+        return 'the motto on seat ' + s + ' was shortened before it was ' +
+          'measured';
+      }
     }
     var shown = document.querySelectorAll('#' + probe + ' .dline i');
-    if (!shown.length || shown[0].textContent !== notes) {
-      return 'the notes were shortened before they were measured';
+    if (shown.length !== 2) {
+      return 'the fixture drew ' + shown.length + ' doctrine notes, not 2 ' +
+        '(both seats at the cap is the case that hurts)';
+    }
+    for (var d = 0; d < shown.length; d++) {
+      if (shown[d].textContent !== notes) {
+        return 'the notes on seat ' + d + ' were shortened before they were ' +
+          'measured';
+      }
     }
     return null;
   }

@@ -394,7 +394,7 @@ block:
 block:
   let fixture = readFile("tools/ci/renderer_fixture.html")
   check("the fixture has a row per year",
-    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25'];" in fixture)
+    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23'];" in fixture)
   check("and fills bc21's own readouts",
     "bc21-influence" in fixture and "bc21-votes" in fixture and
     "bc21-doctrines-body" in fixture)
@@ -404,6 +404,19 @@ block:
   check("and bc25's",
     "bc25-coverage" in fixture and "bc25-towers" in fixture and
     "bc25-econ" in fixture and "bc25-doctrines-body" in fixture)
+  ## bc23's row is the one this coworld's LLM text lands in: the 280-rune
+  ## `notes` is drawn ONLY into `#bc23-doctrines-body`, under bc23-only CSS,
+  ## and no gate rendered it at a full cap until this row existed (r1-F18).
+  check("and bc23's",
+    "bc23-islands" in fixture and "bc23-econ" in fixture and
+    "bc23-units" in fixture and "bc23-doctrines-body" in fixture)
+  check("with the full-cap notes on BOTH bc23 seats, not just the first",
+    "bc23Doctrines += '<div class=\"dline\"><span class=\"dname\">'" in
+      fixture and
+    "'<br>' + BC23_WORDS[m23] + '<br><i>' + notes + '</i></div>'" in fixture)
+  check("and the fixture refuses to pass on a shortened string",
+    "the notes on seat ' + d + ' were shortened" in fixture and
+    "the motto on seat ' + s + ' was shortened" in fixture)
   ## The fixture's "the notes were shortened before they were measured"
   ## check reads `#<year>-doctrines .dline i`, so a year whose doctrine rows
   ## carry any other class name passes that check VACUOUSLY -- bc25 shipped
@@ -866,9 +879,16 @@ block:
     "if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {"
   check("self-dismissal on the first advance", SelfDismiss in page)
   const BandBound =
-    "max-height: calc(100% - var(--topband, 0px) - var(--band, 0px) - 46px)"
-  check("and it is bounded ABOVE the transport band, never inside it",
+    "max-height: min(46vh,\n    calc(100% - var(--topband, 0px) - " &
+    "var(--band, 0px) - 46px));"
+  check("and it is bounded ABOVE the transport band, never inside it, and " &
+    "never over half the featured-match frame",
     BandBound in page)
+
+  ## The stat boxes size to their own content: a fixed box and a
+  ## `white-space: nowrap` row is a readout that reads short (r1-F18).
+  check("#bc23-econ and #bc23-units size to their content",
+    "width: max-content; max-width: calc(100% - 16px);" in page)
 
   ## The two stat boxes sit above the band and are in the --statrail set.
   check("#bc23-units is lifted above var(--band)",
