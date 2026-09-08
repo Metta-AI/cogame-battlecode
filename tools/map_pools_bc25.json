@@ -1,0 +1,9 @@
+{
+  "small": ["DefaultSmall", "CastleDefense", "Paintball", "Justice", "Filter",
+            "Jail"],
+  "mixed": ["DefaultSmall", "Justice", "Fossil", "SandyBeach", "rain", "roads",
+            "DefaultMedium", "Money", "Portal", "Bunny", "DefaultLarge",
+            "leavemealone"],
+  "large": ["HungerGames", "Oasis", "DefaultHuge", "Leaf", "SMILE",
+            "gardenworld"]
+}

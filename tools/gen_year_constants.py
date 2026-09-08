@@ -13,11 +13,12 @@ hand-edited constant fails the build.
         --out src/battlecode/years/bc26/constants.nim
     tools/gen_year_constants.py --engine ... --check   # diff, exit 1 on drift
 
-`--year bc20`, `--year bc21` and `--year bc24` do the same job for the other
-year modules against a checkout of the matching engine at its pinned commit.
-bc20 and bc21 read `common/GameConstants.java` and `common/RobotType.java`;
-bc24 reads `common/GameConstants.java`, `common/SkillType.java`,
-`common/TrapType.java` and `common/GlobalUpgrade.java`:
+`--year bc20`, `--year bc21`, `--year bc24` and `--year bc25` do the same job
+for the other year modules against a checkout of the matching engine at its
+pinned commit. bc20 and bc21 read `common/GameConstants.java` and
+`common/RobotType.java`; bc24 reads `common/GameConstants.java`,
+`common/SkillType.java`, `common/TrapType.java` and `common/GlobalUpgrade.java`;
+bc25 reads `common/GameConstants.java` and `common/UnitType.java`:
 
     tools/gen_year_constants.py --year bc20 --engine /path/to/battlecode20 \
         --out src/battlecode/years/bc20/constants.nim
@@ -591,10 +592,112 @@ def render_bc24(engine: pathlib.Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+# ---------------------------------------------------------------------------
+#  bc25 -- Battlecode 2025 "Chromatic Conflict"
+# ---------------------------------------------------------------------------
+
+BC25_COMMIT = "28975a487c1a30ed2b5bed644fe6ecd2c3dd1482"
+
+BC25_UNIT_RE = re.compile(
+    r"^\s*(SOLDIER|SPLASHER|MOPPER|LEVEL_(?:ONE|TWO|THREE)_"
+    r"(?:PAINT|MONEY|DEFENSE)_TOWER)\((.*?)\)\s*[,;]\s*$", re.M)
+
+BC25_DECISION_OPS_ROBOT = 1750
+BC25_DECISION_OPS_TOWER = 2000
+    # One tenth of ROBOT_BYTECODE_LIMIT / TOWER_BYTECODE_LIMIT, the same
+    # convention bc20, bc21 and bc24 use. docs/RULES-BC25.md §Divergences
+    # item 1 carries the measurement that makes it harmless in this year:
+    # the 2025 example bot peaks at 14.1-15.0 % of its limit.
+
+
+def render_bc25(engine: pathlib.Path) -> str:
+    common = engine / "engine/src/main/battlecode/common"
+    consts = read_constants_from(common / "GameConstants.java",
+                                 strip_comments=True)
+    unit_src = (common / "UnitType.java").read_text()
+    units = [(n, [v.strip() for v in a.split(",")])
+             for n, a in BC25_UNIT_RE.findall(unit_src)]
+    if len(units) != 12:
+        raise SystemExit(
+            f"::error::expected 12 UnitType entries, saw {len(units)}")
+    for name, a in units:
+        if len(a) != 13:
+            raise SystemExit(
+                f"::error::UnitType.{name} has {len(a)} arguments, expected 13")
+
+    lines: list[str] = []
+    add = lines.append
+    add('## Battlecode 2025 "Chromatic Conflict" gameplay constants '
+        "-- GENERATED, do not edit.")
+    add("##")
+    add(f"## Source: github.com/battlecode/battlecode25 at commit "
+        f"`{BC25_COMMIT}`,")
+    add("## files `common/GameConstants.java` and `common/UnitType.java`, read")
+    add("## by `tools/gen_year_constants.py --year bc25`. The `test` job of")
+    add("## `.github/workflows/ci.yml` re-runs that generator with `--check`,")
+    add("## which byte-diffs this file, so an edit here fails the build instead")
+    add("## of quietly changing the rules under a `GameVersion` that no longer")
+    add("## describes them.")
+    add("##")
+    add('## `SpecVersion` is the literal string "1" in the 2025 sources, which')
+    add("## is useless as a version pin -- so the ORACLE JAR is pinned by")
+    add("## sha256 in `tools/oracle/bc25/jar.lock` instead, and Tier B")
+    add("## cross-checks every constant here against the jar's own classes")
+    add("## (docs/RULES-BC25.md §Divergences item 12).")
+    add("##")
+    add("## THERE IS NO FLOAT32 ANYWHERE IN BC25 and no transcendental in the")
+    add("## round loop: the only floating point is `Math.round(double)` in four")
+    add("## places, which is why this year's arithmetic tier is provable over")
+    add("## its whole finite domain rather than sampled.")
+    add("")
+    add(f'const EngineCommit* = "{BC25_COMMIT}"')
+    add('const OracleJarVersion* = "3.1.0"')
+    add("")
+    add("type")
+    add("  UnitType* = enum")
+    for name, _ in units:
+        add(f'    ut{camel(name)} = "{name}"')
+    add("")
+    add("  UnitSpec* = object")
+    add("    ## `common/UnitType.java`'s thirteen constructor arguments, in the")
+    add("    ## file's own order. `-1` means the field has no meaning for that")
+    add("    ## type and is carried rather than normalised, because the engine")
+    add("    ## carries it.")
+    add("    paintCost*, moneyCost*, attackCost*, health*, level*: int")
+    add("    paintCapacity*, actionCooldown*, actionRadiusSquared*: int")
+    add("    attackStrength*, aoeAttackStrength*: int")
+    add("    paintPerTurn*, moneyPerTurn*, attackMoneyBonus*: int")
+    add("")
+    add("const")
+    for name, nim_type, literal in consts:
+        if nim_type == "float32":
+            literal = f32_literal(literal)
+        add(f"  {camel(name)}*: {nim_type} = {literal}")
+    add("")
+    add(f"  DecisionOpsRobot*: int = {BC25_DECISION_OPS_ROBOT}")
+    add(f"  DecisionOpsTower*: int = {BC25_DECISION_OPS_TOWER}")
+    add("    ## Replace `RobotBytecodeLimit` / `TowerBytecodeLimit` outside the")
+    add("    ## JVM: no mid-turn resumption, no mid-primitive cut, enforced by")
+    add("    ## the sim rather than by the bot.")
+    add("")
+    add("  UnitSpecs*: array[UnitType, UnitSpec] = [")
+    for name, a in units:
+        add(f"    ut{camel(name)}: UnitSpec(paintCost: {a[0]}, "
+            f"moneyCost: {a[1]}, attackCost: {a[2]},")
+        add(f"      health: {a[3]}, level: {a[4]}, paintCapacity: {a[5]},")
+        add(f"      actionCooldown: {a[6]}, actionRadiusSquared: {a[7]},")
+        add(f"      attackStrength: {a[8]}, aoeAttackStrength: {a[9]},")
+        add(f"      paintPerTurn: {a[10]}, moneyPerTurn: {a[11]},")
+        add(f"      attackMoneyBonus: {a[12]}),")
+    add("  ]")
+    add("")
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--year", default="bc26",
-                    choices=["bc26", "bc20", "bc21", "bc24"])
+                    choices=["bc26", "bc20", "bc21", "bc24", "bc25"])
     ap.add_argument("--engine", required=True, type=pathlib.Path)
     ap.add_argument("--out", type=pathlib.Path, default=None)
     ap.add_argument("--check", action="store_true",
@@ -604,9 +707,10 @@ def main() -> int:
     out = args.out or pathlib.Path(
         f"src/battlecode/years/{args.year}/constants.nim")
     label = {"bc26": TAG, "bc20": BC20_COMMIT, "bc21": BC21_COMMIT,
-             "bc24": BC24_COMMIT}[args.year]
+             "bc24": BC24_COMMIT, "bc25": BC25_COMMIT}[args.year]
     text = {"bc26": render, "bc20": render_bc20,
-            "bc21": render_bc21, "bc24": render_bc24}[args.year](args.engine)
+            "bc21": render_bc21, "bc24": render_bc24,
+            "bc25": render_bc25}[args.year](args.engine)
     if args.check:
         current = out.read_text() if out.exists() else ""
         if current != text:

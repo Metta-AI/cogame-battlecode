@@ -13,12 +13,35 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV07"
+  GameVersion* = "GV08"
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV08 — the `bc25` year module: Battlecode 2025 "Chromatic Conflict"
+    ##        ported from battlecode25 at commit 28975a48 (oracle jar 3.1.0,
+    ##        pinned by sha256 because its `SPEC_VERSION` is the useless
+    ##        literal "1"): the six-step round loop over a DYNAMIC
+    ##        append-ordered exec list with by-value removal, the 0..4 paint
+    ##        alphabet with its live square count and its MID-ACTION 70 %
+    ##        win check, the three robots and their exact attacks (the
+    ##        splasher's two radii, the mopper's six swing offsets), the
+    ##        four hard-coded 5x5 patterns and the mark/fill/complete tower
+    ##        build, tower upgrades with the damage carry and the defense
+    ##        damage ledger, Special Resource Patterns with the fifty-round
+    ##        delay and the reset-on-break, the paint-connectivity message
+    ##        gate and the tower broadcast, the low-paint cooldown surcharge
+    ##        and the end-of-turn paint bill (crowding counts TOWERS), and
+    ##        the six-rung end ladder, behind `game_config.year`. bc26, bc20,
+    ##        bc21 AND bc24 SEMANTICS ARE UNCHANGED: nothing a GV04, GV05,
+    ##        GV06 or GV07 recording carries changed meaning — the sheet
+    ##        envelope, the results document and the replay all gained
+    ##        year-neutral shape without moving a byte an older recording
+    ##        holds — which is why `ReplayCompatibleGameVersions` is EXTENDED
+    ##        rather than reset and every hosted bc26, bc20, bc21 and bc24
+    ##        replay keeps rendering.
     ##
     ## GV07 — the `bc24` year module: Battlecode 2024 "Breadwars" ported from
     ##        battlecode24 at commit 166c79bb (spec 3.0.5/3.0.6, oracle jar
@@ -103,7 +126,8 @@ const
     ##        round loop, cheese, kings, combat, ratnap/throw, traps, dirt,
     ##        formation, squeaks, cats, backstab, float32-narrowed scoring.
 
-  ReplayCompatibleGameVersions* = ["GV04", "GV05", "GV06", GameVersion]
+  ReplayCompatibleGameVersions* = ["GV04", "GV05", "GV06", "GV07",
+                                   GameVersion]
     ## Versions whose recordings this build can still re-derive. A replay
     ## carrying anything else is refused with a readable message rather than
     ## silently re-simulated under different rules.
@@ -145,6 +169,8 @@ type
     scExamplefuncsplayer21 = "examplefuncsplayer21"
     scGoneSharkin = "gone-sharkin"
     scExamplefuncsplayer24 = "examplefuncsplayer24"
+    scSpaark = "spaark"
+    scExamplefuncsplayer25 = "examplefuncsplayer25"
 
   ConfigError* = object of CatchableError
     ## An unusable `game_config`. The container exits 2 on this, per ctf.
