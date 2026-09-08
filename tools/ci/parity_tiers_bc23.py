@@ -6,11 +6,12 @@ CI-TIME ONLY, run by the `parity-oracle-bc23` job of
 enforces:
 
   Tier A  (BLOCKING)  rounds 1..2000 BIT-EXACT, WHOLE GAMES, for
-                      `examplefuncsplayer` against itself on six `small`
+                      `examplefuncsplayer23` against itself on six `small`
                       maps. The window is the whole game for one MEASURED
-                      reason: the 2025 example bot never approaches its
-                      bytecode limit (peak 14 % of 17 500 over eight full
-                      games, zero mid-turn cut-offs), so the port's "no
+                      reason: the 2023 example bot never approaches its
+                      bytecode limit (peak 745-893 bytecodes over six full
+                      games -- 4-9 % of whichever type's limit that was --
+                      and zero mid-turn cut-offs), so the port's "no
                       mid-turn resumption" divergence is never exercised and
                       the comparison stays defined to the last round. THE JOB
                       DOES NOT ASSUME THAT: it reads the `bc=` column and
@@ -70,16 +71,31 @@ BC_VALUE_RE = re.compile(r"^R (\d+) U (\d+) team=\S+ ty=(\S+) .* bc=(\d+)$")
 
 # The headroom bound. Past this point the comparison stops being defined,
 # because the port's DecisionOps budget has no mid-turn resumption and the
-# JVM's bytecode limit does. Measured: the example bot peaks at 14 % and the
-# scenario bot at 35 %.
+# JVM's bytecode limit does. Measured over the six whole-game pairs: the
+# example bot peaks at 745-893 bytecodes, which is 4-9 % of whichever type's
+# limit it was, and never once cuts a turn off.
 HEADROOM_PCT = 50
 
-LIMITS = {"ROBOT": 17500, "TOWER": 20000}
+# `RobotType`'s own `BL` column, engine23 @ af42086. A type that is not here
+# is a trace the emitters and this script disagree about, and guessing a
+# limit would silently move the headroom bound.
+LIMITS = {
+    "HEADQUARTERS": 20000,
+    "CARRIER": 12500,
+    "LAUNCHER": 10000,
+    "DESTABILIZER": 10000,
+    "BOOSTER": 10000,
+    "AMPLIFIER": 10000,
+}
 
 
 def limit_for(unit_type: str) -> int:
-    robot = unit_type in ("SOLDIER", "SPLASHER", "MOPPER")
-    return LIMITS["ROBOT"] if robot else LIMITS["TOWER"]
+    if unit_type not in LIMITS:
+        raise SystemExit(
+            f"::error::unknown bc23 unit type {unit_type!r} in the Java "
+            f"trace: tools/ci/parity_tiers_bc23.py has no bytecode limit for "
+            f"it, so the headroom bound cannot be computed.")
+    return LIMITS[unit_type]
 
 
 def strip_bc(line: str) -> str:
@@ -89,13 +105,18 @@ def strip_bc(line: str) -> str:
 def first_divergence(java_path: pathlib.Path, nim_path: pathlib.Path):
     """(round, java line, nim line) of the first differing record, or None.
 
+    `bc=` is stripped from BOTH sides: the Java column is the real bytecode
+    counter and the Nim column is a constant 0, because the port has no
+    counter to report. Stripping only one side compares a line against itself
+    plus a suffix and fails on the first robot record of round 1.
+
     Streamed: a 2000-round trace is 3-4 MB a side and eighteen pairs would be
     seventy megabytes held at once otherwise.
     """
     with java_path.open() as jf, nim_path.open() as nf:
         for lineno, (jl, nl) in enumerate(zip(jf, nf), start=1):
             j = strip_bc(jl.rstrip("\n"))
-            n = nl.rstrip("\n")
+            n = strip_bc(nl.rstrip("\n"))
             if j != n:
                 round_no = -1
                 m = re.match(r"^R (\d+) ", j)
@@ -107,7 +128,7 @@ def first_divergence(java_path: pathlib.Path, nim_path: pathlib.Path):
         nrest = nf.readline()
         if jrest or nrest:
             j = strip_bc(jrest.rstrip("\n"))
-            n = nrest.rstrip("\n")
+            n = strip_bc(nrest.rstrip("\n"))
             m = re.match(r"^R (\d+) ", j or n)
             return (int(m.group(1)) if m else -1, -1, j, n)
     return None
