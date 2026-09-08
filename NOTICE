@@ -7,9 +7,9 @@ discharged by the repository itself.
 
 **No upstream Java source runs in any image this repository builds, and no
 JVM, JDK or JRE is installed in one.** The Java engines exist only inside the
-`parity-oracle` and `parity-oracle-bc20` jobs of
-`.github/workflows/ci.yml`, where they are fetched at CI time and used as
-differential oracles (see `docs/PARITY.md`).
+`parity-oracle`, `parity-oracle-bc20`, `-bc21`, `-bc22`, `-bc23`, `-bc24` and
+`-bc25` jobs of `.github/workflows/ci.yml`, where they are fetched at CI time
+and used as differential oracles (see `docs/PARITY.md`).
 
 ---
 
@@ -470,3 +470,126 @@ The 2023 ranking's 7th (`don't @ me`) and 3rd (`4 Musketeers`) place bots are
 **not published on GitHub** and contribute nothing to this repository. As in
 every other year, an unlicensed repository is not vendored, not ported, not
 compiled and not read into any file here.
+
+# ===========================================================================
+#  The `bc22` year module — Battlecode 2022 "Mutation"
+# ===========================================================================
+
+## battlecode/battlecode22 engine — AGPL-3.0
+
+Repository: <https://github.com/battlecode/battlecode22>, pinned commit
+**`6ed05b679c0822e9bbe332812ff5655812dd023e`**. The licence is verified three
+ways: `engine/COPYING`, `schema/LICENSE` **and** `client/LICENSE` are each the
+GNU Affero General Public License v3. (The repository root itself carries no
+`LICENSE` file.)
+
+What derives from it, named individually:
+
+* `src/battlecode/years/bc22/**` — the 2022 rule set, **hand-ported as
+  behaviour** from `world/GameWorld.java`, `world/InternalRobot.java`,
+  `world/RobotControllerImpl.java`, `world/TeamInfo.java`,
+  `world/ObjectInfo.java`, `world/LiveMap.java` and
+  `world/DominationFactor.java`;
+* `src/battlecode/years/bc22/constants.nim` — **generated** by
+  `tools/gen_year_constants.py --year bc22` from `common/GameConstants.java`,
+  `common/RobotType.java` and `common/AnomalyType.java`;
+* `src/battlecode/years/bc22/trove.nim` — **trove4j 3.0.3**'s
+  `TIntObjectHashMap` iteration order, reproduced as behaviour. Trove is
+  **not** AGPL and has its own section below;
+* `data/maps/bc22/*.json` — the 22 committed maps, **converted** from the
+  official `.map22` flatbuffers by `tools/convert_maps_bc22.py` (a
+  hand-written vtable walk: there is no flatbuffers library on either side of
+  this port);
+* `data/bc22/tables.json` — the whole finite arithmetic domain, regenerated
+  under the CI JDK 8 by `tools/JavaBc22Tables.java` straight out of the
+  released jar's own classes and byte-diffed by the `parity-oracle-bc22` job;
+* `src/battlecode/years/bc22/chassis/scaffold22.nim` — `examplefuncsplayer`,
+  ported **statement for statement** from
+  `example-bots/src/main/examplefuncsplayer/RobotPlayer.java`. It is one side
+  of the differential oracle and may not gain behaviour;
+* `tools/oracle/bc22/examplefuncsplayer22/RobotPlayer.java` — upstream's own
+  file, **byte for byte, with no determinism patch** (it seeds its own
+  `java.util.Random(6147)`, static fields are per-robot under the
+  instrumenter, and it never calls `Math.random()`).
+
+**The engine itself is used only at CI time.** No JDK, no JRE and no upstream
+Java source or bytecode exists in any image this repository builds; the 2022
+toolchain lives only in the `parity-oracle-bc22` job, and only as the
+published `battlecode22-2.2.1.jar` (`tools/oracle/bc22/jar.lock` pins its URL,
+size and sha256).
+
+## net.sf.trove4j:trove4j 3.0.3 — LGPL-2.1
+
+The 2022 engine's `ObjectInfo` keeps its robots in a
+`gnu.trove.map.hash.TIntObjectHashMap`, and `robotsArray()` is that map's
+`values(V[])` — a high-index-to-low walk over the open-addressed table. That
+order is **read by a rule**: the global CHARGE anomaly sorts the board's droids
+and destroys the top 5 %, and a stable sort over a differently-ordered input
+kills different robots. Measured over 900 recorded dumps, 51-58 % of CHARGE
+rounds contain at least one tie that the iteration order decides.
+
+`src/battlecode/years/bc22/trove.nim` therefore reproduces that **observable
+iteration order**: the open-addressing scheme, the auto-compacting rehash, the
+tombstone history and the capacity ladder, hand-written in Nim from the
+documented algorithm and verified bit-for-bit against the jar's own trove
+classes. **No trove source or bytecode is vendored, compiled or copied**; the
+class files reached only the CI-only oracle jar's classpath and never any
+image. The dependency and its licence are recorded here because reproducing a
+library's iteration order derives from its *behaviour*, and this repository
+says so plainly rather than leaving it implicit.
+
+## battlecode/battlecode22 client sprites — AGPL-3.0
+
+`client/LICENSE` **is** the GNU AGPL v3 — as in 2023, and unlike 2024 and
+2025, whose clients had no LICENSE file — while `client/package.json` declares
+`"license": "GPL-3.0"`. Both facts are recorded; the AGPL file is the one this
+repository relies on. `data/atlas_bc22.png` and `data/atlas_bc22.json` are cut
+by `tools/build_sprite_atlas_bc22.py` from
+`client/visualizer/src/static/img/**` at the pinned commit — the `robots/`
+unit sprites in both team tints, the `resources/` lead and gold glyphs, and
+`star.png`.
+
+`schema/package.json` also says `GPL-3.0` while `schema/LICENSE` is the AGPL —
+the discrepancy is recorded and is moot here, because **no schema code is used
+at all**: `tools/convert_maps_bc22.py` is a hand-written vtable walk.
+
+## iliao2345/Battlecode2022 — AGPL-3.0
+
+Repository: <https://github.com/iliao2345/Battlecode2022>, **AGPL-3.0**, head
+`c42645a0`, `src/fury_fix_20/`. What derives from it, as **behaviour and not
+code**, rewritten in Nim and parameterised by this coworld's doctrine sheet:
+`src/battlecode/years/bc22/chassis/{wololo,kit,econ,archon,miner,soldier,micro,anomaly}.nim`
+— the rubble-weighted BFS and its checkpoint navigator, the miner's
+`mine_until` floor and its mine-move-mine turn shape, the archon's
+build-rate/urgency model with its saturation caps and its 20-round miner
+employment ring buffer, the archon repair priority (sage, then soldier, then
+idle miner), the soldier and sage micro with the sage's `0.6 x cooldown`
+advance gate, and the pre-vortex archon relocation.
+
+## BSreenivas0713/Battlecode2022 — AGPL-3.0
+
+Repository: <https://github.com/BSreenivas0713/Battlecode2022>, **AGPL-3.0**,
+head `c388fe8a`, `src/MPTempName/`. What derives from it:
+`src/battlecode/years/bc22/chassis/{lab,builder,gold,comms}.nim` — the
+laboratory siting and solitude gate, the builder's prototype-then-repair
+discipline, the mutation ladder's marginal-value ordering, and the comms slot
+layout it shares with jmerle's. It is the published bot of the three whose own
+directory history (`MPLaboratory`, `MPMoreLabs`) shows it actually iterated on
+the gold economy, which is why this year's headline doctrine axis has a real
+behaviour source.
+
+## jmerle/battlecode-2022 — MIT
+
+Repository: <https://github.com/jmerle/battlecode-2022>, **MIT**, head
+`f57d3549`, `src/camel_case_v25_final/`. What derives from it:
+`src/battlecode/years/bc22/chassis/comms.nim` — the 64-slot shared-array
+layout and its 16-bit packing, from `util/SharedArray.java` — and `kit.nim`'s
+per-radius navigators, from `dijkstra/Dijkstra20|34|53.java`, one per vision
+radius, which is the right shape for a year whose radii are 20 / 34 / 53.
+
+## IvanGeffner/BC22 and '5 Musketeers' — cited, never used
+
+`IvanGeffner/BC22` carries **no licence anywhere** and is **not vendored, not
+ported, not compiled, not read and not cloned** — the same rule as every other
+year. `5 Musketeers` is not published on GitHub and likewise contributes
+nothing.
