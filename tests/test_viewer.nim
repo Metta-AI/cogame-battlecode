@@ -394,8 +394,8 @@ block:
 block:
   let fixture = readFile("tools/ci/renderer_fixture.html")
   check("the fixture has a row per year",
-    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22'];" in
-      fixture)
+    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22', " &
+      "'bc16'];" in fixture)
   check("and fills bc21's own readouts",
     "bc21-influence" in fixture and "bc21-votes" in fixture and
     "bc21-doctrines-body" in fixture)
@@ -427,6 +427,24 @@ block:
   check("and the fixture refuses to pass on a shortened string",
     "the notes on seat ' + d + ' were shortened" in fixture and
     "the motto on seat ' + s + ' was shortened" in fixture)
+  ## bc16's row: the eighth year, and the reason it exists is that
+  ## `#bc16-doctrines-body` is where bc16's 280-rune `notes`, 48-rune `motto`
+  ## and 120-rune submitted sheet are drawn, and no gate rendered any of them
+  ## at a full cap at any width until this row existed (r1-F2).
+  check("and bc16's",
+    "bc16-archons" in fixture and "bc16-horde" in fixture and
+    "bc16-econ" in fixture and "bc16-units" in fixture and
+    "bc16-doctrines-body" in fixture)
+  check("with both bc16 seats at the full cap, the envelope badge, the " &
+    "motto and the submitted sheet",
+    "'<br>' + BC16_WORDS[m16].join(' \\u00b7 ') +" in fixture and
+    "'<br><i>' + notes + '</i>' +" in fixture and
+    "what the cog actually sent: ' +\n      notes.slice(0, 120)" in fixture)
+  ## bc16 is IN the FILLED map, so the "hides its own content" rule runs over
+  ## its five readouts rather than over nothing.
+  check("and bc16's readouts are measured for hidden content",
+    "bc16: '#scorebug .plate, #scorebug .plate *, #bc16-archons, '" in
+      fixture)
   ## The fixture's "the notes were shortened before they were measured"
   ## check reads `#<year>-doctrines .dline i`, so a year whose doctrine rows
   ## carry any other class name passes that check VACUOUSLY -- bc25 shipped
@@ -436,6 +454,10 @@ block:
     "<div class=\"dline\"><span class=\"dname\">' + esc(seat.alias)" in page and
     "#bc25-doctrines .dline {" in page and
     "#bc25-doctrines .dname {" in page)
+  ## Same rule, same reason, for bc16: a bare text node where every sibling
+  ## year wraps `notes` in `<i>` would make that check vacuous for bc16 too.
+  check("and bc16 wraps its notes in the <i> the fixture selects",
+    "if (d.notes) html += '<br><i>' + esc(d.notes) + '</i>';" in page)
 
 ## Transport rules from the design note.
 check("relayout sets --hudscale", "--hudscale" in page)

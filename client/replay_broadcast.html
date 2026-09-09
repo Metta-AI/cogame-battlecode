@@ -3704,12 +3704,21 @@ html:not([data-year="bc16"]) #bc16-siege { display: none !important; }
    composition and how many rounds away, the outbreak level and multiplier,
    dens standing and the tiebreak countdown. It sits IMMEDIATELY ABOVE
    var(--band), never inside it, and it KEEPS its wave composition, its
-   multiplier and its countdown at EVERY width including 360 px. */
+   multiplier and its countdown at EVERY width including 360 px.
+   IT WRAPS, and that is what makes the last sentence true (r1-F2). On one
+   nowrap line the six readouts measure ~570 px, so at 360 px (max-width 92 %
+   = 331 px) and at 720 px the tail of the strip ran past the box and
+   `overflow: hidden` ATE IT: `DENS`, the mini-timeline and the countdown were
+   drawn outside the frame and clipped to nothing, exactly the class of defect
+   `tools/ci/renderer_fixture.html` exists to catch. `flex-wrap: wrap` keeps
+   every field on screen at every width instead; `white-space: nowrap` stays,
+   so a field wraps as a whole and never mid-number. */
 #bc16-horde {
   position: absolute; left: 50%; transform: translateX(-50%);
   bottom: calc(var(--band, 0px) + 148px);
-  display: flex; gap: 8px; align-items: center;
-  font: 600 11px/1 var(--mono); color: #cdbfa6;
+  display: flex; gap: 8px 8px; align-items: center;
+  flex-wrap: wrap; justify-content: center;
+  font: 600 11px/1.35 var(--mono); color: #cdbfa6;
   background: rgba(10, 12, 18, .82); border: 1px solid #2a3342;
   border-radius: 8px; padding: 4px 10px; z-index: 7; white-space: nowrap;
   max-width: 92%; overflow: hidden;
@@ -3732,8 +3741,15 @@ html:not([data-year="bc16"]) #bc16-siege { display: none !important; }
 }
 #bc16-units { bottom: calc(var(--band, 0px) + 76px); }
 #bc16-econ { bottom: calc(var(--band, 0px) + 8px); }
+/* The two rail boxes WRAP their rows (r1-F2). `width: max-content` capped by
+   `max-width` bounds the BOX, but a nowrap flex row inside it keeps laying
+   its fields out past that cap: at 360 px a real econ row measures ~640 px
+   against a 344 px box, so `rubble +x / -y` was drawn OFF THE FRAME. Wrapping
+   the row keeps every field on screen at every width; the fields themselves
+   still never break mid-number. */
 #bc16-econ .row, #bc16-units .row {
-  display: flex; gap: 7px; align-items: baseline; white-space: nowrap;
+  display: flex; gap: 3px 7px; align-items: baseline; white-space: nowrap;
+  flex-wrap: wrap;
 }
 #bc16-econ .who, #bc16-units .who {
   min-width: 4.2em; color: #8b8375; font-weight: 700;
@@ -5885,7 +5901,14 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
       }
       html += '<br>' + esc((d.words || []).join(' \u00b7 '));
       if (d.motto) html += '<br>\u201c' + esc(d.motto) + '\u201d';
-      if (d.notes) html += '<br>' + esc(d.notes);
+      // `<i>` is not decoration: it is the element every other year's
+      // doctrine row wraps its `notes` in, and it is what
+      // `tools/ci/renderer_fixture.html`'s "the notes on seat N were
+      // shortened before they were measured" check selects
+      // (`#<year>-doctrines .dline i`). bc25 shipped its own class names
+      // first and that check found nothing to measure; a bare text node
+      // here would do the same to bc16 (r1-F2).
+      if (d.notes) html += '<br><i>' + esc(d.notes) + '</i>';
       if (d.submitted) {
         html += '<br><span class="dsub">what the cog actually sent: ' +
           esc(d.submitted) + '</span>';

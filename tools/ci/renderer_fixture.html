@@ -67,7 +67,7 @@
   // unit and doctrine panels, or bc24's flag, crumb, level and doctrine
   // panels.
   var SIZES = [[360, 640], [720, 900], [1280, 720]];
-  var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22'];
+  var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22', 'bc16'];
 
   function runes(text) { return Array.from(text); }
   function repeatRunes(text, count) {
@@ -472,6 +472,115 @@
       notes.slice(0, 120) + '</span></div>';
   }
 
+  // --- the bc16 row: the same full-cap strings through bc16's own words ---
+  // #bc16-doctrines-body is the element that draws bc16's 280-rune LLM
+  // `notes`, its 48-rune `motto` and the 120-rune submitted sheet
+  // (renderDoctrines, client/replay_broadcast.html), it is scoped
+  // html[data-year="bc16"], and until this row existed NO GATE had ever
+  // rendered it with a full-cap string at any width (r1-F2; the design note
+  // asked for this row in as many words: "The fixture gains a bc16 row").
+  // The markup below is renderArchons / renderHorde / renderEcon /
+  // renderUnits / renderDoctrines reproduced element for element and class
+  // for class, so the fixture measures the real rules and not a lookalike.
+  //
+  // The WORDS are plainWords16()'s own output, and they are the WIDEST it can
+  // emit: every one of the eleven clauses is the longest of its alternatives
+  // (`turret_count` 6, `guard_ratio` 100, `retreat_hp` 100, `den_clear_round`
+  // 3000 -- 502 characters over eleven clauses against the second pole's
+  // 468). A doctrine card sized for the median sheet is a card that reads
+  // short on the widest one.
+  var BC16_WORDS = [
+    ['parks scouts between the dens and itself to pull the horde',
+     'wants 6 turrets standing',
+     'builds guards whenever it can afford one',
+     'kites zombies with guards too',
+     'breaks a zombie den at round 3000',
+     'spends parts on soldiers and guards first',
+     'spreads its archons behind their own screens',
+     'routes its archons along the neutral roster',
+     'withdraws a unit on the first damage it takes',
+     'clears no rubble and plays the map it was given',
+     'walks its infected units at the enemy archons to die there'],
+    ['sends a soldier spearhead at the nearest enemy archon',
+     'wants no turrets standing, and stays all-mobile',
+     '70 % of its army is guards',
+     'trades with every zombie where it stands',
+     'breaks a zombie den at round 600',
+     'buys a viper before the third soldier',
+     'sends one archon away to farm the far map',
+     'activates a neutral it passes',
+     'pulls a unit out at 55 % health',
+     'flattens its whole home area to full speed',
+     'walks its infected units away from its own archons']
+  ];
+  // Every number below is MEASURED, not invented: the widest value each field
+  // reached on ANY round of a `bulwark` mirror over all six maps of the
+  // `small` pool (the bc16 variant's own pool) at the engine's full
+  // 3000-round cap -- archons 4 a side, soldiers 110, guards 28, scouts 3,
+  // vipers 1, turrets 3, building 4, infected 10, lost 200, turned 70, parts
+  // 618, income 2.0, parts collected 16 600 tenths, dens destroyed 4,
+  // neutrals 12, rubble cleared 317 167 tenths and created 157 162 tenths,
+  // parts left on the map 3 380, impassable 450, zombies 39/8/10/6, dens
+  // standing 12, outbreak level 9, twelve schedule rows, the largest single
+  // wave 54 in four parts. A readout sized for four digits and fed six is a
+  // readout that reads short. `neutral_archons` measured ZERO on this pool,
+  // so the parenthetical branch is fed 1 here on purpose -- the branch exists
+  // and no measured episode would have laid it out.
+  var bc16Archons = '<span class="ash">CLAN ASH</span>' +
+    '<span class="pips ash">\u25cf<span class="zinf">(\u25d5)</span>' +
+    '\u25d1<span class="vinf">(\u25d4)</span></span>' +
+    '<span>4 \u2014 4</span>' +
+    '<span class="pips basil">\u25cf\u25cf' +
+    '<span class="zinf">(\u25d5)</span>\u25d1</span>' +
+    '<span class="basil">CLAN BASIL</span>' +
+    '<span class="lost">lost 4/4</span>';
+  var bc16Horde = '<span class="alive">\u25c639 \u27a48 \u26a110 ' +
+    '\u25cf6</span>' +
+    '<span class="wave">WAVE 20+20+7+7 in 2087</span>' +
+    '<span class="ob">OUTBREAK 9 \u2014 \u00d71.7</span>' +
+    '<span class="dens">DENS 12</span>' +
+    '<span class="tl"><b>\u00b7</b><b>\u00b7</b><b>\u00b7</b>' +
+    '\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7</span>' +
+    '<span class="togo">ROUND 2999 \u2014 912 to go</span>';
+  var bc16Econ = '';
+  for (var e16 = 0; e16 < 2; e16++) {
+    bc16Econ += '<div class="row"><span class="who">' + ALIASES[e16] +
+      '</span><span class="pt">618 parts</span>' +
+      '<span class="inc">+2.0/round</span>' +
+      '<span class="den">dens 4 (+800)</span>' +
+      '<span class="neu">neutrals 12 (1 archon)</span>' +
+      '<span class="rub">rubble +15716.2 / \u221231716.7</span></div>';
+  }
+  bc16Econ += '<div class="row"><span class="who lbl">map</span>' +
+    '<span class="pt">3380 parts left</span>' +
+    '<span class="rub">impassable 450 of 450 at round 0</span></div>';
+  var bc16Units = '';
+  for (var u16 = 0; u16 < 2; u16++) {
+    bc16Units += '<div class="row"><span class="who">' + ALIASES[u16] +
+      '</span><span class="arc">\u25b24</span>' +
+      '<span class="grd">G28</span><span>S110</span><span>Sc3</span>' +
+      '<span>V1</span><span class="tur">T3</span>' +
+      '<span class="bld">building 4</span>' +
+      '<span class="inf">infected 10</span>' +
+      '<span class="lbl">lost 200 \u00b7 turned 70</span></div>';
+  }
+  // BOTH SEATS AT THE FULL 280-RUNE CAP AT ONCE, plus the fallback badge, the
+  // SUBMITTED-VS-APPLIED badge, the 48-rune motto and the 120-rune submitted
+  // sheet: the widest line `#bc16-doctrines` can ever be asked to hold.
+  var bc16Doctrines = '';
+  for (var m16 = 0; m16 < 2; m16++) {
+    bc16Doctrines += '<div class="dline"><span class="dname">' +
+      ALIASES[m16] + '</span> \u2014 ' + NAMES[m16] +
+      (m16 === 1 ? ' <span class="dfall">[fallback: timeout]</span>' : '') +
+      ' <span class="dbadge">envelope: doctrine \u00b7 11 of 11 knobs ' +
+      'defaulted</span>' +
+      '<br>' + BC16_WORDS[m16].join(' \u00b7 ') +
+      '<br>\u201c' + motto + '\u201d' +
+      '<br><i>' + notes + '</i>' +
+      '<br><span class="dsub">what the cog actually sent: ' +
+      notes.slice(0, 120) + '</span></div>';
+  }
+
   document.body.innerHTML =
     '<div id="viewport"><div id="stage"><div id="chrome">' +
       '<div id="scorebug">' +
@@ -485,6 +594,7 @@
           '<button type="button" id="bc25-doctrines-toggle" hidden>doctrines</button>' +
           '<button type="button" id="bc23-doctrines-toggle" hidden>doctrines</button>' +
           '<button type="button" id="bc22-doctrines-toggle" hidden>doctrines</button>' +
+          '<button type="button" id="bc16-doctrines-toggle" hidden>doctrines</button>' +
         '</div></div>' +
         '<div class="plates" id="plates-r">' + plate(1, 'basil') + '</div>' +
       '</div>' +
@@ -553,6 +663,14 @@
         '<button type="button" id="bc22-doctrines-close" ' +
         'aria-label="Dismiss doctrines">&times;</button>' +
         '<div id="bc22-doctrines-body">' + bc22Doctrines + '</div></div>' +
+      '<div id="bc16-archons">' + bc16Archons + '</div>' +
+      '<div id="bc16-horde">' + bc16Horde + '</div>' +
+      '<div id="bc16-units">' + bc16Units + '</div>' +
+      '<div id="bc16-econ">' + bc16Econ + '</div>' +
+      '<div id="bc16-doctrines" role="region" aria-label="Doctrines">' +
+        '<button type="button" id="bc16-doctrines-close" ' +
+        'aria-label="Dismiss doctrines">&times;</button>' +
+        '<div id="bc16-doctrines-body">' + bc16Doctrines + '</div></div>' +
     '</div></div></div>';
 
   // The verdict: nothing may leave the frame, and nothing may hide text
@@ -618,7 +736,11 @@
       bc22: '#scorebug .plate, #scorebug .plate *, #bc22-archons, ' +
         '#bc22-archons *, #bc22-anomaly, #bc22-anomaly *, #bc22-econ, ' +
         '#bc22-econ *, #bc22-units, #bc22-units *, #bc22-doctrines, ' +
-        '#bc22-doctrines *'
+        '#bc22-doctrines *',
+      bc16: '#scorebug .plate, #scorebug .plate *, #bc16-archons, ' +
+        '#bc16-archons *, #bc16-horde, #bc16-horde *, #bc16-econ, ' +
+        '#bc16-econ *, #bc16-units, #bc16-units *, #bc16-doctrines, ' +
+        '#bc16-doctrines *'
     };
     var filled = document.querySelectorAll(FILLED[year]);
     for (var j = 0; j < filled.length; j++) {
