@@ -39,12 +39,26 @@ proc objectiveFor(w: World, s: Side, r: Robot): Loc =
   ## without this, a mirror match ended in `archons_destroyed` at round 756
   ## with 44 of the loser's own units standing back up as zombies inside its
   ## own ring.
+  ##
+  ## THE ONE EXCEPTION IS THE STANDING STRIKE GROUP (`dens.nim`), and it is
+  ## the whole of the den-breaking iteration: the horde arrives on a schedule,
+  ## so a defensive floor that outranks everything reclaims the entire army
+  ## every round and the den field is never touched — which is what the first
+  ## measurement showed (1 of 6 games reached the round limit, 6 dens killed
+  ## across the six maps, and three of the six games were over before the
+  ## default `den_clear_round: 900` came due). `DenStrikeGroup` attackers are
+  ## therefore named, and only they ignore the floor; `DenGarrison` attackers
+  ## are held out of the group at every setting, so committing to a den is
+  ## never the same thing as abandoning the archons.
+  if s.inStrikeGroup(r):
+    let approach = denApproachSquare(w, s, r)
+    if approach.x >= 0: return approach
   let threat = s.nearestThreat(r.loc)
   if threat.x >= 0:
     let home = s.nearestArchon(r.loc)
     if home.x < 0 or home.distanceSquaredTo(threat) <= 36:
       return threat
-  if s.hasDenTarget:
+  if s.hasDenTarget and s.denCommitted:
     let approach = denApproachSquare(w, s, r)
     if approach.x >= 0: return approach
   case s.doctrine.opening

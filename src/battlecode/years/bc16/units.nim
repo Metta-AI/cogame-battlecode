@@ -360,7 +360,10 @@ func damageToTarget*(rawDamage: float64, target: RobotType): float64 =
 
 func rubbleFactorFor*(cause: DeathCause): float64 =
   ## `visitDeathSignal`: `1.0` normally, `1.0/3.0` when a TURRET landed the
-  ## killing blow. `145 * (1.0/3.0) = 48.333333333333336` is a named vector.
+  ## killing blow. `145 * (1.0/3.0) = 48.33333333333333` is a named vector,
+  ## MEASURED against the JVM (`tests/test_bc16_arith.nim`) -- the design
+  ## note's `48.333333333333336` was one ulp out and the ENGINE is the
+  ## authority (docs/RULES-BC16.md section Divergences, note corrections).
   if cause == dcTurret: RubbleFromTurretFactor else: 1.0
 
 func broadcastDelayIncrease*(radiusSquared: int, sightR2: int): float64 =

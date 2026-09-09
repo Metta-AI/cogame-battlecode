@@ -31,19 +31,66 @@ func scoutTarget*(w: World, s: Side): int =
   else:
     if s.doctrine.rubbleClear == rcNever: 1 else: 2
 
+func openingGuardBias*(opening: Opening16): int =
+  ## THE OPENING'S OWN SHARE OF THE ATTACK MIX, and it is what gives `opening`
+  ## teeth beyond a census target.
+  ##
+  ## MEASURED, and the reason this exists: with the attacker TARGET as the
+  ## only difference (6 per archon for `turtle` against 12 for
+  ## `soldier_viper_aggro`), a paired 800-round game on `river` and `checkers`
+  ## produced 116 soldiers against 115 and 63 guards against 80 — i.e. the
+  ## knob moved nothing, because the parts economy caps both openings at the
+  ## same census long before either target is reached and `guard_ratio` alone
+  ## decided the mix. The three openings ARE the three archetypes the 2016
+  ## finals produced, and a turret turtle is not a soldier/viper push with a
+  ## different unit ceiling, so the opening moves the MIX as well:
+  ##
+  ##   `turtle`                 0 -- the wall is guards, and the DEFAULT
+  ##                                 `guard_ratio: 45` already buys it
+  ##   `soldier_viper_aggro`  -20 -- the spearhead is soldiers (4 damage at
+  ##                                 r2 <= 13) and the vipers behind them
+  ##   `scout_zombie_pull`      0 -- the bait is scouts; the mix is the cog's
+  ##
+  ## **THE BIAS IS DELIBERATELY ONE-SIDED, and the reason is MEASURED.** A
+  ## symmetric +-20 gives the knob the same 40-point spread and the same
+  ## teeth, but it also moves the ALL-DEFAULTS game, which is what
+  ## `tests/test_bc16_survival.nim` measures: at turtle +20 the mirror falls
+  ## to 1 of 6 games ending other than `archons_destroyed`, with 5 dens killed
+  ## and a median of 770 rounds, against 3 of 6, 20 dens and 2 147 rounds at
+  ## turtle 0. A guard deals 1.5 doubled to 3.0 against a zombie while a den
+  ## is 2 000 HP, so an extra 20 points of guard share is a slower den
+  ## programme and a shorter game. Leaving `turtle` at the cog's own number
+  ## keeps the default doctrine at its measured best AND keeps the whole
+  ## 40-point spread that gives `opening` its teeth.
+  ##
+  ## The cog's own `guard_ratio` still dominates: the bias is applied to it and
+  ## CLAMPED to 0..100, so `guard_ratio: 0` is all-soldier and
+  ## `guard_ratio: 100` is all-guard in EVERY opening.
+  case opening
+  of opTurtle: 0
+  of opSoldierViperAggro: -20
+  of opScoutZombiePull: 0
+
+func effectiveGuardRatio*(s: Side): int =
+  max(0, min(100, s.doctrine.guardRatio +
+                  openingGuardBias(s.doctrine.opening)))
+
 func wantsGuardNext*(w: World, s: Side): bool =
   ## `attackMix()`: the percentage of the ATTACKER budget that goes to GUARDs
   ## rather than SOLDIERs. Deterministic and census-driven rather than random,
   ## so a doctrine's mix is reproducible: build a guard when the guard share
-  ## of the standing attacker mix is below `guard_ratio`.
+  ## of the standing attacker mix is below the effective ratio.
   if w.brokenChassis: return false        ## the negative control never guards
   let guards = s.counts[rtGuard]
   let soldiers = s.counts[rtSoldier]
   let total = guards + soldiers
+  let ratio = effectiveGuardRatio(s)
   if s.doctrine.guardRatio >= 100: return true
   if s.doctrine.guardRatio <= 0: return false
-  if total == 0: return s.doctrine.guardRatio >= 50
-  (guards * 100) < (s.doctrine.guardRatio * total)
+  if ratio >= 100: return true
+  if ratio <= 0: return false
+  if total == 0: return ratio >= 50
+  (guards * 100) < (ratio * total)
 
 func canAfford*(w: World, s: Side, kind: RobotType): bool =
   w.teamParts(s.team) - s.partsCommitted >= float64(kind.partCost())
@@ -94,6 +141,18 @@ func buildQueue*(w: World, s: Side): seq[RobotType] =
     if wantTurret: result.add(rtTurret)
   of ppUnits:
     if wantScout and s.counts[rtScout] == 0: result.add(rtScout)
+    ## A VIPER PER SIX SOLDIERS FOR THE AGGRO OPENING, AND IT GOES FIRST WHEN
+    ## THE STOCKPILE CAN AFFORD IT PLUS AN ATTACKER. Measured: as a TAIL entry
+    ## the viper was never reached at all -- `buildSomething` takes the first
+    ## AFFORDABLE entry and a 30-part soldier is always affordable, so a
+    ## `soldier_viper_aggro` faction built ZERO vipers in 800 rounds and the
+    ## opening's headline unit did not exist. 120 + 30 = 150 parts is the same
+    ## "and still buy an attacker afterwards" gate the turret deficit uses.
+    if d.opening == opSoldierViperAggro and
+        s.counts[rtViper] * 6 <= s.counts[rtSoldier] and
+        w.teamParts(s.team) - s.partsCommitted >=
+          float64(rtViper.partCost() + rtSoldier.partCost()):
+      result.add(rtViper)
     ## A TURRET DEFICIT OUTRANKS A FURTHER ATTACKER once the unconditional
     ## floor is met: 130 parts and 25 frozen archon turns is a real
     ## commitment, and a faction that never gets there because its attacker
@@ -105,8 +164,6 @@ func buildQueue*(w: World, s: Side): seq[RobotType] =
     if wantAttacker:
       if wantsGuardNext(w, s): result.add(rtGuard) else: result.add(rtSoldier)
     if wantScout: result.add(rtScout)
-    if d.opening == opSoldierViperAggro and s.counts[rtViper] * 6 <= s.counts[rtSoldier]:
-      result.add(rtViper)
   ## A viper per six soldiers once parts allow, for the aggro opening — and a
   ## soldier as the always-affordable tail, so a stockpile above 200 always
   ## has somewhere to go.

@@ -1,24 +1,26 @@
-## The Tier A' scenario bot: `scenario16.nim`, the Nim twin of
-## `tools/oracle/bc16/bc16scenario/RobotPlayer.java` and its three variants,
-## written LINE FOR LINE against them and selected by `-d:bc16Scenario`
-## (+ `-d:bc16ScenarioTurn` / `-d:bc16ScenarioAnnihilate` /
-## `-d:bc16ScenarioTie`).
+## The Tier A' scenario bot: `scenario16.nim`, selected by `-d:bc16Scenario`.
+##
+## **ITS JAVA TWIN IS NOT WRITTEN AND TIER A' DOES NOT RUN.**
+## `tools/oracle/bc16/bc16scenario/RobotPlayer.java` does not exist, so
+## `parity-oracle-bc16` compares only Tier A (`bc16idle`) and Tier A"
+## (`bc16greenhorn`). This file is the Nim half of a tier that is deferred, and
+## `docs/PARITY.md` §bc16 names the exact shape of the gap rather than leaving
+## coverage to be inferred. It builds, it runs, and it is what the Java bot
+## would be written against; nothing else in this repository reads it.
 ##
 ## Tier A cannot cover any PLAYER action — an idle bot never builds, moves,
-## attacks, clears, packs, repairs or activates — so this bot exists to force
-## every rare path EARLY and DETERMINISTICALLY. Three properties are
-## deliberate and all three are asserted by the oracle job:
+## attacks, clears, packs, repairs or activates — so this bot is written to
+## force every rare path EARLY and DETERMINISTICALLY. Three properties are
+## deliberate, and they are the contract the Java twin would have to hold to:
 ##
-## 1. **no RNG at all**: every decision is a function of `getRoundNum()` and
-##    the robot's own type, so the two sides cannot drift for a reason that is
-##    not a rules difference;
-## 2. **cheap**: the Java side asserts at the end of every turn that
-##    `Clock.getBytecodeNum()` is at or below `bytecodeLimit - 8000` and
-##    `System.exit(4)` otherwise, so the engine's own `amountToDecrement` is
-##    exactly 1.0 and V1 is never exercised;
+## 1. **no RNG at all**: every decision is a function of the round number and
+##    the robot's own type, so the two sides could not drift for a reason that
+##    is not a rules difference;
+## 2. **cheap**: every turn stays well inside `limit - 8000`, so the engine's
+##    own `amountToDecrement` is exactly 1.0 and V1 is never exercised;
 ## 3. **scripted by round number**, so the trace lines that prove each path
-##    fired are at known rounds and `ci.yml` can assert them off the JAVA
-##    trace rather than trusting the comparison.
+##    fired are at known rounds and can be asserted off the JAVA trace rather
+##    than trusted from the comparison.
 ##
 ## The script, by round (an ARCHON does the building; every built unit follows
 ## its own type's script):
@@ -47,11 +49,6 @@
 ##             [6, 40]); pack at round 400 and unpack at round 430, proving
 ##             10-on-both twice
 ##
-## `bc16ScenarioTurn` additionally lets an infected SOLDIER, SCOUT and ARCHON
-## die; `bc16ScenarioAnnihilate` walks soldiers onto the enemy's single archon
-## until `DESTROYED` fires; `bc16ScenarioTie` mirrors both sides so the ladder
-## walks PWNED -> OWNED -> BARELY_BEAT and, on one seed,
-## WON_BY_DUBIOUS_REASONS.
 
 import ../world
 

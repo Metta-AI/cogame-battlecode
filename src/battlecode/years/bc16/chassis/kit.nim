@@ -53,6 +53,21 @@ type
     denCommitted*: bool
     denTarget*: Loc
     hasDenTarget*: bool
+    strikeGroup*: seq[int]
+      ## THE STANDING STRIKE GROUP: the ids of the attackers committed to
+      ## breaking `denTarget`, re-formed once a round from the attackers
+      ## nearest the den. A den is 2000 HP and a SOLDIER deals 4 at
+      ## attackDelay 2 — TWO a round — so a group has to be at least
+      ## `DenStrikeGroup` strong to break one inside a few hundred rounds, and
+      ## it has to be a NAMED SUBSET rather than "everyone" or the defensive
+      ## floor (which answers every hostile inside r2 64 of an archon, and the
+      ## horde arrives on a schedule) reclaims the whole army every round and
+      ## the den is never touched. A member of this group is the ONE unit
+      ## class that outranks the defensive floor; every attacker outside it
+      ## still holds the ring. Measured: without the named subset, the
+      ## all-defaults mirror killed 6 dens across the six `small` maps and
+      ## reached round 3000 once; with it, the table in
+      ## `tests/test_bc16_survival.nim`'s header.
     turretSites*: seq[Loc]
     claimedNeutrals*: seq[Loc]
     frontier*: Loc

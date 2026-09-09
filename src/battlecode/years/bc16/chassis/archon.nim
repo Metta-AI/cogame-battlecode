@@ -88,6 +88,42 @@ proc postureTarget(w: World, s: Side, r: Robot): Loc =
   ## A neutral in reach outranks everything: it is a free unit.
   let neutralAt = neutral.target(w, s, r)
   if neutralAt.x >= 0: return neutralAt
+  ## **`archon_spread` BIASES THE PARTS WALK, and that is where its teeth
+  ## are.** MEASURED, and the reason this is here: with the knob reachable
+  ## ONLY as the last arm of this proc, `huddle` and `split` produced
+  ## byte-identical games on `river` and `checkers` (285 units, 31 800 parts
+  ## and 1 den apiece) -- because an archon on a real map ALWAYS has a
+  ## remembered parts square to walk at, so the posture arm below was never
+  ## reached and the knob had no teeth at all.
+  ##
+  ## The bias is a distance term measured from OUR OWN ARCHON CENTROID:
+  ##   `huddle` pulls the walk toward the centroid, so the repair fields stay
+  ##     overlapped and one wall protects every archon;
+  ##   `spread` is neutral -- nearest-and-richest, the default;
+  ##   `split` sends the FIRST archon in the census outward and holds the rest
+  ##     in, which is what a 20 520-parts-over-684-squares map rewards and
+  ##     what a six-square map punishes.
+  var cx = 0
+  var cy = 0
+  if s.archons.len > 0:
+    for l in s.archons:
+      cx += l.x
+      cy += l.y
+    cx = cx div s.archons.len
+    cy = cy div s.archons.len
+  let centroid = loc(cx, cy)
+  let outward = s.doctrine.archonSpread == asSplit and
+                s.archons.len > 1 and s.archons[0] == r.loc
+  let inward = s.doctrine.archonSpread == asHuddle or
+               (s.doctrine.archonSpread == asSplit and not outward)
+  proc spreadBias(l: Loc): float64 =
+    ## Positive is better. `huddle` prefers a square NEAR the centroid;
+    ## `split`'s roamer prefers one FAR from it; `spread` is indifferent.
+    if s.archons.len == 0: return 0.0
+    let d = float64(l.distanceSquaredTo(centroid))
+    if outward: d / 8.0
+    elif inward: -d / 8.0
+    else: 0.0
   ## Then the nearest parts square inside vision, because a move onto parts
   ## collects the whole square for nothing.
   var bestParts = loc(-1, -1)
@@ -96,16 +132,25 @@ proc postureTarget(w: World, s: Side, r: Robot): Loc =
     if not r.spend(1): break
     if w.getParts(l) <= 0.0: continue
     if rubbleBlocks(w.getRubble(l), r.kind): continue
-    let score = w.getParts(l) - float64(l.distanceSquaredTo(r.loc))
+    let score = w.getParts(l) - float64(l.distanceSquaredTo(r.loc)) +
+                spreadBias(l)
     if score > bestScore:
       bestScore = score
       bestParts = l
   if bestParts.x >= 0: return bestParts
-  ## Nothing in sight: walk at the nearest REMEMBERED parts square. Measured
-  ## on `caverns` (1 078 of 1 892 squares impassable, 110 parts squares) a
+  ## Nothing in sight: walk at the best REMEMBERED parts square. Measured on
+  ## `caverns` (1 078 of 1 892 squares impassable, 110 parts squares) a
   ## sight-radius-only archon collected ZERO parts in 1 350 rounds, because
   ## every deposit is outside r2 35 of its opening square.
-  let remembered = nearestPartsTarget(w, s, r.loc)
+  var remembered = loc(-1, -1)
+  var bestRemembered = -1.0e18
+  for l in s.partsTargets:
+    if not r.spend(1): break
+    if w.getParts(l) <= 0.0: continue
+    let score = -float64(l.distanceSquaredTo(r.loc)) / 4.0 + spreadBias(l)
+    if score > bestRemembered:
+      bestRemembered = score
+      remembered = l
   if remembered.x >= 0: return remembered
   case s.doctrine.archonSpread
   of asHuddle:

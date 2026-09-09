@@ -44,7 +44,11 @@ proc dataRoot*(): string =
 func incomeFor*(w: World, t: Team): float64 =
   ## `Math.max(0.0, ARCHON_PART_INCOME - PART_INCOME_UNIT_PENALTY *
   ## getRobotCount(team))`, written in the engine's own order. Named float64
-  ## vector: at 137 robots this is exactly `0.63`.
+  ## vector: at 137 robots this is `0.6299999999999999`, NOT `0.63` -- `0.01`
+  ## is not representable, `0.01 * 137` rounds a hair above `1.37`, and the
+  ## JVM's own table (`data/bc16/tables.json`, `parts_income[137]`) says the
+  ## same. The design note's rounded prose was wrong and the ENGINE is the
+  ## authority (`tests/test_bc16_arith.nim`).
   max(0.0, ArchonPartIncome -
     PartIncomeUnitPenalty * float64(w.robotCountOf(t)))
 

@@ -163,6 +163,19 @@ proc runControllerFor*(w: World, sides: array[2, Side],
     ## `getBytecodeLimit()` returns 0 for a robot that cannot execute code,
     ## so its controller cannot do anything at all.
     return
+  when defined(bc16Idle):
+    ## **TIER A**, and it is CI-only: `-d:bc16Idle` is the Nim twin of
+    ## `tools/oracle/bc16/bc16idle/RobotPlayer.java`, whose whole body is
+    ## `while (true) Clock.yield();`. It is not a degenerate tier — the
+    ## zombie half of this game is ENGINE-SIDE, so an idle player still
+    ## exercises the den schedules and their per-den split, the spawn ring's
+    ## direction and chirality, `spawnAllPossible` and its proximity-damage
+    ## fallback, the whole eight-step zombie movement ladder, ALL THREE RNG
+    ## STREAMS, infection and the die-and-turn conversion, the corpse-rubble
+    ## deposit, `clearRubble` by digging zombies, the parts income curve, both
+    ## factions' archons being eaten, the mid-turn `DESTROYED` check and the
+    ## round-2999 ladder.
+    return
   when defined(bc16Scenario):
     runScenario16(w, r)
   else:
@@ -333,7 +346,7 @@ proc runRound*(w: World, sides: array[2, Side],
 
   ## THE CHASSIS'S ROUND-LEVEL BOOKKEEPING RUNS FIRST, so every robot this
   ## round reads the same census and the same den programme.
-  when not defined(bc16Scenario):
+  when not defined(bc16Scenario) and not defined(bc16Idle):
     for t in 0 .. 1:
       case chassis[t]
       of ckBulwark: beginRound(w, sides[t])
