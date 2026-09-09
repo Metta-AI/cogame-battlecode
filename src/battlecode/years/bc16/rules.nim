@@ -439,10 +439,26 @@ proc runRound*(w: World, sides: array[2, Side],
 #  One game
 # ---------------------------------------------------------------------------
 
-proc endReasonFor(w: World): string =
-  case w.domination
-  of dfNone: $dfPwned
-  else: $w.domination
+proc endReasonFor*(w: World): string =
+  ## FAULT, never mislabel (r1-F8). `dfNone` is "no winner at all" and it was
+  ## rendered as `$dfPwned` — `more_archons` — which is a silent lie about
+  ## what happened. It is UNREACHABLE in the shipped configuration:
+  ## `checkEndOfMatch` (`:216-234`) fires at `currentRound >= maxRounds - 1`
+  ## and always sets a winner via one of the four rungs, the abandoned path
+  ## returns before this proc is called, and the only way in is
+  ## `maxRounds <= 0`, which `config_schema.maxRounds.minimum = 50` forbids.
+  ## An impossible state that reports a plausible answer is the wrong failure
+  ## mode: a future rule change that makes it reachable has to surface as a
+  ## FAILURE, not as a wrong `end_reason` in a shipped replay. Raised rather
+  ## than `doAssert`-ed so it holds under `-d:danger` too.
+  if w.domination == dfNone:
+    raise newException(Defect,
+      "bc16: the game ended with domination factor `dfNone` (no winner at " &
+      "all) at round " & $w.currentRound & " of " & $w.maxRounds &
+      ", hasWinner=" & $w.hasWinner & ". checkEndOfMatch's four-rung ladder " &
+      "cannot produce that while maxRounds >= 1, so a rule has changed. " &
+      "Labelling it `" & $dfPwned & "` would hide the change.")
+  $w.domination
 
 proc harvest(w: World, outcome: var GameOutcome16) =
   for team in [teamA, teamB]:
