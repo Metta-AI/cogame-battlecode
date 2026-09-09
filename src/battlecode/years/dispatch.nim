@@ -443,6 +443,20 @@ proc stepRound*(s: Session) =
   of yBc16: rules16.runRound(s.w16, s.sides16, s.chassis16)
 
 proc currentRound*(s: Session): int =
+  ## **THE SESSION-LEVEL NUMBER IS ROUNDS PLAYED, and it is 1-BASED FOR EVERY
+  ## YEAR.** `replay.nim`'s deriver indexes the recorded per-round hash chain
+  ## with it (`(roundInGame - 1) * ChainHexLen`) and compares
+  ## `roundInGame == record.rounds`, so a year whose world numbers rounds
+  ## differently has to normalise HERE rather than making the year-neutral
+  ## deriver year-aware.
+  ##
+  ## bc26/bc20/bc21/bc22/bc23/bc24/bc25 all start their world's
+  ## `currentRound` at 0 and pre-increment, so their first played round is 1
+  ## and the world's number IS the count. **bc16 does not**: 2016's
+  ## `GameWorld.currentRound` is initialised to -1 (`GameWorld.java:69`), so
+  ## its first played round is round 0 and its last is 2999, exactly as the
+  ## engine's are — which is what every bc16 event, every trace line and the
+  ## viewer clock carry. The `+ 1` here is the count, not the number.
   case s.year
   of yBc26: s.w26.currentRound
   of yBc20: s.w20.currentRound
@@ -451,7 +465,7 @@ proc currentRound*(s: Session): int =
   of yBc25: s.w25.currentRound
   of yBc23: s.w23.currentRound
   of yBc22: s.w22.currentRound
-  of yBc16: s.w16.currentRound
+  of yBc16: s.w16.currentRound + 1
 
 proc running*(s: Session): bool =
   case s.year

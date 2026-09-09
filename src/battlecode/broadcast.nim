@@ -143,6 +143,11 @@ proc econFor(w: World, sideAslot: int): JsonNode =
       "dirt": w.teamInfo.dirtPlaced[t]
     })
 
+proc permille(value: int): string =
+  ## bc16's outbreak multiplier travels as an integer per-mille (1000, 1100,
+  ## … 3000) so the replay stays float-free. Rendered as `1.1`, `3.0`.
+  $(value div 1000) & "." & $((value mod 1000) div 100)
+
 proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNode =
   ## Every scrubber beat, with the ABSOLUTE frame it lands on. The game block
   ## turns each of these into a labelled, clickable `<button>`.
@@ -361,13 +366,14 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
         e.fields{"unit"}.getStr().replace("_", " ") & " — game " &
         $(e.game + 1) & ", round " & $e.round
     of "zombie_wave":
-      label = "WAVE — " & $e.fields{"count"}.getInt() & " zombies from " &
-        $e.fields{"dens"}.getInt() & " dens at x" &
-        e.fields{"multiplier"}.getStr() & ", game " & $(e.game + 1) &
+      label = "WAVE — " & $e.fields{"total"}.getInt() & " zombies from " &
+        $e.fields{"dens_spawning"}.getInt() & " dens at outbreak level " &
+        $e.fields{"outbreak_level"}.getInt() & ", game " & $(e.game + 1) &
         ", round " & $e.round
     of "outbreak":
       label = "OUTBREAK " & $e.fields{"level"}.getInt() &
-        " — every new zombie is " & e.fields{"multiplier"}.getStr() &
+        " — every new zombie is " &
+        permille(e.fields{"multiplier_permille"}.getInt()) &
         "x stronger from here, game " & $(e.game + 1) & ", round " & $e.round
     of "den_destroyed":
       label = e.fields{"alias"}.getStr() & " breaks the den at " &
