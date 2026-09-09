@@ -44,20 +44,30 @@ block:
     else:
       inc worse
   checkEq("no value is more than one ulp from the JVM's", worse, 0)
-  ## MEASURED against a real Temurin 8 and the pinned oracle jar: **7 996 of
-  ## the 8 001 values are bit-exact and the remaining 5 are one ulp apart.**
-  ## `Math.pow` is explicitly NOT correctly rounded (the JDK allows 1 ulp of
-  ## error and is only required to be semi-monotonic), and neither is glibc's,
-  ## so the two libraries disagreeing on five of eight thousand cells is the
-  ## expected result and not a port defect. **It is also unreachable in this
-  ## coworld**, because V1 pins the whole expression to its `pow(0, 1.5) = 0`
-  ## branch, where both libraries are exact. That is the argument, and it is
-  ## the reason the numbers below are asserted rather than the bit-exactness
-  ## being demanded.
-  check("and 7 996 of the 8 001 are bit-exact (5 differ by one ulp)",
-    exact >= 7996)
-  checkEq("exactly five cells differ, and by one ulp each", exact + oneUlp,
-    8001)
+  ## **THE TABLE IS `StrictMath.pow`, NOT `Math.pow`, AND THAT IS WHY THESE
+  ## NUMBERS ARE WHAT THEY ARE.** The engine calls `Math.pow`, whose result the
+  ## JLS permits to be up to 1 ulp from the exact value and which is therefore
+  ## NOT REPRODUCIBLE BETWEEN JDK BUILDS: Temurin 8u422 and the CI runner's
+  ## 8u452 disagree, so a byte-diff of a `Math.pow` table fails for a reason
+  ## that has nothing to do with this port. `StrictMath.pow` must reproduce
+  ## fdlibm bit for bit on every conforming JVM, so `data/bc16/tables.json`
+  ## tables that instead and `ci.yml` separately asserts the running JDK's
+  ## `Math.pow` is within one ulp of every value in it.
+  ##
+  ## MEASURED, glibc's `pow` against fdlibm over the whole domain: **7 220 of
+  ## the 8 001 values bit-exact, 781 one ulp apart, NONE further.** (Against
+  ## Temurin 8u422's `Math.pow` the same comparison is 7 996 and 5 — glibc and
+  ## HotSpot's intrinsic are simply closer to each other than either is to
+  ## fdlibm.) Neither library is correctly rounded and neither is required to
+  ## be, so this is the expected result and not a port defect. **It is also
+  ## unreachable in this coworld**, because V1 pins the whole expression to its
+  ## `pow(0, 1.5) = 0` branch, where all three are exact. That is the argument,
+  ## and it is the reason the numbers below are asserted rather than
+  ## bit-exactness being demanded.
+  check("and 7 220 of the 8 001 are bit-exact against fdlibm",
+    exact >= 7220)
+  checkEq("every remaining cell is one ulp apart, and no further",
+    exact + oneUlp, 8001)
   checkEq("k = 0 is exactly 0", pow15[0].getFloat(), 0.0)
   checkEq("k = 8000 is exactly 1", pow15[8000].getFloat(), 1.0)
   ## Monotone over the whole domain, which is what makes the 1.0 branch a

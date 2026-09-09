@@ -248,6 +248,17 @@ Every place this port deliberately differs from the engine, with its reason.
    `tests/table_bc16_delay.nim`, so the port provably knows what it diverged
    from. **The sub-1.0 branch is the one behaviour the parity oracle cannot
    compare**, and `docs/PARITY.md` §bc16 says so in as many words.
+
+   **And it could not be compared bit-exactly even in principle.** The engine
+   calls `Math.pow`, which the JLS permits to be 1 ulp from the exact result
+   and which is therefore **not reproducible between JDK builds** — measured,
+   Temurin 8u422 and 8u452 disagree over this very domain. `tables.json`
+   therefore tables `StrictMath.pow` (bit-stable everywhere, and it says so in
+   its own `pow_1_5_source` key), and CI separately asserts the running JDK's
+   `Math.pow` is within one ulp of every value. Over the whole 8 001-value
+   domain, glibc's `pow` — the port's — is bit-exact against fdlibm on 7 220
+   cells and one ulp apart on the other 781, **never further**; and V1's
+   pinned branch is `pow(0, 1.5) = 0`, where all three are exact.
 2. **V2 — bytecode metering is replaced by a fixed per-robot `DecisionOps`
    budget**: **2000** (ARCHON, SCOUT), **1000** (SOLDIER, GUARD, VIPER,
    TURRET, TTM), **0** for a robot with `!isActive()`. One tenth of the

@@ -2810,6 +2810,66 @@ jobs:
           diff -q data/bc16/tables.json /tmp/oracle16/tables.json
           echo "Tier B: the committed arithmetic table IS the jar's own output"
 
+      # AND THE ENGINE'S OWN `Math.pow` IS WITHIN ONE ULP OF THE TABLE.
+      #
+      # `pow_1_5` is tabled from `StrictMath.pow`, not from the `Math.pow` the
+      # engine actually calls, because `Math.pow` is permitted 1 ulp of error
+      # and IS NOT REPRODUCIBLE BETWEEN JDK BUILDS -- measured, Temurin 8u422
+      # and 8u452 disagree on this domain, and either disagrees with
+      # `StrictMath` on hundreds of the 8 001 cells. A byte-diff of a
+      # `Math.pow` table therefore fails for a reason that has nothing to do
+      # with this port. `StrictMath.pow` must reproduce fdlibm bit for bit on
+      # every conforming JVM, so the byte-diff above stays absolute -- and
+      # this step adds the assertion it would otherwise have lost: the RUNNING
+      # JDK's `Math.pow`, the call the engine makes, is within one ulp of
+      # every tabled value. Strictly more checks than a `Math.pow` byte-diff,
+      # not fewer. See docs/PARITY.md section bc16 and docs/RULES-BC16.md V1.
+      - name: Tier B (BLOCKING) — the running JDK's own Math.pow, within 1 ulp
+        run: |
+          set -euo pipefail
+          cat > /tmp/oracle16/PowCheck.java <<'JAVA'
+          import java.io.*;
+          import java.util.*;
+          public final class PowCheck {
+              public static void main(String[] a) throws Exception {
+                  String all = new Scanner(new File(a[0]), "UTF-8")
+                      .useDelimiter("\\A").next();
+                  int i = all.indexOf("\"pow_1_5\":");
+                  int lo = all.indexOf('[', i), hi = all.indexOf(']', lo);
+                  String[] cells = all.substring(lo + 1, hi).split(",");
+                  if (cells.length != 8001)
+                      throw new IllegalStateException(
+                          "pow_1_5 has " + cells.length + " cells, want 8001");
+                  int exact = 0, oneUlp = 0, worse = 0, firstBad = -1;
+                  for (int k = 0; k <= 8000; k++) {
+                      double want = Double.parseDouble(cells[k].trim());
+                      double got = Math.pow(k / 8000.0, 1.5);
+                      long g = Double.doubleToRawLongBits(got);
+                      long w = Double.doubleToRawLongBits(want);
+                      if (g == w) exact++;
+                      else if (Math.abs(g - w) <= 1L) oneUlp++;
+                      else { worse++; if (firstBad < 0) firstBad = k; }
+                  }
+                  System.out.println("this JDK's Math.pow against the tabled "
+                      + "StrictMath.pow: " + exact + " bit-exact, " + oneUlp
+                      + " one ulp apart, " + worse + " further");
+                  if (worse > 0) {
+                      System.out.println("::error::" + worse + " tabled "
+                          + "pow(k/8000,1.5) values are more than one ulp "
+                          + "from this JDK's Math.pow, first at k="
+                          + firstBad + ". That is not a rounding-mode "
+                          + "difference, it is a wrong table.");
+                      System.exit(1);
+                  }
+                  System.exit(0);
+              }
+          }
+          JAVA
+          javac -nowarn -encoding UTF-8 -d /tmp/oracle16/build/classes \
+            /tmp/oracle16/PowCheck.java
+          timeout 300 java -cp /tmp/oracle16/build/classes PowCheck \
+            data/bc16/tables.json
+
       # Tier B, part 3 (BLOCKING): D3 AND D4, PROVED RATHER THAN TRUSTED. The
       # committed maps carry a build-time SYMMETRY and a build-time PER-DEN
       # SPLIT of the public zombie schedule, and both are reproduced here from

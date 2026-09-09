@@ -1720,7 +1720,7 @@ bytes) commits the whole of both:
 | `predicates` | 12 types × 8 derived predicates |
 | `outbreak_multiplier` / `outbreak_health` / `outbreak_attack` | levels 0…12, every type |
 | `guard_reduction` | every reachable attack power |
-| `pow_1_5` | `Math.pow(k/8000.0, 1.5)` for **all 8 001** k — the V1 table |
+| `pow_1_5` | `pow(k/8000.0, 1.5)` for **all 8 001** k — the V1 table. **Tabled from `StrictMath.pow`; see below** |
 | `int_sqrt` | `(int) Math.sqrt(r2)` for r2 0…10 000 |
 | `direction_to` | the **whole** `directionTo` lattice, dx,dy ∈ −80…80 — **25 921 pairs** |
 | `rubble_clear` | the rubble clear map, 0…1000 |
@@ -1729,6 +1729,37 @@ bytes) commits the whole of both:
 
 The check is a **byte diff**, not a tolerance: the committed file must be
 exactly what the jar's own classes emit.
+
+### `Math.pow` IS NOT REPRODUCIBLE BETWEEN JDK BUILDS, and that cost a CI round
+
+The engine calls `Math.pow`. The JLS permits `Math.pow` to be up to **1 ulp**
+from the exact result and requires only semi-monotonicity — so it is **not
+reproducible between JDK builds**, and a byte-diff of a `Math.pow` table fails
+for a reason that has nothing to do with this port. This was not theoretical:
+the table was first generated on Temurin **8u422** and the CI runner's Temurin
+**8u452** emitted a different `pow_1_5` row, and nothing else in the 304 KB
+file differed.
+
+`StrictMath.pow` must reproduce fdlibm bit for bit on every conforming JVM, so
+`data/bc16/tables.json` tables **`StrictMath.pow`** and records that in its own
+`pow_1_5_source` key. **The byte-diff above therefore stays absolute for the
+whole file**, and the job adds the assertion the change would otherwise have
+lost: a second BLOCKING step asserts that the *running* JDK's `Math.pow` — the
+call the engine actually makes — is within one ulp of **every** tabled value.
+That is strictly more checking than a `Math.pow` byte-diff, not less.
+
+Measured over the whole 8 001-value domain:
+
+| pair | bit-exact | one ulp apart | further |
+| --- | --- | --- | --- |
+| Temurin 8u422 `Math.pow` vs `StrictMath.pow` | 7 221 | 780 | **0** |
+| glibc `pow` (the port) vs `StrictMath.pow` | 7 220 | 781 | **0** |
+| glibc `pow` vs Temurin 8u422 `Math.pow` | 7 996 | 5 | **0** |
+
+None of it is reachable in this coworld: **V1 pins the whole expression to its
+`pow(0, 1.5) = 0` branch**, where all three implementations are exact. The
+table exists so the divergence is measured rather than asserted, and
+`tests/table_bc16_delay.nim` is what reads it.
 
 ## THREE REAL DEFECTS THE ORACLE FOUND
 

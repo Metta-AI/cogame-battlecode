@@ -10,11 +10,13 @@
 // have finite domains, so unlike a sampled tier this one is the ENTIRE
 // domain:
 //
-//   * `Math.pow(k/8000.0, 1.5)` for all 8 001 k — the argument of
+//   * `pow(k/8000.0, 1.5)` for all 8 001 k — the argument of
 //     `InternalRobot.decrementDelays` (`:326`), which this port PINS to its
 //     1.0 branch (V1). The port does not read this table at run time; it
 //     exists so the divergence is MEASURED rather than asserted, and
-//     `tests/table_bc16_delay.nim` is what reads it;
+//     `tests/table_bc16_delay.nim` is what reads it. **Tabled from
+//     `StrictMath.pow`, because the engine's `Math.pow` is not reproducible
+//     between JDK builds — see the comment at the table itself;**
 //   * `(int) Math.sqrt(r2)` for r2 0..10 000 — both radius scans
 //     (`GameWorld.java:355`, `MapLocation.java:262`).
 //
@@ -210,10 +212,27 @@ public final class JavaBc16Tables {
         b.append(join(rows, ",\n")).append("\n  },\n");
 
         // --- THE `pow(k/8000, 1.5)` TABLE, all 8 001 k (V1, Tier B') ------
+        //
+        // **`StrictMath.pow`, NOT `Math.pow`, AND THAT IS MEASURED RATHER
+        // THAN fastidious.** The engine calls `Math.pow`, whose result the
+        // JLS permits to differ from the exact result by up to 1 ulp AND
+        // WHICH IS THEREFORE NOT REPRODUCIBLE BETWEEN JDK BUILDS. Measured on
+        // Temurin 8u422: `Math.pow` and `StrictMath.pow` disagree on **780 of
+        // these 8 001 values**, each by exactly one ulp, first at k = 6 --
+        // and the CI runner's Temurin 8u452 disagrees with 8u422 in turn, so
+        // a byte-diff of a `Math.pow` table fails for a reason that has
+        // nothing to do with this port. `StrictMath.pow` must reproduce
+        // fdlibm bit for bit on every conforming JVM, so the committed table
+        // is stable, and `ci.yml` separately asserts that the RUNNING JDK's
+        // `Math.pow` -- the call the engine actually makes -- is within one
+        // ulp of every value here. Both facts are recorded in
+        // `docs/PARITY.md` section bc16 and `docs/RULES-BC16.md` V1.
+        b.append("  ").append(q("pow_1_5_source"))
+         .append(": ").append(q("StrictMath.pow")).append(",\n");
         b.append("  ").append(q("pow_1_5")).append(": [");
         rows = new ArrayList<String>();
         for (int k = 0; k <= 8000; k++)
-            rows.add(d(Math.pow(k / 8000.0, 1.5)));
+            rows.add(d(StrictMath.pow(k / 8000.0, 1.5)));
         b.append(join(rows, ", ")).append("],\n");
 
         // --- (int) Math.sqrt(r2) for r2 0..10 000 -------------------------
