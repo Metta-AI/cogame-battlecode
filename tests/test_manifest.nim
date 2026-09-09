@@ -128,6 +128,29 @@ block:
         key notin Bc21GameKeys and key notin Bc24GameKeys and
         key notin Bc25GameKeys and key notin Bc23GameKeys)
 
+  for key in Bc16GameKeys:
+    check("the schema declares bc16's optional game key " & key,
+      key in gameProps)
+  for key in Bc16GameKeys:
+    ## bc16 REUSES TEN keys deliberately -- `units_built`, `damage_dealt`,
+    ## `robots_alive`, `robots_lost` from bc20/bc23/bc24/bc25 and
+    ## `archons_start`, `archons_end`, `archons_lost`, `archons_per_side`,
+    ## `soldiers_built`, `repairs`, `hp_repaired` from bc22, since 2016 and
+    ## 2022 are the two archon years and mean the same thing by all of them --
+    ## and those are NOT in `Bc16GameKeys` at all, so everything here must be
+    ## its own.
+    check("bc16's key " & key & " collides with no other year",
+      key notin Bc26GameKeys and key notin Bc20GameKeys and
+      key notin Bc21GameKeys and key notin Bc24GameKeys and
+      key notin Bc25GameKeys and key notin Bc23GameKeys and
+      key notin Bc22GameKeys)
+  for reused in ["units_built", "damage_dealt", "robots_alive", "robots_lost",
+                 "archons_start", "archons_end", "archons_lost",
+                 "archons_per_side", "soldiers_built", "repairs",
+                 "hp_repaired"]:
+    check("and bc16 reuses the existing per-game key " & reused,
+      reused in gameProps and reused notin Bc16GameKeys)
+
   var endReasons: seq[string]
   for v in game["results_schema"]["properties"]["games"]["items"]["properties"]["end_reason"]["enum"]:
     endReasons.add(v.getStr())
@@ -142,6 +165,16 @@ block:
     check("end_reason carries bc22's " & reason, reason in endReasons)
   for reason in ["annihilated", "coin_flip", "abandoned"]:
     check("and bc22 reuses the existing " & reason, reason in endReasons)
+  ## bc16 adds EXACTLY THREE and reuses three, and two of the engine's own
+  ## factors stay out because they are armageddon-only (V4).
+  for reason in ["archons_destroyed", "more_archon_health",
+                 "more_parts_net_worth"]:
+    check("end_reason carries bc16's " & reason, reason in endReasons)
+  for reason in ["more_archons", "highest_id", "abandoned"]:
+    check("and bc16 reuses the existing " & reason, reason in endReasons)
+  for reason in ["zombified", "cleansed"]:
+    check("bc16's armageddon-only " & reason & " is absent (V4)",
+      reason notin endReasons)
   check("and bc24's two DEAD RUNGS are absent: `checkEndOfMatch` never calls " &
     "MORE_FLAGS_PICKED and no action a doctrine can reach produces " &
     "RESIGNATION",
@@ -150,13 +183,30 @@ block:
   var yearEnum: seq[string]
   for v in game["config_schema"]["properties"]["year"]["enum"]:
     yearEnum.add(v.getStr())
-  checkEq("config_schema.year.enum names all seven years", yearEnum,
-    @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22"])
-  ## bc24 plays to 2000 rounds, which is EXACTLY the existing ceiling, so no
-  ## schema change was needed -- and this is the assertion that says so.
+  checkEq("config_schema.year.enum names all eight years", yearEnum,
+    @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22", "bc16"])
+  check("bc16 is APPENDED, so no existing index moved",
+    yearEnum[^1] == "bc16" and yearEnum[0 ..< 7] ==
+      @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22"])
+  ## bc24 plays to 2000 rounds, which was EXACTLY the old ceiling; bc16 plays
+  ## 3000, so this is the ONE schema bound this year widens -- and this is the
+  ## assertion that says so. A widened maximum accepts everything it accepted
+  ## before, which is why every shipped variant is re-checked against it here.
   let rounds = game["config_schema"]["properties"]["maxRounds"]
-  checkEq("maxRounds still tops out at 2000", rounds["maximum"].getInt(), 2000)
+  checkEq("maxRounds is widened to 3000 for bc16", rounds["maximum"].getInt(),
+    3000)
   checkEq("and still bottoms at 50", rounds["minimum"].getInt(), 50)
+  for variant in variants:
+    let mr = variant["game_config"]["maxRounds"].getInt()
+    check(variant["id"].getStr() & "'s maxRounds is inside the widened bound",
+      mr >= rounds["minimum"].getInt() and mr <= rounds["maximum"].getInt())
+  for variant in variants:
+    if variant["id"].getStr() != "bc16":
+      check("no shipped variant's maxRounds moved: " &
+        variant["id"].getStr(),
+        variant["game_config"]["maxRounds"].getInt() <= 2000)
+  checkEq("and bc16 is the 3000-round year",
+    variants[7]["game_config"]["maxRounds"].getInt(), 3000)
 
 block:
   ## The third leg: what docker_smoke.sh actually asserts.
@@ -169,11 +219,11 @@ block:
 # --- num_agents -------------------------------------------------------------
 block:
   ## ONE VARIANT PER BATTLECODE YEAR.
-  checkEq("one variant per registered year", variants.len, 7)
+  checkEq("one variant per registered year", variants.len, 8)
   var variantIds: seq[string]
   for variant in variants: variantIds.add(variant["id"].getStr())
   checkEq("and they are the registered years", variantIds,
-    @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22"])
+    @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22", "bc16"])
   for variant in variants:
     check("variant " & variant["id"].getStr() & " is a registered year",
       isRegisteredYear(variant["game_config"]["year"].getStr()))
@@ -237,6 +287,12 @@ block:
       "bc24" in p["description"].getStr())
     check(p["id"].getStr() & "'s description names its bc22 resolution",
       "bc22" in p["description"].getStr())
+    check(p["id"].getStr() & "'s description names its bc16 resolution",
+      "bc16" in p["description"].getStr())
+  check("awu resolves to bulwark on bc16",
+    "bulwark on bc16" in manifest["player"][0]["description"].getStr())
+  check("and scaffold to greenhorn on bc16",
+    "greenhorn on bc16" in manifest["player"][1]["description"].getStr())
 
 # --- no runner-managed tokens, and bounded arrays ---------------------------
 proc walkArrays(node: JsonNode, path: string) =
@@ -299,8 +355,8 @@ block:
   checkEq("docs.readme is an object", docs["readme"].kind, JObject)
   check("docs.readme has type and value",
     docs["readme"].hasKey("type") and docs["readme"].hasKey("value"))
-  checkEq("nine doc pages ship — one rules page per year",
-    docs["pages"].len, 9)
+  checkEq("ten doc pages ship — one rules page per year",
+    docs["pages"].len, 10)
   var ids: seq[string]
   for page in docs["pages"]:
     ids.add(page["id"].getStr())
@@ -315,7 +371,7 @@ block:
     check("the page's file exists: " & target, fileExists(target))
   checkEq("the pages are the ones the design note names", ids,
     @["rules.md", "rules-bc20.md", "rules-bc21.md", "rules-bc24.md",
-      "rules-bc25.md", "rules-bc23.md", "rules-bc22.md",
+      "rules-bc25.md", "rules-bc23.md", "rules-bc22.md", "rules-bc16.md",
       "replay.md", "parity.md"])
 
 # --- the rest of the shape --------------------------------------------------
@@ -362,7 +418,7 @@ block:
 block:
   let policies = parseJson(readFile("tools/ci/policies.json"))
   ## Four per year: two `PLAYER_PROMPT` champions and two scripted fillers.
-  checkEq("twenty-eight policies ship — four per year", policies.len, 28)
+  checkEq("thirty-two policies ship — four per year", policies.len, 32)
   var prompts = 0
   var scripted = 0
   var owned = 0
@@ -385,9 +441,9 @@ block:
         p["env"]["PLAYER_PROMPT"].getStr().len > 200)
     if p["env"].hasKey("PLAYER_SCRIPTED"): inc scripted
     if p.hasKey("player"): inc owned
-  checkEq("two LLM champions per year", prompts, 14)
-  checkEq("two scripted baselines per year", scripted, 14)
-  checkEq("each year's champion #2 carries its owning player", owned, 7)
+  checkEq("two LLM champions per year", prompts, 16)
+  checkEq("two scripted baselines per year", scripted, 16)
+  checkEq("each year's champion #2 carries its owning player", owned, 8)
   checkEq("bc26 champion #2 is the second prompt policy",
     policies[1]["player"].getStr(),
     "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
@@ -503,6 +559,32 @@ block:
     "wololo,examplefuncsplayer22")
   check("and neither bc22 filler is a champion",
     not policies[26].hasKey("player") and not policies[27].hasKey("player"))
+  ## bc16's four are APPENDED: no sibling year's entry is renumbered, renamed
+  ## or re-prompted, which is what the four checks above this line assert for
+  ## every earlier year by index.
+  checkEq("bc16 champion #1 is the turret turtle",
+    policies[28]["name"].getStr(), "battlecode-bc16-bulwark")
+  checkEq("bc16 champion #2 is the scout-pull / infection doctrine",
+    policies[29]["name"].getStr(), "battlecode-bc16-pullers")
+  checkEq("and bc16 champion #2 carries its owning player",
+    policies[29]["player"].getStr(),
+    "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
+  check("the two bc16 champion prompts differ",
+    policies[28]["env"]["PLAYER_PROMPT"].getStr() !=
+    policies[29]["env"]["PLAYER_PROMPT"].getStr())
+  check("bc16 champion #1 is the turtle/guard/turret pole",
+    policies[28]["env"]["PLAYER_PROMPT"].getStr().contains("\"turtle\""))
+  check("and champion #2 the scout-pull / infection pole",
+    policies[29]["env"]["PLAYER_PROMPT"].getStr().contains(
+      "\"scout_zombie_pull\"") and
+    policies[29]["env"]["PLAYER_PROMPT"].getStr().contains(
+      "\"suicide_squad\""))
+  checkEq("the bc16 fillers name the two published chassis",
+    policies[30]["env"]["PLAYER_SCRIPTED"].getStr() & "," &
+    policies[31]["env"]["PLAYER_SCRIPTED"].getStr(),
+    "bulwark,greenhorn")
+  check("and neither bc16 filler is a champion",
+    not policies[30].hasKey("player") and not policies[31].hasKey("player"))
 
 # --- compose.yaml service names are load-bearing ----------------------------
 block:
@@ -553,6 +635,19 @@ block:
                 "a70328eacaab18622cdac838f5e4e981c2a1f0cd",
                 "AGPL-3.0"]:
     check("NOTICE names " & named, named in notice)
+  ## bc16 is the first year in this repo to take in GPL-3.0 (rather than
+  ## AGPL-3.0) upstream material, from TWO repositories, and the two
+  ## UNLICENSED competitor repositories must be named as NOT read.
+  for named in ["battlecode/battlecode-server-2016",
+                "11a0b09f26a70da19f33a61ebec4ceaf6e161aa3",
+                "battlecode/battlecode-client-2016",
+                "317e1f3ff902ae568619c051813335ecdd72322c",
+                "GPL-3.0",
+                "TheDuck314/battlecode2016",
+                "bshimanuki/battlecode2016"]:
+    check("NOTICE names " & named & " for bc16", named in notice)
+  check("and says the two unlicensed repositories were not read",
+    "not cloned, not read, not copied, not vendored" in notice)
   check("and says no upstream Java runs in the image",
     "No upstream Java source runs in any image" in notice)
   check("README's NOTICE link has a target", "[`NOTICE`](NOTICE)" in

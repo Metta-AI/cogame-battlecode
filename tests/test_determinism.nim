@@ -14,6 +14,8 @@ import battlecode/years/dispatch
 import battlecode/rng
 from battlecode/years/bc22/maps as maps22 import nil
 from battlecode/years/bc22/anomaly as anomaly22 import nil
+from battlecode/years/bc16/maps as maps16 import nil
+from battlecode/years/bc16/world as world16 import nil
 
 proc play(mapName: string, sheets: array[2, Sheet], rounds: int,
           sideAslot = 0): GameOutcome26 =
@@ -404,5 +406,83 @@ block:
   check("a vortex draw moves the world RNG", w.rand.seed != randStateBefore)
   checkEq("and leaves the id stream exactly where it was", w.idGen.cursor,
     cursorMid)
+
+block:
+  ## THE bc16 HALF. Same seed + same sheets => identical hash chain, twice in
+  ## one process and through `years/dispatch.nim` — the path the wasm viewer
+  ## takes — plus the chassis fallback and the THREE INDEPENDENT
+  ## `java.util.Random` STREAMS.
+  let s16 = [baselineSheet("bc16", blBulwark), baselineSheet("bc16", blBulwark)]
+  let strong16 = playGameFor("bc16", "river", s16,
+    [scBulwark, scBulwark], 0, 0, 300, 0)[0]
+  let again16 = playGameFor("bc16", "river", s16,
+    [scBulwark, scBulwark], 0, 0, 300, 0)[0]
+  checkEq("bc16 is deterministic in one process", again16.hashChain,
+    strong16.hashChain)
+  checkEq("down to the per-round chain", again16.roundChains,
+    strong16.roundChains)
+  let foreign16 = playGameFor("bc16", "river", s16,
+    [scLemonade, scGoneSharkin], 0, 0, 300, 0)[0]
+  checkEq("a foreign chassis name on a bc16 game plays bulwark",
+    foreign16.hashChain, strong16.hashChain)
+  checkEq("and the bc16 chassis strings round-trip",
+    $parseScriptedChassis("greenhorn"), "greenhorn")
+  checkEq("as does the strong one", $parseScriptedChassis("bulwark"),
+    "bulwark")
+  checkEq("for bc16 the strong chassis is bulwark",
+    $strongChassisFor("bc16"), "bulwark")
+  ## And the weak floor really plays a DIFFERENT game.
+  let weak16 = playGameFor("bc16", "river", s16,
+    [scGreenhorn, scGreenhorn], 0, 0, 300, 0)[0]
+  check("greenhorn's game is not bulwark's",
+    weak16.hashChain != strong16.hashChain)
+
+block:
+  ## **THREE INDEPENDENT `java.util.Random` STREAMS — more than any prior
+  ## year.** All three are seeded with the MAP SEED and all three are SEPARATE
+  ## OBJECTS with separate 48-bit states, so the port must construct three
+  ## generators, not share one. A port that shared them would desynchronise
+  ## every id after the first zombie turn.
+  let spec = maps16.loadMap("river")
+  var w = world16.newWorld(spec, 3000)
+  let idBefore = w.idGen.random.seed
+  let cursorBefore = w.idGen.cursor
+  let worldBefore = w.rand.seed
+  let zombieBefore = w.zombieRand.seed
+  checkEq("`GameWorld.rand` starts from the map seed's scramble",
+    initJavaRandom(spec.randomSeed).seed, worldBefore)
+  checkEq("and so does `ZombieControlProvider.random`",
+    initJavaRandom(spec.randomSeed).seed, zombieBefore)
+  check("but they are SEPARATE OBJECTS, not one shared stream",
+    w.rand.addr != w.zombieRand.addr)
+  ## Drawing from the world stream must move NEITHER of the other two.
+  discard w.rand.nextInt(4)
+  check("a world draw moves the world stream", w.rand.seed != worldBefore)
+  checkEq("and leaves the zombie stream alone", w.zombieRand.seed,
+    zombieBefore)
+  checkEq("and the id stream alone", w.idGen.random.seed, idBefore)
+  checkEq("and its cursor", w.idGen.cursor, cursorBefore)
+  ## Drawing from the zombie stream must move neither of the others.
+  let worldMid = w.rand.seed
+  discard w.zombieRand.nextBoolean()
+  check("a zombie draw moves the zombie stream",
+    w.zombieRand.seed != zombieBefore)
+  checkEq("and leaves the world stream alone", w.rand.seed, worldMid)
+  checkEq("and the id stream alone", w.idGen.random.seed, idBefore)
+  ## Drawing an id must move neither live stream.
+  discard w.idGen.nextId()
+  checkEq("an id draw leaves the world stream alone", w.rand.seed, worldMid)
+  check("and the zombie stream alone", w.zombieRand.seed != zombieBefore)
+  check("but it does move the id cursor", w.idGen.cursor > cursorBefore)
+  ## 2016's IDGenerator starts its block at ZERO and mints ids from ONE,
+  ## against the 10 000 floor every later year uses.
+  var gen16 = initIdGenerator(spec.randomSeed, 0)
+  var minted: seq[int]
+  for i in 0 ..< 32: minted.add(gen16.nextId())
+  check("every 2016 id is at least 1", minted.min >= 1)
+  check("and below the 10 000 floor later years use", minted.max < 10000)
+  var gen26 = initIdGenerator(spec.randomSeed)
+  check("while the DEFAULT first block is still the 10 000 floor, so no " &
+    "other year's id stream moves", gen26.nextId() > 10000)
 
 finish("test_determinism")
