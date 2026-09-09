@@ -435,6 +435,8 @@ block:
     "bc16-archons" in fixture and "bc16-horde" in fixture and
     "bc16-econ" in fixture and "bc16-units" in fixture and
     "bc16-doctrines-body" in fixture)
+  check("with the faction label laid out in the strip at every width",
+    "'<span class=\"horde\">THE HORDE</span>'" in fixture)
   check("with both bc16 seats at the full cap, the envelope badge, the " &
     "motto and the submitted sheet",
     "'<br>' + BC16_WORDS[m16].join(' \\u00b7 ') +" in fixture and
@@ -1390,6 +1392,58 @@ block:
   check("#bc16-horde is the signature readout, IMMEDIATELY above the band " &
     "and never inside it",
     "bottom: calc(var(--band, 0px) + 148px);" in page)
+
+  ## 4b. THE THIRD PARTY IS NAMED ON SCREEN, and the strip really is taken
+  ##     over. Coordinator ruling 4 made "THE HORDE" this year's flavour
+  ##     carrier and the design note says the zombie team is drawn and
+  ##     labelled THE HORDE spectator-side — but `renderHorde` never drew the
+  ##     faction name and `#bc16-horde.struck` was a rule NOTHING ACTIVATED
+  ##     (r1-F9). Both halves are asserted here in the same triad shape the
+  ##     endcard's `.on` uses: the rule exists, the page adds that exact
+  ##     class, and the page takes it off again.
+  check("the faction name is DRAWN, first in the strip",
+    "'<span class=\"horde\">THE HORDE</span>'" in page)
+  check("with a rule of its own",
+    "#bc16-horde .horde {" in page)
+  check("and it survives the 360 px media query — only the mini-timeline " &
+    "is dropped",
+    "#bc16-horde .tl { display: none; }" in page and
+    "#bc16-horde .horde { display: none;" notin page)
+  check("the strip takeover ADDS the class its CSS rule uses",
+    "box.classList.add('struck');" in page)
+  check("and takes it off again, so the readouts come back",
+    "box.classList.remove('struck');" in page and
+    "if (box) box.classList.remove('struck');" in page)
+  check("there is a rule for `struck` to activate",
+    "#bc16-horde.struck {" in page)
+  check("it is driven by a WAVE round or a `turned` event, for two seconds, " &
+    "in the beat's own plain words",
+    "if (b.k !== 'wave' && b.k !== 'turned') return;" in page and
+    "struckUntil = Date.now() + 2000;" in page and
+    "'<span class=\"tell\">' + esc(struckText) +" in page)
+  ## AND THE KINDS IT KEYS ON ARE KINDS THE COMMITTED ARTEFACT REALLY EMITS,
+  ## with labels — otherwise the takeover is as dead as the CSS rule was.
+  ## `tests/test_bc16_beats.nim` asserts the same fixture carries all
+  ## thirteen kinds; this closes the loop between the fixture and the page.
+  block:
+    let fixture = parseReplay(readFile("tests" / "fixtures" /
+      "replay-bc16.json"))
+    var gameStart: seq[int]
+    var total = 0
+    for g in fixture.games:
+      gameStart.add(total)
+      total += g.rounds
+    proc frameOf(g, r: int): int =
+      if g < 0 or g >= gameStart.len: 0 else: gameStart[g] + max(0, r - 1)
+    var struckKinds: seq[string]
+    for b in beatsFor(fixture, frameOf):
+      let k = b["k"].getStr()
+      if k notin ["wave", "turned"]: continue
+      if b["label"].getStr().len == 0: continue
+      if k notin struckKinds: struckKinds.add(k)
+    check("the committed fixture emits a labelled `wave` beat, so the " &
+      "takeover fires", "wave" in struckKinds)
+    check("and a labelled `turned` beat", "turned" in struckKinds)
 
   ## 5. EVERY #bc16-* CSS RULE IS SCOPED TO THE YEAR, one way or the other.
   ##    The whole <style> block, not a line scan (r1-F24).

@@ -3730,7 +3730,30 @@ html:not([data-year="bc16"]) #bc16-siege { display: none !important; }
 #bc16-horde .togo { color: #8b8375; }
 #bc16-horde .tl { letter-spacing: .12em; color: #6f6558; }
 #bc16-horde .tl b { color: #f2e8d8; }
-#bc16-horde.struck { color: #f2e8d8; border-color: #6a5a3a; }
+/* THE THIRD PARTY, NAMED ON SCREEN. The zombie team is drawn and labelled
+   THE HORDE spectator-side (design note: "the zombie team is drawn and
+   labelled THE HORDE, is never a seat, never scores"); until r1-F9 the words
+   appeared only in the agent-facing brief and in a CSS comment. It is the
+   first field in the strip at EVERY width -- it is the shortest field and the
+   one that says what the strip is. */
+#bc16-horde .horde {
+  color: #f2e8d8; font-weight: 800; letter-spacing: .1em;
+}
+/* THE STRIP TAKEOVER. On a wave round or a `turned` event the strip carries
+   what happened in plain words for two seconds (design note: `WAVE — 34
+   zombies from 4 dens at ×1.7`, `CLAN ASH'S ARCHON TURNS — a BIGZOMBIE at
+   34,19`) and `.struck` is the class that dresses it. `.struck` was a rule
+   nothing ever activated (r1-F9); `renderHorde` adds and removes it now, the
+   same add/remove shape `renderArchons` uses for the archon pill's `flash`. */
+#bc16-horde .tell { color: #ffd9a0; font-weight: 700; }
+#bc16-horde.struck {
+  color: #f2e8d8; border-color: #6a5a3a;
+  /* While struck the strip carries ONE SENTENCE, so it wraps: the readouts'
+     `white-space: nowrap` is there to stop a field breaking mid-number, and
+     applied to a sentence inside an `overflow: hidden` box it clips the
+     sentence instead (measured at 360 px). */
+  white-space: normal;
+}
 
 #bc16-econ, #bc16-units {
   position: absolute; left: 8px;
@@ -5673,6 +5696,7 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
   var pinned = false;                // the viewer opened it themselves
   var lastFrame = -1;
   var lastArchons = [-1, -1];
+  var lastState = null;              // the frame the strip re-renders from
   var feedShown = {};
 
   function $(id) { return document.getElementById(id); }
@@ -5808,10 +5832,57 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
   }
 
   // ---- the horde clock: the year's signature readout --------------------
+  // THE STRIP TAKEOVER (r1-F9). On a wave round or a `turned` event the strip
+  // carries what happened in plain words for two seconds, and `.struck`
+  // dresses it -- the design note's `WAVE — 34 zombies from 4 dens at ×1.7`
+  // and `CLAN ASH'S ARCHON TURNS — a BIGZOMBIE at 34,19`. The words are the
+  // BEAT'S OWN LABEL, so the strip, the killfeed and the scrubber button all
+  // say the same sentence and there is no second string to keep in step.
+  // `.struck` is a static rule rather than an animation, so it takes a timer
+  // where the archon pill's `flash` takes an animation; the add/remove shape
+  // is renderArchons's.
+  var struckUntil = 0;
+  var struckText = '';
+  var struckTimer = null;
+  var struckAt = -1;
+
+  function hordeStrike(s, prevFrame) {
+    if (!s.beats || prevFrame < 0 || s.t <= prevFrame) return;
+    var hit = null;
+    s.beats.forEach(function (b) {
+      if (b.k !== 'wave' && b.k !== 'turned') return;
+      if (b.t <= prevFrame || b.t > s.t || !b.label) return;
+      hit = b;                       // the last one inside this step wins
+    });
+    if (!hit || hit.t === struckAt) return;
+    struckAt = hit.t;
+    struckText = hit.label;
+    struckUntil = Date.now() + 2000;
+    if (struckTimer) clearTimeout(struckTimer);
+    struckTimer = setTimeout(function () {
+      struckTimer = null;
+      struckUntil = 0;
+      var box = $('bc16-horde');
+      if (box) box.classList.remove('struck');
+      if (lastState) renderHorde(lastState);
+    }, 2000);
+  }
+
   function renderHorde(s) {
     var box = $('bc16-horde');
     var h = s.bc16_horde;
     if (!box || !h) return;
+    // THE THIRD PARTY IS NAMED ON SCREEN, at every width and in every state:
+    // the zombie team is drawn and labelled THE HORDE, is never a seat and
+    // never scores.
+    var who = '<span class="horde">THE HORDE</span>';
+    if (struckUntil > Date.now()) {
+      box.classList.add('struck');
+      box.innerHTML = who + '<span class="tell">' + esc(struckText) +
+        '</span>';
+      return;
+    }
+    box.classList.remove('struck');
     var alive = h.alive || {};
     var live = '\u25c6' + stat(alive.standardzombie, 'int') +
       ' \u27a4' + stat(alive.rangedzombie, 'int') +
@@ -5831,7 +5902,7 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
     var tl = (h.schedule || []).map(function (row) {
       return row.past ? '<b>\u00b7</b>' : '\u00b7';
     }).join('');
-    box.innerHTML =
+    box.innerHTML = who +
       '<span class="alive">' + live + '</span>' +
       '<span class="wave">' + esc(wave) + '</span>' +
       '<span class="ob">OUTBREAK ' + stat(h.outbreak_level, 'int') +
@@ -6021,6 +6092,10 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
       if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {
         setDoctrinesOpen(false);
       }
+      // The strip takeover reads the frame the playhead came FROM, so it has
+      // to be decided before `lastFrame` moves.
+      lastState = s;
+      hordeStrike(s, lastFrame);
       lastFrame = s.t;
       renderArchons(s);
       renderHorde(s);
