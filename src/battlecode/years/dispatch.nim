@@ -42,6 +42,10 @@ import bc22/maps as maps22
 import bc22/rules as rules22
 import bc22/world as world22
 import bc22/chassis/kit as kit22
+import bc16/maps as maps16
+import bc16/rules as rules16
+import bc16/world as world16
+import bc16/chassis/kit as kit16
 
 export registry
 
@@ -54,6 +58,7 @@ type
     yBc25 = "bc25"
     yBc23 = "bc23"
     yBc22 = "bc22"
+    yBc16 = "bc16"
 
   Session* = ref object
     ## One game in progress, in whichever year's sim. `stepRound` advances it;
@@ -89,6 +94,10 @@ type
       w22*: world22.World
       sides22*: array[2, kit22.Side]
       chassis22*: array[2, rules22.ChassisKind22]
+    of yBc16:
+      w16*: world16.World
+      sides16*: array[2, kit16.Side]
+      chassis16*: array[2, rules16.ChassisKind16]
 
   GameOutcome* = object
     ## The YEAR-NEUTRAL per-game outcome. `results.games[]`'s five required
@@ -189,6 +198,28 @@ const Bc22RungNames* = ["-", "annihilated", "more_archons",
                         "coin_flip"]
   ## `Domination`'s ordinals, for `singularity.rung`.
 
+const Bc16ActionNames* = [
+  "clear_rubble", "move", "attack", "broadcast", "broadcast_message",
+  "build", "activate", "repair", "pack", "unpack", "disintegrate"
+]
+  ## bc16 has TWELVE unit types and eleven distinct actions, so its
+  ## `first_action` names the ACTION rather than the unit. And the field is
+  ## `action`, never `kind`: a field named `kind` is flattened into the same
+  ## object as the event's own `kind` key and silently overwrites it (the
+  ## bc23 r1-F25 finding).
+
+const Bc16UnitNames* = [
+  "zombieden", "standardzombie", "rangedzombie", "fastzombie", "bigzombie",
+  "archon", "scout", "soldier", "guard", "viper", "turret", "ttm"
+]
+  ## `RobotType`'s ordinals, for `unit_milestone.unit`, `turned.unit` and
+  ## `neutral_activated.unit`.
+
+const Bc16RungNames* = ["-", "archons_destroyed", "more_archons",
+                        "more_archon_health", "more_parts_net_worth",
+                        "highest_id"]
+  ## `Domination`'s ordinals, for `tiebreak.rung`.
+
 const Bc25TowerNames* = ["paint", "money", "defense"]
   ## `TowerKind`'s ordinals, for `tower_built` / `tower_upgraded` /
   ## `tower_lost`.
@@ -201,6 +232,7 @@ proc yearIdOf*(year: string): YearId =
   of "bc25": yBc25
   of "bc23": yBc23
   of "bc22": yBc22
+  of "bc16": yBc16
   else: yBc26
 
 proc strongChassisFor*(year: string): ScriptedChassis =
@@ -214,6 +246,7 @@ proc strongChassisFor*(year: string): ScriptedChassis =
   of yBc25: scSpaark
   of yBc23: scLemonade
   of yBc22: scWololo
+  of yBc16: scBulwark
 
 proc parseScriptedChassis*(name: string): ScriptedChassis =
   ## Year-free reading of a recorded `seats[].chassis` string. An unrecognised
@@ -237,6 +270,7 @@ proc poolNamesFor*(year, pool: string): seq[string] =
   of yBc25: maps25.poolNames(pool)
   of yBc23: maps23.poolNames(pool)
   of yBc22: maps22.poolNames(pool)
+  of yBc16: maps16.poolNames(pool)
 
 proc drawMapsFor*(year, pool: string, seed, count: int): seq[string] =
   case yearIdOf(year)
@@ -247,6 +281,7 @@ proc drawMapsFor*(year, pool: string, seed, count: int): seq[string] =
   of yBc25: maps25.drawMaps(pool, seed, count)
   of yBc23: maps23.drawMaps(pool, seed, count)
   of yBc22: maps22.drawMaps(pool, seed, count)
+  of yBc16: maps16.drawMaps(pool, seed, count)
 
 proc sideAslotFor*(year: string, seed, gameIndex: int): int =
   case yearIdOf(year)
@@ -257,6 +292,7 @@ proc sideAslotFor*(year: string, seed, gameIndex: int): int =
   of yBc25: maps25.sideAslotFor(seed, gameIndex)
   of yBc23: maps23.sideAslotFor(seed, gameIndex)
   of yBc22: maps22.sideAslotFor(seed, gameIndex)
+  of yBc16: maps16.sideAslotFor(seed, gameIndex)
 
 proc mapPathFor*(year, name: string): string =
   case yearIdOf(year)
@@ -267,6 +303,7 @@ proc mapPathFor*(year, name: string): string =
   of yBc25: maps25.mapPath(name)
   of yBc23: maps23.mapPath(name)
   of yBc22: maps22.mapPath(name)
+  of yBc16: maps16.mapPath(name)
 
 proc mapCardFor*(year, name: string, slot, sideAslot, rounds: int): JsonNode =
   ## The per-map facts a seat may legitimately know before writing its
@@ -307,6 +344,10 @@ proc mapCardFor*(year, name: string, slot, sideAslot, rounds: int): JsonNode =
     card
   of yBc22:
     var card = maps22.mapCard(maps22.loadMap(name), slot, sideAslot)
+    card["rounds"] = %rounds
+    card
+  of yBc16:
+    var card = maps16.mapCard(maps16.loadMap(name), slot, sideAslot)
     card["rounds"] = %rounds
     card
 
@@ -380,6 +421,15 @@ proc newSession*(year: string, mapName: string, sheets: array[2, Sheet],
                    rules22.chassisKindFor(chassis[1])]
     result.chassis22 = [kinds22[sideAslot], kinds22[1 - sideAslot]]
     result.sides22 = rules22.newSides22(sheets, sideAslot)
+  of yBc16:
+    let spec = maps16.loadMap(mapName)
+    result = Session(year: yBc16, mapName: mapName, sideAslot: sideAslot,
+                     gameIndex: gameIndex)
+    result.w16 = world16.newWorld(spec, maxRounds)
+    let kinds16 = [rules16.chassisKindFor(chassis[0]),
+                   rules16.chassisKindFor(chassis[1])]
+    result.chassis16 = [kinds16[sideAslot], kinds16[1 - sideAslot]]
+    result.sides16 = rules16.newSides16(sheets, sideAslot)
 
 proc stepRound*(s: Session) =
   case s.year
@@ -390,6 +440,7 @@ proc stepRound*(s: Session) =
   of yBc25: rules25.runRound(s.w25, s.sides25, s.chassis25)
   of yBc23: rules23.runRound(s.w23, s.sides23, s.chassis23)
   of yBc22: rules22.runRound(s.w22, s.sides22, s.chassis22)
+  of yBc16: rules16.runRound(s.w16, s.sides16, s.chassis16)
 
 proc currentRound*(s: Session): int =
   case s.year
@@ -400,6 +451,7 @@ proc currentRound*(s: Session): int =
   of yBc25: s.w25.currentRound
   of yBc23: s.w23.currentRound
   of yBc22: s.w22.currentRound
+  of yBc16: s.w16.currentRound
 
 proc running*(s: Session): bool =
   case s.year
@@ -410,6 +462,7 @@ proc running*(s: Session): bool =
   of yBc25: s.w25.running
   of yBc23: s.w23.running
   of yBc22: s.w22.running
+  of yBc16: s.w16.running
 
 proc hashChainHex*(s: Session): string =
   case s.year
@@ -420,6 +473,7 @@ proc hashChainHex*(s: Session): string =
   of yBc25: toHex(s.w25.hashChain)
   of yBc23: toHex(s.w23.hashChain)
   of yBc22: toHex(s.w22.hashChain)
+  of yBc16: toHex(s.w16.hashChain)
 
 proc mapWidth*(s: Session): int =
   case s.year
@@ -430,6 +484,7 @@ proc mapWidth*(s: Session): int =
   of yBc25: s.w25.width
   of yBc23: s.w23.width
   of yBc22: s.w22.width
+  of yBc16: s.w16.width
 
 proc mapHeight*(s: Session): int =
   case s.year
@@ -440,6 +495,7 @@ proc mapHeight*(s: Session): int =
   of yBc25: s.w25.height
   of yBc23: s.w23.height
   of yBc22: s.w22.height
+  of yBc16: s.w16.height
 
 # ---------------------------------------------------------------------------
 #  Playing a game, and converting the year's outcome to the neutral one
@@ -723,6 +779,76 @@ proc statsJson22*(o: rules22.GameOutcome22): JsonNode =
     "singularity_round": o.singularityRound
   }
 
+proc statsJson16*(o: rules16.GameOutcome16): JsonNode =
+  %*{
+    "archons_start": [o.archonsStart[0], o.archonsStart[1]],
+    "archons_end": [o.archonsEnd[0], o.archonsEnd[1]],
+    "archons_lost": [o.archonsLost[0], o.archonsLost[1]],
+    "archon_health_end_tenths":
+      [o.archonHealthEndTenths[0], o.archonHealthEndTenths[1]],
+    "parts_end_tenths": [o.partsEndTenths[0], o.partsEndTenths[1]],
+    "parts_worth_end": [o.partsWorthEnd[0], o.partsWorthEnd[1]],
+    "parts_collected_tenths":
+      [o.partsCollectedTenths[0], o.partsCollectedTenths[1]],
+    "parts_income_tenths": [o.partsIncomeTenths[0], o.partsIncomeTenths[1]],
+    "parts_spent_tenths": [o.partsSpentTenths[0], o.partsSpentTenths[1]],
+    "units_built": [o.unitsBuilt[0], o.unitsBuilt[1]],
+    "scouts_built": [o.scoutsBuilt[0], o.scoutsBuilt[1]],
+    "soldiers_built": [o.soldiersBuilt[0], o.soldiersBuilt[1]],
+    "guards_built": [o.guardsBuilt[0], o.guardsBuilt[1]],
+    "vipers_built": [o.vipersBuilt[0], o.vipersBuilt[1]],
+    "turrets_built": [o.turretsBuilt[0], o.turretsBuilt[1]],
+    "turret_packs": [o.turretPacks[0], o.turretPacks[1]],
+    "robots_alive": [o.robotsAlive[0], o.robotsAlive[1]],
+    "robots_lost": [o.robotsLost[0], o.robotsLost[1]],
+    "robots_turned": [o.robotsTurned[0], o.robotsTurned[1]],
+    "neutrals_activated": [o.neutralsActivated[0], o.neutralsActivated[1]],
+    "neutral_archons_activated":
+      [o.neutralArchonsActivated[0], o.neutralArchonsActivated[1]],
+    "dens_destroyed": [o.densDestroyed[0], o.densDestroyed[1]],
+    "den_damage_dealt": [o.denDamageDealt[0], o.denDamageDealt[1]],
+    "damage_dealt": [o.damageDealt[0], o.damageDealt[1]],
+    "zombie_damage_dealt":
+      [o.zombieDamageDealt[0], o.zombieDamageDealt[1]],
+    "zombie_damage_taken":
+      [o.zombieDamageTaken[0], o.zombieDamageTaken[1]],
+    "enemy_damage_dealt": [o.enemyDamageDealt[0], o.enemyDamageDealt[1]],
+    "enemy_damage_taken": [o.enemyDamageTaken[0], o.enemyDamageTaken[1]],
+    "infections_suffered":
+      [o.infectionsSuffered[0], o.infectionsSuffered[1]],
+    "infections_inflicted":
+      [o.infectionsInflicted[0], o.infectionsInflicted[1]],
+    "viper_infection_damage":
+      [o.viperInfectionDamage[0], o.viperInfectionDamage[1]],
+    "repairs": [o.repairs[0], o.repairs[1]],
+    "hp_repaired": [o.hpRepaired[0], o.hpRepaired[1]],
+    "rubble_cleared_tenths":
+      [o.rubbleClearedTenths[0], o.rubbleClearedTenths[1]],
+    "rubble_created_tenths":
+      [o.rubbleCreatedTenths[0], o.rubbleCreatedTenths[1]],
+    "squares_opened": [o.squaresOpened[0], o.squaresOpened[1]],
+    "basic_signals": [o.basicSignals[0], o.basicSignals[1]],
+    "message_signals": [o.messageSignals[0], o.messageSignals[1]],
+    "archon_parts_walks": [o.archonPartsWalks[0], o.archonPartsWalks[1]],
+    "archons_alive_at_2000":
+      [o.archonsAliveAt2000[0], o.archonsAliveAt2000[1]],
+    "archons_per_side": o.archonsPerSide,
+    "dens_per_side": o.densPerSide,
+    "dens_on_map": o.densOnMap,
+    "parts_on_map_start": o.partsOnMapStart,
+    "parts_squares_start": o.partsSquaresStart,
+    "rubble_mean_tenths": o.rubbleMeanTenths,
+    "impassable_squares_start": o.impassableSquaresStart,
+    "impassable_squares_end": o.impassableSquaresEnd,
+    "neutrals_on_map_start": o.neutralsOnMapStart,
+    "zombies_spawned": o.zombiesSpawned,
+    "zombies_alive_end": o.zombiesAliveEnd,
+    "zombies_killed": o.zombiesKilled,
+    "outbreak_level_end": o.outbreakLevelEnd,
+    "schedule_rounds": o.scheduleRounds,
+    "tiebreak_round": o.tiebreakRound
+  }
+
 proc playGameFor*(
   year, mapName: string, sheets: array[2, Sheet],
   chassis: array[2, ScriptedChassis],
@@ -800,6 +926,16 @@ proc playGameFor*(
       endReason: o.endReason, points: o.points, hashChain: o.hashChain,
       roundChains: o.roundChains, aborted: o.aborted,
       stats: statsJson22(o)), w.events)
+  of yBc16:
+    let spec = maps16.loadMap(mapName)
+    let (w, o) = rules16.playGame(spec, sheets,
+      [rules16.chassisKindFor(chassis[0]), rules16.chassisKindFor(chassis[1])],
+      index, sideAslot, maxRounds, budgetSeconds)
+    (GameOutcome(index: o.index, mapName: o.mapName, sideAslot: o.sideAslot,
+      roundsPlayed: o.roundsPlayed, winnerSlot: o.winnerSlot,
+      endReason: o.endReason, points: o.points, hashChain: o.hashChain,
+      roundChains: o.roundChains, aborted: o.aborted,
+      stats: statsJson16(o)), w.events)
 
 proc bc21Breakpoints*(): seq[int] =
   ## The slanderer influence breakpoints, for the bc21 doctrine brief. Read

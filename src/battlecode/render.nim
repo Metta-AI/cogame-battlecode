@@ -12,7 +12,7 @@
 ## round. Re-sending the board every round would be a megabyte a frame; the
 ## diff is a few dozen bytes.
 
-import std/[json, math, os, sequtils, sets, tables]
+import std/[json, math, os, sequtils, sets, strutils, tables]
 import pixie
 import bitworld/spriteprotocol
 import sheet
@@ -34,6 +34,9 @@ from years/bc23/units as u23 import nil
 from years/bc22/world as w22 import nil
 from years/bc22/constants as c22 import nil
 from years/bc22/units as u22 import nil
+from years/bc16/world as w16 import nil
+from years/bc16/constants as c16 import nil
+from years/bc16/units as u16 import nil
 
 const
   TileSize* = 16
@@ -139,6 +142,21 @@ const
   Bc22LeadColor = rgba(0x6d, 0x7f, 0x8c, 255)
   Bc22GoldColor = rgba(0xc9, 0xa2, 0x3a, 255)
   Bc22DeadSquareColor = rgba(0x4a, 0x2c, 0x2c, 255)
+
+  ## bc16's rubble heat ramp: SIX steps with HARD BREAKS AT THE TWO
+  ## THRESHOLDS THAT MATTER — 50, where every movement and cooldown charge
+  ## DOUBLES, and 100, where the square is impassable to everything but a
+  ## SCOUT, a FASTZOMBIE and a BIGZOMBIE. Rubble is this year's terrain and a
+  ## spectator who cannot see it cannot understand why a soldier is standing
+  ## still, so it is drawn FIRST and the break is deliberately visible.
+  Bc16Bare = rgba(0x43, 0x3c, 0x30, 255)          ## 0
+  Bc16Light = rgba(0x39, 0x33, 0x29, 255)         ## 1..49
+  Bc16Heavy = rgba(0x2c, 0x27, 0x20, 255)         ## 50..99 (double cost)
+  Bc16Impassable = rgba(0x1c, 0x19, 0x15, 255)    ## 100..999
+  Bc16Wall = rgba(0x12, 0x10, 0x0e, 255)          ## 1000..9999
+  Bc16Bedrock = rgba(0x07, 0x07, 0x07, 255)       ## >= 10 000
+  Bc16PartsColor = rgba(0xd8, 0xb0, 0x4a, 255)
+  Bc16PartsGoneColor = rgba(0x4a, 0x3c, 0x22, 255)
 
 type
   Atlas = ref object
@@ -1093,6 +1111,112 @@ proc buildBc22Packet(r: Renderer, w: w22.World, gameIndex, sideAslot: int,
   packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
   packet
 
+proc bc16UnitSprite(unit: w16.Robot): string =
+  ## Palette follows the 2016 CLIENT's own four team colours, because the
+  ## client ships every one of the twelve types at all four `Team` palettes:
+  ## blue = side A, red = side B, GREEN = THE HORDE and GREY = NEUTRAL. This
+  ## is the first year in the repo whose art can draw a neutral robot AS
+  ## ITSELF rather than as a greyed team sprite — which matters, because
+  ## `neutral_activation` is a headline knob.
+  let tint =
+    case unit.team
+    of u16.teamA: "a_"
+    of u16.teamB: "b_"
+    of u16.teamNeutral: "neutral_"
+    of u16.teamZombie: "horde_"
+  tint & ($unit.kind).toLowerAscii()
+
+proc bc16TerrainStage(w: w16.World): int =
+  ## The rubble layer changes on every corpse and every clear, and the parts
+  ## layer every time an archon walks over a deposit, so the terrain sprite is
+  ## re-cut on a fixed cadence: eight rounds is often enough that a corpse
+  ## bricking a lane is visible as it happens and rare enough that an 80x80
+  ## board is not re-rasterised twenty-four times a second.
+  w.currentRound div 8
+
+proc bc16RubbleColour(rubble: float64): ColorRGBA =
+  if rubble <= 0.0: Bc16Bare
+  elif rubble < c16.RubbleSlowThresh: Bc16Light
+  elif rubble < c16.RubbleObstructionThresh: Bc16Heavy
+  elif rubble < 1000.0: Bc16Impassable
+  elif rubble < 10_000.0: Bc16Wall
+  else: Bc16Bedrock
+
+proc renderBc16Terrain(r: Renderer, w: w16.World): Image =
+  result = newImage(w.width * TileSize, w.height * TileSize)
+  result.fill(Bc16Bare)
+  let ctx = newContext(result)
+  for y in 0 ..< w.height:
+    for x in 0 ..< w.width:
+      let px = x * TileSize
+      ## 2016's y axis grows SOUTH — `Direction.NORTH` is `(0, -1)` — which
+      ## is the SAME direction the canvas grows, so unlike every other year
+      ## in this repo the row is NOT flipped.
+      let py = y * TileSize
+      let l = u16.loc(x, y)
+      let i = w16.idx(w, l)
+      ctx.fillStyle = bc16RubbleColour(w.rubble[i])
+      ctx.fillRect(rect(float32(px), float32(py),
+                        float32(TileSize), float32(TileSize)))
+      ## Parts: a pip SIZED BY AMOUNT, and a hollow mark the moment an archon
+      ## takes the square — which is how a spectator sees an
+      ## `archon_spread: split` faction eating the map.
+      let parts = w.partsAt[i]
+      let cx = float32(px + TileSize div 2)
+      let cy = float32(py + TileSize div 2)
+      if parts > 0.0:
+        let size = float32(3 + min(6, int(parts) div 40))
+        ctx.fillStyle = Bc16PartsColor
+        ctx.fillRect(rect(cx - size / 2, cy - size / 2, size, size))
+      elif w.map.parts[i] > 0.0:
+        ctx.fillStyle = Bc16PartsGoneColor
+        ctx.fillRect(rect(cx - 2.5, cy - 0.75, 5.0, 1.5))
+
+proc buildBc16Packet(r: Renderer, w: w16.World, gameIndex, sideAslot: int,
+                     chrome: string): seq[uint8] =
+  var packet: seq[uint8]
+  let newGame = r.terrainGame != gameIndex
+  let stage = bc16TerrainStage(w)
+
+  if newGame:
+    r.terrainGame = gameIndex
+    r.terrainStage = -1
+    r.liveObjects.clear()
+    r.prevRobotSprite.clear()
+    packet.addClearObjects()
+    packet.addLayer(MapLayerId, MapLayerKind, ZoomableFlag)
+    packet.addViewport(MapLayerId, w.width * TileSize, w.height * TileSize)
+
+  if r.terrainStage != stage:
+    r.terrainStage = stage
+    let terrain = r.renderBc16Terrain(w)
+    packet.addSprite(TerrainSpriteId, terrain.width, terrain.height,
+      straightPixels(terrain), "terrain")
+    packet.addObject(1, 0, 0, -32768, MapLayerId, TerrainSpriteId)
+
+  ## Every live robot. Object ids are stable for a robot's whole life, so the
+  ## client's motion interpolation glides it between rounds instead of
+  ## teleporting it. An ARCHON draws above everything else, because it is the
+  ## only unit whose death ends the game; a DEN draws below everything,
+  ## because it never moves and everything walks over its ring.
+  var seen = initHashSet[int]()
+  for id in w.execOrder:
+    let unit = w16.robotById(w, id)
+    if unit == nil: continue
+    let objectId = RobotObjectBase + (id mod 20000)
+    seen.incl(objectId)
+    let sprite = r.spriteId(packet, bc16UnitSprite(unit))
+    r.addObj(packet, objectId, unit.loc.x * TileSize, unit.loc.y * TileSize,
+      (if unit.kind == c16.rtArchon: 6
+       elif unit.kind == c16.rtZombieden: 3
+       else: 5), sprite)
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= RobotObjectBase and objectId notin seen:
+      r.dropObj(packet, objectId)
+
+  packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
+  packet
+
 proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   ## The ONE place the renderer branches on the year. `Session` is an object
   ## variant, so the compiler checks that a new year gets an arm here.
@@ -1104,3 +1228,4 @@ proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   of yBc25: r.buildBc25Packet(s.w25, s.gameIndex, s.sideAslot, chrome)
   of yBc23: r.buildBc23Packet(s.w23, s.gameIndex, s.sideAslot, chrome)
   of yBc22: r.buildBc22Packet(s.w22, s.gameIndex, s.sideAslot, chrome)
+  of yBc16: r.buildBc16Packet(s.w16, s.gameIndex, s.sideAslot, chrome)

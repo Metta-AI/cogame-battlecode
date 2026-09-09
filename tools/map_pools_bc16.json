@@ -1,0 +1,6 @@
+{
+  "small": ["checkers", "zigzag", "swamp", "river", "prisons", "frogger"],
+  "mixed": ["closequarters", "lockdown", "industrial", "quadrants", "turtle",
+            "boxy", "voluted", "collision", "caverns", "6147"],
+  "large": ["desert", "space", "scouting", "vortex", "wormy", "quarry"]
+}

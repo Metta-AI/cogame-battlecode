@@ -44,7 +44,10 @@ const Years* = [
            atlas: "atlas_bc23"),
   YearSpec(id: "bc22", title: "Battlecode 2022 — Mutation",
            maxRounds: 2000, pools: @["small", "mixed", "large"],
-           atlas: "atlas_bc22")
+           atlas: "atlas_bc22"),
+  YearSpec(id: "bc16", title: "Battlecode 2016 — Zombie Invasion",
+           maxRounds: 3000, pools: @["small", "mixed", "large"],
+           atlas: "atlas_bc16")
 ]
 
 proc yearSpec*(id: string): YearSpec =

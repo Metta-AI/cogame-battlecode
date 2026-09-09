@@ -60,7 +60,7 @@ proc chassisForSeat*(year: string, seat: SeatPolicy): ScriptedChassis =
 
 proc chassisNameFor*(year: string, seat: SeatPolicy, sheet: Sheet): string =
   case yearIdOf(year)
-  of yBc20, yBc21, yBc22, yBc24, yBc25, yBc23:
+  of yBc20, yBc21, yBc22, yBc24, yBc25, yBc23, yBc16:
     (if seat.isLlm: $strongChassisFor(year)
      else: baselineName(baselineForSeat(year, seat)))
   of yBc26: $sheet.doctrine.chassis
@@ -606,6 +606,113 @@ droids: a faction with one archon and nothing else plays on to round 2000
 earning 2 lead a round.
 """
 
+const Bc16Preamble* = """
+You command a faction of robots in Battlecode 2016, "Zombie Invasion": a
+two-faction grid war on a symmetric map, 3000 rounds a game (numbered 0 to
+2999), best of three.
+
+You do not move a single robot. Before the war you write ONE DOCTRINE — a
+JSON sheet of eleven named knobs — and a deterministic simulation then plays
+the whole match from it while you watch.
+
+THE WORLD
+- Each faction starts with 1 to 4 ARCHONS (1000 hp) and 300 PARTS. AN ARCHON
+  CANNOT BE BUILT AND IS THE ONLY THING THAT DECIDES THE GAME: lose your last
+  one and you lose immediately.
+- An archon builds SOLDIERS (30 parts, 60 hp, 4 damage at range-squared 13),
+  GUARDS (30, 145 hp, 1.5 melee but DOUBLE against zombies and 4 damage
+  BLOCKED off any hit above 10), SCOUTS (25, 80 hp, NO attack, IGNORES
+  RUBBLE, sight range-squared 53), VIPERS (120, 120 hp, 2 damage at
+  range-squared 20 that INFECTS FOR 20 TURNS) and TURRETS (130, 100 hp, 13
+  damage between range-squared 6 and 40, immobile — it must PACK into a TTM
+  to move and UNPACK to shoot). Building freezes the archon for that unit's
+  build turns: 20 for a scout, 12 a soldier, 10 a guard, 30 a viper, 25 a
+  turret.
+- An archon also REPAIRS one friendly non-archon for 1 hp a turn, for free,
+  within range-squared 24 — the only healing in the game — and PICKS UP EVERY
+  PART on any square it stands on or walks onto, all of it, and nothing else
+  in the game collects parts.
+- Income is `max(0, 2 - 0.01 * your live robot count)` parts per round: ZERO
+  AT 200 ROBOTS and half at 100. That is the whole economy alongside the
+  map's parts and 200 per zombie den killed.
+
+THE HORDE
+- Each map ships a fixed PUBLIC zombie spawn schedule — round to counts of
+  STANDARDZOMBIE / RANGEDZOMBIE / FASTZOMBIE / BIGZOMBIE — divided evenly
+  among the map's 2 to 12 ZOMBIE DENS (2000 hp each, worth 200 parts to
+  whoever kills one). You can read the whole schedule from round 0.
+- Zombies belong to a third team, SEE THE WHOLE MAP ALWAYS, and every zombie
+  every turn walks at the NEAREST PLAYER-CONTROLLED ROBOT ON THE MAP, OF
+  EITHER FACTION, and hits it.
+- Every 300 rounds the OUTBREAK LEVEL rises and every zombie spawned after it
+  is stronger: x1.0, x1.1, x1.2, x1.3, x1.5, x1.7, x2.0, x2.3, x2.6, x3.0 —
+  so a round-2700 BIGZOMBIE has 5000 health and 250 damage.
+- A den that still has zombies queued damages EVERY adjacent non-zombie robot
+  for 10 a round.
+
+INFECTION, RUBBLE, NEUTRALS
+- A zombie hit infects for 10 turns (no damage); a VIPER hit for 20 turns at
+  2 damage a turn. ANYTHING THAT DIES WHILE INFECTED LEAVES NO RUBBLE AND
+  STANDS BACK UP AS A ZOMBIE of its own type on the horde's team, where it
+  fell: archon to BIGZOMBIE, scout to FASTZOMBIE, soldier or guard to
+  STANDARDZOMBIE, viper/turret/TTM to RANGEDZOMBIE. It then hunts whoever is
+  nearest — which can be them.
+- Anything that dies UNINFECTED raises the rubble on its square by its own
+  max health (1000 an archon, 500 a bigzombie, 145 a guard; a third of that
+  if a TURRET landed the killing blow). RUBBLE OF 100 OR MORE IS IMPASSABLE
+  to everything except a SCOUT, a FASTZOMBIE and a BIGZOMBIE; 50 or more
+  DOUBLES every movement and cooldown charge. One clear action turns r into
+  max(0, 0.95r - 10), so 100 takes fourteen actions and 1000 takes about 55.
+  A TURRET and a TTM cannot clear.
+- NEUTRAL robots stand on most maps. An ARCHON ACTIVATES one within
+  range-squared 2 for ZERO PARTS and 2 core delay: the neutral is replaced by
+  an identical robot on your team, immediately active. Some maps place
+  neutral ARCHONS, and an extra archon is the first tiebreak at round 2999.
+
+FRIENDLY FIRE IS LEGAL and there is no reading under which shooting your own
+soldiers is a strategy; the chassis never does it.
+
+YOUR REPLY
+Reply with ONE JSON object and NOTHING else. Your reply must begin with '{'.
+{"sheet": {...knobs...}, "notes": "<=280 chars", "motto": "<=48 chars"}
+
+THE KNOBS (unknown key, wrong type or out-of-range value = that field's
+default; the four integers CLAMP to their range; you cannot forfeit by
+answering badly, only by answering weakly):
+  opening             "turtle" | "soldier_viper_aggro" | "scout_zombie_pull"
+                                                          default "turtle"
+  turret_count        0..12                                default 3
+  guard_ratio         0..100  (percent of the ATTACKER budget)  default 45
+  zombie_kiting       "never" | "ranged_only" | "always"   default "ranged_only"
+  den_clear_round     1..2800                              default 900
+  parts_priority      "units" | "turrets" | "vipers"       default "units"
+  archon_spread       "huddle" | "spread" | "split"        default "spread"
+  neutral_activation  "never" | "opportunistic" | "hunt"   default "opportunistic"
+  retreat_hp          0..100  (percent of max health)      default 35
+  rubble_clear        "never" | "paths" | "aggressive"     default "paths"
+  infection_policy    "ignore" | "quarantine" | "suicide_squad"
+                                                          default "quarantine"
+
+THE CHASSIS IS NOT YOURS TO CHOOSE. There is no `chassis` knob, and a reply
+that sends one has it recorded as an unknown field and ignored. Your faction
+is driven by the `bulwark` chassis, which independently of every knob keeps at
+least one archon collecting parts, builds an attacker whenever parts allow and
+the attacker census is short (never fewer than three attackers per archon),
+answers any hostile sensed within range-squared 24 of one of its own archons,
+spends every archon's free repair every turn, never walks its last archon
+into a den's damage ring, and never fires on its own units.
+
+HOW A GAME ENDS
+A game ends the instant a faction's last ARCHON dies (`archons_destroyed`),
+or at the end of round 2999 on this ladder, first non-zero difference wins:
+more archons alive (`more_archons`), then greater total live-archon health
+(`more_archon_health`), then greater parts stockpile plus the parts cost of
+every live robot (`more_parts_net_worth`), then higher maximum live archon id
+(`highest_id`, and Clan Basil on a 0-0). THERE IS NO ELIMINATION FOR LOSING
+YOUR ARMY: a faction with one archon and nothing else plays on to round 2999
+earning 2 parts a round.
+"""
+
 proc preambleFor*(year: string): string =
   case yearIdOf(year)
   of yBc20: Bc20Preamble
@@ -614,6 +721,7 @@ proc preambleFor*(year: string): string =
   of yBc25: Bc25Preamble
   of yBc23: Bc23Preamble
   of yBc22: Bc22Preamble
+  of yBc16: Bc16Preamble
   of yBc26: SystemPreamble
 
 proc briefFor*(
@@ -997,6 +1105,129 @@ proc briefFor*(
     payload["scoring"] = %*{
       "weights": {"archons_share": 64, "gold_net_worth_share": 24,
                   "lead_net_worth_share": 12},
+      "win_bonus_per_game": 200,
+      "games": plan.maps.len,
+      "note": "shares are float32; points truncate to an integer; the " &
+              "league ranks by ELO on match wins and results.scores is " &
+              "dominated by the win bonus"
+    }
+  of yBc16:
+    payload["economy"] = %*{
+      "start_per_team": {"parts": 300},
+      "income_per_team_per_round":
+        "max(0, 2 - 0.01 * your live robot count) parts -- so income is " &
+        "ZERO at 200 robots and half at 100",
+      "den_bounty": 200,
+      "map_parts": "archon-collected only, whole-square, never regenerating"
+    }
+    payload["units"] = %*{
+      "archon": {"parts": "cannot be built", "hp": 1000, "attack": 0,
+        "repair_r2": 24, "sight_r2": 35, "move_delay": 2,
+        "cooldown_delay": 1, "turns_into": "bigzombie",
+        "does": "builds SCOUT/SOLDIER/GUARD/VIPER/TURRET in an adjacent " &
+                "square (and is FROZEN for that unit's build turns); " &
+                "repairs one friendly non-archon for 1 hp within r2<=24 FOR " &
+                "FREE, once a turn; activates NEUTRALs within r2<=2; " &
+                "collects parts by standing on them. LOSE YOUR LAST ARCHON " &
+                "AND YOU LOSE IMMEDIATELY"},
+      "scout": {"parts": 25, "build_turns": 20, "hp": 80, "attack": 0,
+        "sight_r2": 53, "move_delay": 1.4, "ignores_rubble": true,
+        "turns_into": "fastzombie",
+        "does": "sees further than anything else, walks through ANY rubble, " &
+                "cannot attack, and is the cheapest thing you can put " &
+                "between a den and yourself"},
+      "soldier": {"parts": 30, "build_turns": 12, "hp": 60, "attack": 4,
+        "attack_r2": 13, "sight_r2": 24, "move_delay": 2, "attack_delay": 2,
+        "turns_into": "standardzombie"},
+      "guard": {"parts": 30, "build_turns": 10, "hp": 145, "attack": 1.5,
+        "attack_r2": 2, "sight_r2": 24, "move_delay": 2, "attack_delay": 1,
+        "turns_into": "standardzombie",
+        "does": "DOUBLE damage against zombies, and 4 damage BLOCKED off " &
+                "any hit above 10"},
+      "viper": {"parts": 120, "build_turns": 30, "hp": 120, "attack": 2,
+        "attack_r2": 20, "infect_turns": 20, "move_delay": 2,
+        "attack_delay": 3, "turns_into": "rangedzombie",
+        "does": "infects for 20 turns at 2 damage a turn; an infected robot " &
+                "that dies becomes a ZOMBIE instead of leaving rubble"},
+      "turret": {"parts": 130, "build_turns": 25, "hp": 100, "attack": 13,
+        "attack_r2": 40, "attack_r2_minimum": 6, "immobile": true,
+        "attack_delay": 3, "cooldown_delay": 3, "turns_into": "rangedzombie",
+        "does": "the longest reach in the game, but cannot shoot inside r2 " &
+                "6 and cannot move or clear rubble; PACK it into a TTM (10 " &
+                "delay on both counters) to relocate, UNPACK to shoot"},
+      "ttm": {"parts": "not buildable -- only reachable by PACKING a turret",
+        "hp": 100, "attack": 0, "move_delay": 2, "cooldown_delay": 2,
+        "turns_into": "rangedzombie"}
+    }
+    payload["zombies"] = %*{
+      "team": "a third team called THE HORDE; it never wins and never scores",
+      "targeting": "EVERY zombie, EVERY turn, walks at the NEAREST " &
+                   "player-controlled robot on the map, of EITHER team; " &
+                   "zombies see the whole map always",
+      "standardzombie": {"hp": 60, "attack": 2.5, "attack_r2": 2,
+                         "move_delay": 3},
+      "rangedzombie": {"hp": 60, "attack": 3, "attack_r2": 13,
+                       "move_delay": 3},
+      "fastzombie": {"hp": 80, "attack": 3, "attack_r2": 2,
+                     "move_delay": 1.4, "ignores_rubble": true},
+      "bigzombie": {"hp": 500, "attack": 25, "attack_r2": 2,
+                    "move_delay": 4, "ignores_rubble": true},
+      "outbreak": "every 300 rounds every NEWLY SPAWNED zombie's health and " &
+                  "damage are multiplied: x1.0, x1.1, x1.2, x1.3, x1.5, " &
+                  "x1.7, x2.0, x2.3, x2.6, x3.0",
+      "den": {"hp": 2000, "bounty": 200,
+              "does": "spawns its share of the public schedule into up to 8 " &
+                      "adjacent squares a turn, in a ring starting toward " &
+                      "the nearest initial archon; if it still has a queue " &
+                      "it damages every adjacent non-zombie for 10 and " &
+                      "tries again"}
+    }
+    payload["infection"] = %*{
+      "zombie_bite": "10 turns, no damage",
+      "viper_bite": "20 turns, 2 damage a turn",
+      "on_death": "an INFECTED robot leaves NO rubble and stands back up as " &
+                  "a zombie of its own type's turns_into, on the ZOMBIE " &
+                  "team, at the current outbreak multiplier, on the square " &
+                  "where it fell -- and it then hunts whoever is nearest",
+      "on_activation": "a NEUTRAL killed by activation leaves no rubble and " &
+                       "never turns"
+    }
+    payload["rubble"] = %*{
+      "impassable_at": 100,
+      "doubles_cost_at": 50,
+      "from_a_corpse": "an UNINFECTED robot's death adds its own MAX HEALTH " &
+                       "to its square (1000 for an archon, 500 for a " &
+                       "bigzombie, 145 for a guard) -- a third of that if a " &
+                       "TURRET landed the killing blow",
+      "clearing": "one action turns r into max(0, 0.95*r - 10); a TURRET and " &
+                  "a TTM cannot clear; clearing a square at exactly 0 costs " &
+                  "nothing and does nothing"
+    }
+    payload["signals"] = %*{
+      "basic_per_turn": 5, "message_per_turn": 20,
+      "message_senders": "ARCHON and SCOUT only",
+      "cost": "0.05 delay on BOTH counters inside twice your own sight " &
+              "radius, plus 0.03 per unit beyond it",
+      "queue": 1000,
+      "note": "there is no shared array in 2016, and EVERY signal is heard " &
+              "by the enemy too"
+    }
+    payload["win"] = %*{
+      "instant": "destroy the enemy's LAST ARCHON",
+      "at_round_2999": ["more archons alive",
+                        "greater total live-archon health",
+                        "greater parts stockpile plus the parts cost of " &
+                        "every live robot",
+                        "higher maximum live archon id (and Clan Basil on a " &
+                        "0-0)"],
+      "note": "there is no elimination for losing your army: a faction with " &
+              "one archon and nothing else plays on to round 2999 earning 2 " &
+              "parts a round"
+    }
+    payload["sheet_schema"] = bc16SheetSchema()
+    payload["scoring"] = %*{
+      "weights": {"archons_share": 64, "archon_health_share": 24,
+                  "parts_net_worth_share": 12},
       "win_bonus_per_game": 200,
       "games": plan.maps.len,
       "note": "shares are float32; points truncate to an integer; the " &
