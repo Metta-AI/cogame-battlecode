@@ -1812,6 +1812,26 @@ zombies and 9 infected pairs, and it additionally requires
 `bc16idle` and 685 239 for `bc16greenhorn` — **1 667 162 lines compared, all
 identical.**
 
+### Divergence from the design note's literal anti-vacuity assertion (r1-F6)
+
+The design note (design.md:2574) asked that `ci.yml` "additionally asserts
+every game reached at least **2 900 rounds** and that at least **150 zombies**
+were spawned". **Neither literal assertion is what shipped, and neither could
+be**, so the substitution is recorded here rather than left implied.
+
+| | design note | shipped (`ci.yml`) | why |
+|---|---|---|---|
+| round floor | ≥ 2 900 **per game** | `≥ 250` per game (`ci.yml:3069`) | **no oracle bot survives that long.** Measured lifetimes: `bc16idle` 298–683 rounds, `bc16greenhorn` 485–1424. A 2 900-round floor would fail every one of the eighteen pairs. |
+| zombie floor | ≥ 150 **spawned per game** | `≥ 150` **summed `zombies_peak` over the eighteen pairs** (`ci.yml:3115`), measured 735 | the trace records the peak simultaneously on the board, not a spawn total; summing it over the pairs is the same anti-vacuity guarantee against the number the trace actually carries. |
+
+What makes the shorter window sound rather than weaker is that the trace runs
+from round 0 to the engine's own `isRunning() == false`, so **the end round,
+the winner and the domination factor are themselves compared** — a port that
+ended one round early diverges on the `W` line. The reasoning is also in the
+workflow at `ci.yml:3013-3023`. The job additionally floors peak robots at 10
+and requires an infection on at least 9 of the 18 pairs plus
+`saw_zombie_turn=true` on every pair, none of which the note asked for.
+
 ## The measured bytecode headroom, and why it matters
 
 V1 pins the port's delay decay to the `1.0` branch of the engine's
