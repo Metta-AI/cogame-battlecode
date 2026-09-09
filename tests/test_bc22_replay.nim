@@ -92,8 +92,20 @@ block:
   checkEq("the episode completed", r.reason, epComplete)
   check("and it re-derives with NO hash mismatch", r.ok)
   checkEq("the bytes are strict UTF-8", r.text.validateUtf8(), -1)
-  checkEq("the game version is GV10", r.doc.gameVersion, "GV10")
+  ## The RECORDED version is whatever this build stamps, and this shard's job
+  ## is to prove it is (a) the build's own headline, (b) a REAL version and
+  ## not an empty string, and (c) inside the compatibility list — so a future
+  ## year's bump moves the number without weakening the assertion. The
+  ## literal `"GV10"` that used to be here made the bc16 run's authorised
+  ## GV10 -> GV11 bump look like a bc22 regression, which it is not.
   checkEq("and it is what the build claims", r.doc.gameVersion, GameVersion)
+  check("which is a real version headline",
+    r.doc.gameVersion.len >= 4 and r.doc.gameVersion.startsWith("GV"))
+  check("and it is inside ReplayCompatibleGameVersions",
+    r.doc.gameVersion in ReplayCompatibleGameVersions)
+  check("as is every version this build claims to keep rendering",
+    ReplayCompatibleGameVersions.len >= 8 and
+    "GV04" in ReplayCompatibleGameVersions)
   checkEq("the year", r.doc.year, "bc22")
   checkEq("the seed", r.doc.seed, 2029)
   checkEq("both seats", r.doc.seats.len, 2)

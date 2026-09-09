@@ -13,8 +13,8 @@ hand-edited constant fails the build.
         --out src/battlecode/years/bc26/constants.nim
     tools/gen_year_constants.py --engine ... --check   # diff, exit 1 on drift
 
-`--year bc20`, `--year bc21`, `--year bc22`, `--year bc23`, `--year bc24` and
-`--year bc25` do the same job
+`--year bc20`, `--year bc21`, `--year bc22`, `--year bc23`, `--year bc24`,
+`--year bc25` and `--year bc16` do the same job
 for the other year modules against a checkout of the matching engine at its
 pinned commit. bc20 and bc21 read `common/GameConstants.java` and
 `common/RobotType.java`; bc24 reads `common/GameConstants.java`,
@@ -22,7 +22,9 @@ pinned commit. bc20 and bc21 read `common/GameConstants.java` and
 bc25 reads `common/GameConstants.java` and `common/UnitType.java`; bc23 reads
 `common/GameConstants.java`, `common/RobotType.java` and `common/Anchor.java`;
 bc22 reads `common/GameConstants.java`, `common/RobotType.java` and
-`common/AnomalyType.java`:
+`common/AnomalyType.java`; bc16 reads `common/GameConstants.java` and
+`common/RobotType.java` (whose constants are INTERFACE fields, with no
+`public static final` modifiers, so it needs its own regex):
 
     tools/gen_year_constants.py --year bc20 --engine /path/to/battlecode20 \
         --out src/battlecode/years/bc20/constants.nim
@@ -72,6 +74,10 @@ def nim_literal(java_type: str, raw: str) -> tuple[str, str]:
         "Integer.MAX_VALUE/2": "1073741823",
         # 2024's MAX_SHARED_ARRAY_VALUE, written as a shift.
         "(1<<16)-1": "65535",
+        # 2016's RUBBLE_FROM_TURRET_FACTOR, written as a division. The
+        # quotient is the double 1/3 rounds to, and `145 * (1.0/3.0) =
+        # 48.333333333333336` is a named parity vector because of it.
+        "1.0/3.0": "0.3333333333333333",
     }
     text = JAVA_EXPRESSIONS.get(text.replace(" ", ""), text)
     if re.fullmatch(r"[-+0-9._eE]+[LlFfDd]?", text):
@@ -1002,11 +1008,201 @@ def render_bc22(engine: pathlib.Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+# ---------------------------------------------------------------------------
+#  bc16 -- Battlecode 2016 "Zombie Invasion"
+# ---------------------------------------------------------------------------
+
+BC16_COMMIT = "11a0b09f26a70da19f33a61ebec4ceaf6e161aa3"
+
+# 2016's GameConstants is an INTERFACE, so its fields carry no
+# `public static final` -- they are bare `int MAP_MIN_HEIGHT = 30;`
+# declarations and CONST_RE (which requires the modifiers) sees none of them.
+BC16_CONST_RE = re.compile(
+    r"^\s*(int|long|float|double|String)\s+([A-Z0-9_]+)\s*=\s*([^;]+);",
+    re.M)
+
+BC16_ROBOT_RE = re.compile(
+    r"^\s*(ZOMBIEDEN|STANDARDZOMBIE|RANGEDZOMBIE|FASTZOMBIE|BIGZOMBIE|"
+    r"ARCHON|SCOUT|SOLDIER|GUARD|VIPER|TURRET|TTM)\s*\((.*?)\)\s*[,;]\s*$",
+    re.M)
+
+BC16_OUTBREAK_RE = re.compile(r"case\s+(\d+):\s*return\s+([0-9.]+);")
+
+BC16_DECISION_OPS_WIDE = 2000
+BC16_DECISION_OPS_STANDARD = 1000
+    # One tenth of `RobotType.bytecodeLimit` -- 20 000 for an ARCHON and a
+    # SCOUT, 10 000 for everything else -- the convention bc20..bc26 use.
+    # docs/RULES-BC16.md §Divergences items 1 and 2 carry the argument: the
+    # delay decay is pinned to 1.0 precisely so that no RULE reads the budget.
+
+BC16_TYPE_ORDINALS = {
+    "ZOMBIEDEN": 0, "STANDARDZOMBIE": 1, "RANGEDZOMBIE": 2, "FASTZOMBIE": 3,
+    "BIGZOMBIE": 4, "ARCHON": 5, "SCOUT": 6, "SOLDIER": 7, "GUARD": 8,
+    "VIPER": 9, "TURRET": 10, "TTM": 11,
+}
+
+
+def bc16_num(text: str) -> str:
+    """A `RobotType` constructor argument as a Nim literal.
+
+    Every numeric column in the 2016 table is either an `int` or a `double`;
+    THERE IS NO FLOAT32 ANYWHERE IN THE 2016 RULE SET, so no widening is
+    needed here (unlike bc21/bc22/bc24/bc25) and a value like `2.5` is exactly
+    the double the JVM holds.
+    """
+    t = text.strip()
+    if t in ("true", "false"):
+        return t
+    if t == "null":
+        return "-1"
+    if t in BC16_TYPE_ORDINALS:
+        return str(BC16_TYPE_ORDINALS[t])
+    return t
+
+
+def render_bc16(engine: pathlib.Path) -> str:
+    common = engine / "src/main/battlecode/common"
+    src = re.sub(r"//[^\n]*", "", (common / "GameConstants.java").read_text())
+    consts = []
+    for java_type, name, raw in BC16_CONST_RE.findall(src):
+        nim_type, literal = nim_literal(java_type, raw)
+        consts.append((name, nim_type, literal))
+    if not consts:
+        raise SystemExit("::error::read no constants from the 2016 "
+                         "GameConstants interface")
+
+    robot_src = (common / "RobotType.java").read_text()
+    robots = [(n, [v.strip() for v in a.split(",")])
+              for n, a in BC16_ROBOT_RE.findall(robot_src)]
+    if len(robots) != 12:
+        raise SystemExit(
+            f"::error::expected 12 RobotType entries, saw {len(robots)}")
+    for name, a in robots:
+        if len(a) != 17:
+            raise SystemExit(
+                f"::error::RobotType.{name} has {len(a)} arguments, "
+                "expected 17")
+
+    outbreak = BC16_OUTBREAK_RE.findall(robot_src)
+    if len(outbreak) < 10:
+        raise SystemExit("::error::read fewer than ten outbreak levels from "
+                         "RobotType.getOutbreakMultiplier")
+    ladder = {int(level): value for level, value in outbreak[:10]}
+
+    lines: list[str] = []
+    add = lines.append
+    add('## Battlecode 2016 "Zombie Invasion" gameplay constants '
+        "-- GENERATED, do not edit.")
+    add("##")
+    add(f"## Source: github.com/battlecode/battlecode-server-2016 at commit "
+        f"`{BC16_COMMIT}`,")
+    add("## files `common/GameConstants.java` and `common/RobotType.java`,")
+    add("## read by `tools/gen_year_constants.py --year bc16`. The `test` job")
+    add("## of `.github/workflows/ci.yml` re-runs that generator with")
+    add("## `--check`, which byte-diffs this file, so an edit here fails the")
+    add("## build instead of quietly changing the rules under a `GameVersion`")
+    add("## that no longer describes them.")
+    add("##")
+    add("## THE OFFICIAL 2016 SPEC IS LOST (dead S3, dead battlecode.org, no")
+    add("## Wayback copy) and there is NO `SPEC_VERSION` field in this year's")
+    add("## `GameConstants` -- so the engine source IS the spec, this table is")
+    add("## its transcription, and the oracle jar is pinned by sha256 AND size")
+    add("## in `tools/oracle/bc16/jar.lock` instead of by a version string.")
+    add("##")
+    add("## 2016 IS A FLOAT64 YEAR: health, damage, both delay counters,")
+    add("## rubble, parts and every multiplier are Java `double`, and there is")
+    add("## NO float32 anywhere in the rule set. IEEE-754 binary64 add,")
+    add("## subtract, multiply, divide and compare are exactly specified and")
+    add("## identical on x86-64 SSE2 and on wasm32, so reproducing each")
+    add("## expression in the engine's own order is bit-exact by construction.")
+    add("## The two non-algebraic functions on gameplay paths --")
+    add("## `Math.pow(x, 1.5)` in `decrementDelays` and `(int) Math.sqrt(r2)`")
+    add("## in the radius scans -- both have finite domains and are TABLED in")
+    add("## `data/bc16/tables.json`, so the runtime path has no")
+    add("## transcendental at all.")
+    add("")
+    add(f'const EngineCommit* = "{BC16_COMMIT}"')
+    add('const OracleJarVersion* = "2016.0.2.2"')
+    add("")
+    add("type")
+    add("  RobotType* = enum")
+    add("    ## `common/RobotType.java` in `values()` order. THE ORDINAL IS")
+    add("    ## LOAD-BEARING: `ZombieCount.compareTo` sorts by it and the den's")
+    add("    ## spawn priority reads it (the no-`break` loop takes the LAST")
+    add("    ## non-zero type, so the priority is BIGZOMBIE, FASTZOMBIE,")
+    add("    ## RANGEDZOMBIE, STANDARDZOMBIE).")
+    for name, _ in robots:
+        add(f'    rt{camel(name)} = "{name}"')
+    add("")
+    add("  RobotSpec* = object")
+    add("    ## `common/RobotType.java`'s seventeen constructor arguments, in")
+    add("    ## the file's own order. `spawnSource` and `turnsInto` are the")
+    add("    ## ORDINAL of the named type, or -1 for the engine's `null`.")
+    add("    isBuilding*, isZombie*: bool")
+    add("    infectTurns*, spawnSource*: int")
+    add("    partCost*, buildTurns*: int")
+    add("    maxHealth*, attackPower*: float64")
+    add("    attackRadiusSquared*: int")
+    add("    movementDelay*, attackDelay*, cooldownDelay*: float64")
+    add("    sensorRadiusSquared*, bytecodeLimit*, strengthWeight*: int")
+    add("    turnsInto*: int")
+    add("    ignoresRubble*: bool")
+    add("")
+    add("const")
+    for name, nim_type, literal in consts:
+        add(f"  {camel(name)}*: {nim_type} = {literal}")
+    add("")
+    add(f"  DecisionOpsWide*: int = {BC16_DECISION_OPS_WIDE}")
+    add(f"  DecisionOpsStandard*: int = {BC16_DECISION_OPS_STANDARD}")
+    add("    ## Replace `RobotType.bytecodeLimit` outside the JVM: 2000 for an")
+    add("    ## ARCHON and a SCOUT, 1000 for everything else, 0 for a robot")
+    add("    ## with `!isActive()`. No mid-turn resumption, no mid-primitive")
+    add("    ## cut, enforced by the sim rather than by the bot.")
+    add("")
+    add("  RobotSpecs*: array[RobotType, RobotSpec] = [")
+    for name, a in robots:
+        add(f"    rt{camel(name)}: RobotSpec(isBuilding: {bc16_num(a[0])}, "
+            f"isZombie: {bc16_num(a[1])},")
+        add(f"      infectTurns: {bc16_num(a[2])}, "
+            f"spawnSource: {bc16_num(a[3])},")
+        add(f"      partCost: {bc16_num(a[4])}, "
+            f"buildTurns: {bc16_num(a[5])},")
+        add(f"      maxHealth: {bc16_num(a[6])}, "
+            f"attackPower: {bc16_num(a[7])},")
+        add(f"      attackRadiusSquared: {bc16_num(a[8])},")
+        add(f"      movementDelay: {bc16_num(a[9])}, "
+            f"attackDelay: {bc16_num(a[10])},")
+        add(f"      cooldownDelay: {bc16_num(a[11])},")
+        add(f"      sensorRadiusSquared: {bc16_num(a[12])}, "
+            f"bytecodeLimit: {bc16_num(a[13])},")
+        add(f"      strengthWeight: {bc16_num(a[14])}, "
+            f"turnsInto: {bc16_num(a[15])},")
+        add(f"      ignoresRubble: {bc16_num(a[16])}),")
+    add("  ]")
+    add("")
+    add("  OutbreakMultipliers*: array[13, float64] = [")
+    add("    ## `RobotType.getOutbreakMultiplier(round)`'s own switch for")
+    add("    ## levels 0..9, then its `default: 3.00 + (level - 9)` arm for")
+    add("    ## 10..12. `level = round / OUTBREAK_TIMER` (integer), applied to")
+    add("    ## a ZOMBIE's maxHealth and attackPower AT THE MOMENT IT SPAWNS")
+    add("    ## and never afterwards; a player unit never scales. A")
+    add("    ## 3000-round game's last round is 2999, so level 9 is the last")
+    add("    ## one a spawn actually reaches -- 10..12 are tabled anyway.")
+    for level in range(13):
+        value = ladder.get(level)
+        if value is None:
+            value = f"{3.0 + (level - 9):.2f}"
+        add(f"    {float(value)!r},")
+    add("  ]")
+    add("")
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--year", default="bc26",
                     choices=["bc26", "bc20", "bc21", "bc22", "bc23", "bc24",
-                             "bc25"])
+                             "bc25", "bc16"])
     ap.add_argument("--engine", required=True, type=pathlib.Path)
     ap.add_argument("--out", type=pathlib.Path, default=None)
     ap.add_argument("--check", action="store_true",
@@ -1018,12 +1214,13 @@ def main() -> int:
     label = {"bc26": TAG, "bc20": BC20_COMMIT, "bc21": BC21_COMMIT,
              "bc22": BC22_COMMIT,
              "bc23": BC23_COMMIT, "bc24": BC24_COMMIT,
-             "bc25": BC25_COMMIT}[args.year]
+             "bc25": BC25_COMMIT, "bc16": BC16_COMMIT}[args.year]
     text = {"bc26": render, "bc20": render_bc20,
             "bc21": render_bc21, "bc22": render_bc22,
             "bc23": render_bc23,
             "bc24": render_bc24,
-            "bc25": render_bc25}[args.year](args.engine)
+            "bc25": render_bc25,
+            "bc16": render_bc16}[args.year](args.engine)
     if args.check:
         current = out.read_text() if out.exists() else ""
         if current != text:

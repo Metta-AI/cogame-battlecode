@@ -218,9 +218,19 @@ proc collectGameEvents(
                     "type": Bc22AnomalyNames[max(0, min(3, e.b))],
                     "how": e.s, "saved": e.c}))
     of "archon_lost":
-      events.add(ev("archon_lost", game = gameIndex, round = e.round,
-        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
-                    "archons_left": e.b, "gold_dropped": e.c}))
+      ## bc22 carries `gold_dropped`; bc16 carries a `cause`
+      ## (`zombie` | `enemy` | `infection` | `den_proximity` | `disintegrate`),
+      ## which is the field a bc16 spectator actually needs. Both ride the
+      ## same event kind and THE YEAR ON THE REPLAY HEADER SAYS WHICH FIELD TO
+      ## READ — the same shape `rout` and `duel` already use.
+      if plan.year == "bc16":
+        events.add(ev("archon_lost", game = gameIndex, round = e.round,
+          fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                      "archons_left": e.b, "cause": e.s}))
+      else:
+        events.add(ev("archon_lost", game = gameIndex, round = e.round,
+          fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                      "archons_left": e.b, "gold_dropped": e.c}))
     of "archon_relocated":
       ## `e.s` carries `<rubbleBefore>:<rubbleAfter>`.
       let parts = e.s.split(':')
@@ -334,6 +344,7 @@ proc collectGameEvents(
         if plan.year == "bc25": Bc25ActionNames[e.b]
         elif plan.year == "bc23": Bc23ActionNames[e.b]
         elif plan.year == "bc22": Bc22ActionNames[e.b]
+        elif plan.year == "bc16": Bc16ActionNames[e.b]
         else: Bc24ActionNames[e.b]
       events.add(ev("first_action", game = gameIndex, round = e.c,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
@@ -367,11 +378,21 @@ proc collectGameEvents(
       events.add(ev("mastery", game = gameIndex, round = e.round,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                     "skill": Bc24SkillNames[e.b], "level": e.c}))
+    of "unit_milestone":
+      ## bc16 ONLY. The first of each of the five buildable types per side, so
+      ## a spectator sees "Clan Ash commissions its first TURRET" rather than
+      ## a census that moved.
+      events.add(ev("unit_milestone", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "unit": Bc16UnitNames[max(0, min(11, e.b))],
+                    "total": e.c}))
     of "rout":
       ## bc24 spells the count `jailed` (its ducks go to jail); bc25 spells it
       ## `lost` (its robots die). Both ride the same event kind and the year
-      ## on the replay header says which field to read.
-      if plan.year == "bc25" or plan.year == "bc23" or plan.year == "bc22":
+      ## on the replay header says which field to read. bc16 spells it `lost`
+      ## too, and its threshold is its own (five robots in one round).
+      if plan.year == "bc25" or plan.year == "bc23" or plan.year == "bc22" or
+          plan.year == "bc16":
         events.add(ev("rout", game = gameIndex, round = e.round,
           fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                       "lost": e.b}))
@@ -436,6 +457,73 @@ proc collectGameEvents(
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.b),
                     "victim_alias": victimAlias,
                     "victim_unit": Bc20UnitNames[e.c]}))
+
+    # --- bc16 -------------------------------------------------------------
+    of "zombie_wave":
+      ## `e.s` carries `<standard>:<ranged>:<fast>:<big>` — the four counts in
+      ## RobotType ordinal order, which is also `ZombieCount.compareTo`'s.
+      var counts = [0, 0, 0, 0]
+      let parts = e.s.split(':')
+      for i in 0 .. min(3, parts.len - 1): counts[i] = intOrZero(parts[i])
+      events.add(ev("zombie_wave", game = gameIndex, round = e.round,
+        fields = %*{"counts": [counts[0], counts[1], counts[2], counts[3]],
+                    "total": e.a, "dens_spawning": e.b,
+                    "outbreak_level": e.c}))
+    of "outbreak":
+      events.add(ev("outbreak", game = gameIndex, round = e.round,
+        fields = %*{"level": e.a, "multiplier_permille": e.b}))
+    of "den_destroyed":
+      ## `e.s` carries `<bounty>:<queueDeleted>`.
+      let parts = e.s.split(':')
+      events.add(ev("den_destroyed", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": e.b div 100, "y": e.b mod 100,
+                    "dens_left": e.c,
+                    "bounty": (if parts.len > 0: intOrZero(parts[0]) else: 0),
+                    "queue_deleted": (if parts.len > 1: intOrZero(parts[1])
+                                      else: 0)}))
+    of "neutral_activated":
+      events.add(ev("neutral_activated", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "unit": Bc16UnitNames[max(0, min(11, e.b))],
+                    "x": e.c div 100, "y": e.c mod 100,
+                    "total": intOrZero(e.s)}))
+    of "infection":
+      events.add(ev("infection", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "victim_unit": Bc16UnitNames[max(0, min(11, e.b))],
+                    "source": (if e.c == 0: "viper" else: "zombie"),
+                    "turns": intOrZero(e.s)}))
+    of "turned":
+      ## `e.s` carries `<becameName>:<outbreakLevel>`.
+      let parts = e.s.split(':')
+      events.add(ev("turned", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "unit": Bc16UnitNames[max(0, min(11, e.b))],
+                    "became": (if parts.len > 0: parts[0] else: ""),
+                    "x": e.c div 100, "y": e.c mod 100,
+                    "outbreak_level": (if parts.len > 1: intOrZero(parts[1])
+                                       else: 0)}))
+    of "tiebreak":
+      ## `e.b` packs the two archon counts, `e.c` the two parts net worths and
+      ## `e.s` is `<archonHealthTenthsA>:<...B>`, all in TEAM order.
+      let aSlot = plan.sideAslots[gameIndex]
+      var archons = [0, 0]
+      archons[aSlot] = e.b div 100
+      archons[1 - aSlot] = e.b mod 100
+      var worth = [0, 0]
+      worth[aSlot] = e.c div 100000
+      worth[1 - aSlot] = e.c mod 100000
+      var hp = [0, 0]
+      let parts = e.s.split(':')
+      if parts.len > 1:
+        hp[aSlot] = intOrZero(parts[0])
+        hp[1 - aSlot] = intOrZero(parts[1])
+      events.add(ev("tiebreak", game = gameIndex, round = e.round,
+        fields = %*{"rung": Bc16RungNames[max(0, min(5, e.a))],
+                    "archons": [archons[0], archons[1]],
+                    "archon_health_tenths": [hp[0], hp[1]],
+                    "parts_worth": [worth[0], worth[1]]}))
     else: discard
 
 proc bc20HqEvents(outcome: GameOutcome, gameIndex: int,
@@ -529,7 +617,12 @@ func winBonusFor*(year: string): float =
   ## `points` can legitimately favour the LOSER on a narrow archon margin
   ## (docs/RULES-BC22.md, Scoring), so only a bonus that dominates the whole
   ## [0, 100] range keeps `results.scores` ordered with `results.wins`.
-  if yearIdOf(year) in {yBc25, yBc23, yBc22}: 200.0 else: 100.0
+  ## bc16 pays 200 for EXACTLY bc22's reason -- it is the other archon year,
+  ## its 64/24/12 weights read the same ladder, and `4/7 - 3/7 = 0.143` of 64
+  ## is 9.1 points against 36 available below, so its `points` can favour the
+  ## loser too (docs/RULES-BC16.md, Scoring; `tests/test_bc16_scoring.nim`
+  ## asserts that case explicitly rather than leaving it to be found).
+  if yearIdOf(year) in {yBc25, yBc23, yBc22, yBc16}: 200.0 else: 100.0
 
 proc scoresFor*(games: seq[GameOutcome],
                 year = "bc26"): array[2, float] =

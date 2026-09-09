@@ -14,6 +14,7 @@ year**, chosen by `game_config.year`:
 | `bc25` | 2025 "Chromatic Conflict" | a paint war: the score IS the colour of the map, towers are painted into existence on ruins, and a resource pattern pays every mining tower you own if it survives fifty rounds |
 | `bc23` | 2023 "Tempest" | carriers mine adamantium and mana from sky wells and haul it home at a quarter speed when full; launchers are the only unit that deals real damage and they shoot through the clouds that blind everyone; pour 600 kg of the wrong resource into a well and it becomes elixir; win by ferrying reality anchors onto 75 % of the sky islands |
 | `bc22` | 2022 "Mutation" | archons build, repair and can get up and walk; every cooldown is scaled by the rubble under your feet; a laboratory is the only thing in the game that makes gold, and its price is how lonely it is; and every map ships a **public schedule** of four world-wide anomalies that eat metal, cull whoever clumped hardest, hollow out turrets and shuffle the rubble map |
+| `bc16` | 2016 "Zombie Invasion" | a **third team** neither cog controls: dens on a published schedule pour zombies at whoever is nearest, they get stronger every 300 rounds, a bite turns your own robot against you when it dies, and losing your last archon loses the game instantly |
 
 ---
 
@@ -214,6 +215,7 @@ bit-exact, with an empty divergence ledger.**
 | `src/battlecode/years/bc25/` | the 2025 rule set: `world.nim`, `units.nim`, `paint.nim`, `patterns.nim`, `towers.nim`, `comms.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/bc23/` | the 2023 rule set: `world.nim`, `units.nim`, `tempo.nim`, `wells.nim`, `islands.nim`, `currents.nim`, `comms.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/bc22/` | the 2022 rule set: `world.nim`, `units.nim`, `trove.nim` (the engine's own hash-table iteration order, because a rule reads it), `buildings.nim`, `economy.nim`, `anomaly.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
+| `src/battlecode/years/bc16/` | the 2016 rule set: `world.nim`, `units.nim`, `delays.nim` (the core/weapon delay pair that is this year's whole tempo), `health.nim`, `economy.nim`, `signals.nim`, `zombies.nim` (the horde's AI, which is the *sim* in this year and not a chassis), `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/{registry,dispatch}.nim` | the year boundary: the ONE place the year-neutral machinery meets a year module |
 | `src/battlecode/rng.nim` | `java.util.Random` and `IDGenerator`, bit-exact |
 | `src/battlecode/{sheet,decide,llm,baselines}.nim` | the doctrine schema, the one sealed parallel batch, the provider ladder, the scripted table |
@@ -239,6 +241,10 @@ bit-exact, with an empty divergence ledger.**
   knobs, the DecisionOps budget that replaces bytecode metering, and its own
   §Divergences list — including why the engine's trove iteration order is
   ported rather than replaced.
+* [`docs/RULES-BC16.md`](docs/RULES-BC16.md) — the 2016 rule set, its eleven
+  knobs, the DecisionOps budget that replaces bytecode metering, and its own
+  §Divergences list — including why the official 2016 specification is lost
+  and the engine source *is* the spec.
 * [`docs/PARITY.md`](docs/PARITY.md) — the Java oracles, tier by tier, and
   every accepted divergence with its root cause.
 * [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — `cogame.battlecode.v1`: what a seat
@@ -260,5 +266,13 @@ branch `final`). The 2020 rule set, constants, maps and sprite art derive from
 strategy of
 [`StoneT2000/Battlecode2020`](https://github.com/StoneT2000/Battlecode2020)
 (AGPL-3.0). GPLv3 and AGPLv3 are explicitly compatible for combined works
-(AGPLv3 §13). See [`NOTICE`](NOTICE). **No upstream Java source, and no JVM,
+(AGPLv3 §13). The 2016 rule set, constants, maps and sprite art derive from
+[`battlecode/battlecode-server-2016`](https://github.com/battlecode/battlecode-server-2016)
+(**GPL-3.0**, commit `11a0b09f`) and
+[`battlecode/battlecode-client-2016`](https://github.com/battlecode/battlecode-client-2016)
+(**GPL-3.0**, commit `317e1f3f`). **The official 2016 specification is lost** —
+the spec bucket and `battlecode.org` are both dead and there is no Wayback copy
+— so the engine source is the spec, and every rule in
+`src/battlecode/years/bc16/` carries a `file:line` citation into that pinned
+checkout. See [`NOTICE`](NOTICE). **No upstream Java source, and no JVM,
 runs in this image.**

@@ -536,3 +536,65 @@ how the reply was obtained (`llm`, `fallback`, `scripted`), how many fields
 were defaulted, how many clamped and how many were unknown. It is in the bc22
 manifest's `required` list and in `tools/ci/docker_smoke.sh`'s `CLOSED_KEYS`,
 so a year that stops emitting it fails the smoke.
+
+## bc16
+
+`game_config.year = "bc16"` selects Battlecode 2016 "Zombie Invasion". The
+protocol id is **unchanged** (`cogame.battlecode.v1`): the wire shape is
+identical and only the year-dependent *payload* differs, so every existing
+bc20, bc21, bc22, bc23, bc24, bc25 and bc26 consumer keeps working without
+re-registering. The `game_version` in the envelope is **`GV11`**; `GV10` and
+every earlier value stay in `ReplayCompatibleGameVersions`, so an older replay
+still loads.
+
+### The bc16 observation
+
+One sealed one-shot brief per seat, recorded verbatim in the replay. There is
+**no per-round observation of any kind**: one doctrine, then the invasion.
+
+On top of the year-neutral envelope (`protocol`, `game_version`, `year`,
+`slot`, `alias`, `opponent_alias`, `team`, `seed`, `games`, `budget`) a bc16
+brief carries:
+
+| key | what it says |
+|---|---|
+| `games[].you_are` / `your_archons` / `enemy_archons` | which side this seat plays and both factions' archon spawns. They are PUBLIC: every map is symmetric and the engine's own map file puts them there |
+| `games[].symmetry` | `rotational`, `horizontal` or `vertical` (20, 1 and 1 of the 22 maps respectively) — the engine's own `GameMap.getSymmetry()`, computed at build time and cross-checked against the JVM in `parity-oracle-bc16` |
+| `games[].rounds_are_zero_based` | **`true`.** 2016 counts rounds from 0 and the tiebreak fires at the end of round 2999, not 3000. Stated in as many words because every other year in this repo counts from 1 |
+| `games[].start_separation` | the shortest Euclidean distance between an A archon and a B one |
+| `games[].terrain` | `rubble_mean`, `rubble_max`, `impassable_squares`, `total_squares`, `squares_over_50_rubble_pct`, and the note that rubble ≥ 100 is impassable *except* to SCOUT, FASTZOMBIE and BIGZOMBIE, and rubble ≥ 50 doubles every delay charge |
+| `games[].parts` | the parts squares, their total, the richest one, the nearest to this seat, and the note that **only an ARCHON collects**, whole-square, and it never regenerates |
+| `games[].dens` | `count`, `per_side`, `health_each` (2000), `bounty_each` (200), every den's location, and `zombies_queued_each_over_the_game` |
+| `games[].zombie_schedule` | **the full public schedule, round by round and type by type.** `RobotController.getZombieSpawnSchedule()` is public to every robot at all times in the real game, so it is public here |
+| `games[].schedule_note` | that those are WHOLE-MAP counts split as evenly as possible among the dens, that a den spawns at most 8 per attempt and 16 per round, and that a den with a stuck queue damages every adjacent non-zombie for 10 first |
+| `games[].neutrals` | the neutral total, the roster by type, the nearest one, and that an ARCHON activates within r² ≤ 2 for **zero parts** and 2 core delay — and that a neutral ARCHON is a whole extra tiebreak rung |
+| `games[].tiebreak_round` | 2999 |
+| `economy` | 300 parts at round 0, `max(0, 2 − 0.01 × your live robot count)` per round — **zero income at 200 robots** — the 200-parts den bounty, and that map parts are archon-collected only |
+| `units` | all seven player types with exact parts cost, build turns, health, attack, radii, both delays, and **`turns_into`**: what each becomes if it dies infected. The ARCHON entry states the free once-a-turn 1 hp repair within r² ≤ 24 and that it is FROZEN for the whole of a unit's build |
+| `zombies` | the HORDE as a third team that never wins and never scores; that **every zombie, every turn, walks at the nearest player robot of EITHER team and sees the whole map**; all four zombie types; the ten-step outbreak multiplier ladder every 300 rounds; and the den's spawn ring |
+| `infection` | 10 turns and no damage from a zombie bite, 20 turns at 2 damage from a VIPER, and the conversion rule: an infected robot leaves **no rubble**, stands back up as a zombie of its own `turns_into` at the current outbreak multiplier, and hunts whoever is nearest |
+| `rubble` | impassable at 100, doubles at 50, a corpse deposits its own **max health** (a third of that if a TURRET landed the killing blow), and `max(0, 0.95r − 10)` per clear |
+| `signals` | 5 basic and 20 message signals a turn, MESSAGE senders are **ARCHON and SCOUT only**, 0.05 delay on both counters inside twice your sight radius plus 0.03 per unit beyond it, a 1000-deep queue — and that **there is no shared array in 2016 and every signal is heard by the enemy too** |
+| `win` | destroy the enemy's last ARCHON, then the four-rung round-2999 ladder, and the note that **there is no elimination for losing your army** |
+| `sheet_schema` | the eleven knobs, their values, ranges and defaults, generated from `knobs.nim` |
+| `scoring` | the 64/24/12 weights, the **200**-per-game win bonus, and the note that the league ranks by ELO |
+
+**Hidden**, always: the opponent's doctrine, sheet, notes and motto (sealed and
+simultaneous — never sent, in either direction, at any time); the opponent's
+real player name; every in-match state; the other seat's fallback status.
+
+### The bc16 reply
+
+The same envelope every year uses — `{"sheet": {...}, "notes": "...",
+"motto": "..."}` — with the eleven knobs of `docs/RULES-BC16.md`. Unknown key,
+wrong type or out-of-range value takes that field's default and is recorded;
+the four INTEGER knobs (`turret_count`, `guard_ratio`, `den_clear_round`,
+`retreat_hp`) **clamp** to their range instead, so "as many as possible" still
+means something. A sheet can never be rejected. **There is no `chassis` key**:
+a submitted one is recorded in `sheet_unknown_fields` and never honoured.
+
+bc16 joins bc22 as the second — and only other — year that also records an
+**absent** known key in `sheet_defaults_applied`. Doing that year-neutrally
+would change what a bc20/bc21/bc23/bc24/bc25/bc26 episode records in that
+array, so it is per-year by construction and `tests/test_sheet.nim` asserts
+both halves.

@@ -35,6 +35,12 @@ from years/bc23/constants as c23 import nil
 from years/bc23/rules as r23 import nil
 from years/bc22/world as w22 import nil
 from years/bc22/units as u22 import nil
+from years/bc16/world as w16 import nil
+from years/bc16/rules as r16 import nil
+from years/bc16/constants as c16 import nil
+from years/bc16/units as u16 import nil
+from years/bc16/economy as e16 import nil
+from years/bc16/health as h16 import nil
 from years/bc22/anomaly as a22 import nil
 from years/bc22/economy as e22 import nil
 from years/bc22/constants as c22 import nil
@@ -137,6 +143,11 @@ proc econFor(w: World, sideAslot: int): JsonNode =
       "dirt": w.teamInfo.dirtPlaced[t]
     })
 
+proc permille(value: int): string =
+  ## bc16's outbreak multiplier travels as an integer per-mille (1000, 1100,
+  ## … 3000) so the replay stays float-free. Rendered as `1.1`, `3.0`.
+  $(value div 1000) & "." & $((value mod 1000) div 100)
+
 proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNode =
   ## Every scrubber beat, with the ABSOLUTE frame it lands on. The game block
   ## turns each of these into a labelled, clickable `<button>`.
@@ -148,6 +159,7 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
   let isBc25 = doc.year == "bc25"
   let isBc23 = doc.year == "bc23"
   let isBc22 = doc.year == "bc22"
+  let isBc16 = doc.year == "bc16"
   ## The bc23-only kinds below (`anchor_built`, `island_captured`,
   ## `island_lost`, `conquest_progress`, `well_transformed`, `well_upgraded`,
   ## `first_elixir_unit`, `boost_field`, `destabilize_hit`, `duel`) need no
@@ -176,14 +188,15 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       of "drone_water_drop": "drop"
       of "hq_buried": "bury"
       of "hq_drowned": "drown"
-      of "first_action": (if isBc25 or isBc23 or isBc22: "build" else: "")
+      of "first_action": (if isBc25 or isBc23 or isBc22 or isBc16: "build"
+                          else: "")
       of "tower_built": "tower"
       of "tower_upgraded": "upgrade"
       of "tower_lost": "siege"
       of "srp_completed", "srp_active", "srp_broken": "srp"
       of "coverage": "coverage"
       of "starved": "starve"
-      of "rout": (if isBc25 or isBc23 or isBc22: "rout" else: "")
+      of "rout": (if isBc25 or isBc23 or isBc22 or isBc16: "rout" else: "")
       of "anchor_built": "anchor"
       of "island_captured", "island_lost": "island"
       of "conquest_progress": "conquest"
@@ -199,6 +212,14 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       of "anomaly_struck": "anomaly"
       of "anomaly_dodged": "dodge"
       of "archon_lost", "archon_relocated": "archon"
+      of "unit_milestone": "build"
+      of "zombie_wave": "wave"
+      of "outbreak": "outbreak"
+      of "den_destroyed": "den"
+      of "neutral_activated": "activate"
+      of "infection": "infect"
+      of "turned": "turned"
+      of "tiebreak": "end"
       of "singularity": "end"
       of "doctrine_received", "doctrine_fallback": "doctrine"
       else: ""
@@ -340,6 +361,51 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
         label = "LAUNCHER DUEL — " & $e.fields{"lost"}[0].getInt() &
           " lost to " & $e.fields{"lost"}[1].getInt() & ", game " &
           $(e.game + 1) & ", round " & $e.round
+    of "unit_milestone":
+      label = e.fields{"alias"}.getStr() & " commissions its first " &
+        e.fields{"unit"}.getStr().replace("_", " ") & " — game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "zombie_wave":
+      label = "WAVE — " & $e.fields{"total"}.getInt() & " zombies from " &
+        $e.fields{"dens_spawning"}.getInt() & " dens at outbreak level " &
+        $e.fields{"outbreak_level"}.getInt() & ", game " & $(e.game + 1) &
+        ", round " & $e.round
+    of "outbreak":
+      label = "OUTBREAK " & $e.fields{"level"}.getInt() &
+        " — every new zombie is " &
+        permille(e.fields{"multiplier_permille"}.getInt()) &
+        "x stronger from here, game " & $(e.game + 1) & ", round " & $e.round
+    of "den_destroyed":
+      label = e.fields{"alias"}.getStr() & " breaks the den at " &
+        $e.fields{"x"}.getInt() & "," & $e.fields{"y"}.getInt() & " — " &
+        $e.fields{"bounty"}.getInt() & " parts and " &
+        $e.fields{"queue_deleted"}.getInt() & " zombies deleted, game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "neutral_activated":
+      label = e.fields{"alias"}.getStr() & " activates a neutral " &
+        e.fields{"unit"}.getStr().toUpperAscii() & " at " &
+        $e.fields{"x"}.getInt() & "," & $e.fields{"y"}.getInt() &
+        " — game " & $(e.game + 1) & ", round " & $e.round
+    of "infection":
+      label = e.fields{"alias"}.getStr() & "'s " &
+        e.fields{"victim_unit"}.getStr().toUpperAscii() & " is infected by a " &
+        e.fields{"source"}.getStr() & " for " &
+        $e.fields{"turns"}.getInt() & " turns, game " & $(e.game + 1) &
+        ", round " & $e.round
+    of "turned":
+      label = e.fields{"alias"}.getStr().toUpperAscii() & "'S " &
+        e.fields{"unit"}.getStr().toUpperAscii() & " TURNS — a " &
+        e.fields{"became"}.getStr().toUpperAscii() & " at " &
+        $e.fields{"x"}.getInt() & "," & $e.fields{"y"}.getInt() &
+        ", and it is hunting whoever is nearest, game " & $(e.game + 1) &
+        ", round " & $e.round
+    of "tiebreak":
+      label = "ROUND " & $e.round & " — " &
+        e.fields{"rung"}.getStr().replace("_", " ") & " decides it: archons " &
+        $e.fields{"archons"}[0].getInt() & " to " &
+        $e.fields{"archons"}[1].getInt() & ", archon health " &
+        $e.fields{"archon_health_tenths"}[0].getInt() & " to " &
+        $e.fields{"archon_health_tenths"}[1].getInt()
     of "lab_built":
       label = e.fields{"alias"}.getStr() &
         (if e.fields{"finished"}.getBool(): " finishes" else: " places") &
@@ -380,9 +446,21 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
         e.fields{"type"}.getStr().toUpperAscii() & " — game " &
         $(e.game + 1) & ", round " & $e.round
     of "archon_lost":
-      label = "ARCHON DOWN — " & e.fields{"alias"}.getStr() & " has " &
-        $e.fields{"archons_left"}.getInt() & " left, and " &
-        $e.fields{"gold_dropped"}.getInt() & " gold is on the ground"
+      ## bc22 AND bc16 both emit `archon_lost`, with DIFFERENT FIELDS —
+      ## bc22 carries `gold_dropped`, bc16 carries the `cause` — so the
+      ## label switch tests the year here (and only here: the beat KIND is
+      ## `archon` in both, and the CSS that colours it is scoped per year).
+      if isBc16:
+        label = "ARCHON DOWN — " & e.fields{"alias"}.getStr() & " has " &
+          $e.fields{"archons_left"}.getInt() & " left, killed by " &
+          (if e.fields{"cause"}.getStr().len > 0:
+             e.fields{"cause"}.getStr().replace("_", " ")
+           else: "the horde") & ", game " & $(e.game + 1) &
+          ", round " & $e.round
+      else:
+        label = "ARCHON DOWN — " & e.fields{"alias"}.getStr() & " has " &
+          $e.fields{"archons_left"}.getInt() & " left, and " &
+          $e.fields{"gold_dropped"}.getInt() & " gold is on the ground"
     of "archon_relocated":
       label = e.fields{"alias"}.getStr() & " walks an archon from " &
         $e.fields{"from_x"}.getInt() & "," & $e.fields{"from_y"}.getInt() &
@@ -1549,6 +1627,250 @@ proc bc20ChromeJson*(
   }
   $node
 
+proc bc16Archons(w: w16.World, sideAslot: int): JsonNode =
+  ## `#bc16-archons`: THE HEADLINE READOUT AND THE YEAR'S WHOLE STORY. Both
+  ## factions' archon tally with a health pip per archon that drains as it is
+  ## shot (1000 hp each), a GREEN ring on any archon that is zombie-infected
+  ## and a VIOLET ring on any that is viper-infected. Lose your last archon
+  ## and you lose the game on the spot, so this is the only readout that can
+  ## end the match.
+  var factions = newJArray()
+  for slot in 0 .. 1:
+    let team = u16.Team(if slot == sideAslot: 0 else: 1)
+    var pips = newJArray()
+    for id in w.execOrder:
+      let r = w16.robotById(w, id)
+      if r == nil or r.team != team or r.kind != c16.rtArchon: continue
+      pips.add(%*{"id": r.id, "x": r.loc.x, "y": r.loc.y,
+                  "health": int(r.health), "max": int(r.maxHealth),
+                  "zombie_infected": r.inf.zombieTurns,
+                  "viper_infected": r.inf.viperTurns})
+    factions.add(%*{
+      "alias": aliasFor(slot),
+      "alive": w16.archonsAlive(w, team),
+      "start": w.stats.archonsStart[ord(team)],
+      "lost": w.stats.archonsLost[ord(team)],
+      "health_tenths": int(w16.archonHealthTotal(w, team) * 10.0),
+      "pips": pips
+    })
+  %*{"factions": factions}
+
+proc bc16Horde(w: w16.World): JsonNode =
+  ## `#bc16-horde`: THE YEAR'S SIGNATURE READOUT, AND THE ONE NO OTHER YEAR
+  ## HAS — the horde clock. Zombies alive by type, the NEXT SCHEDULED WAVE
+  ## with its composition and how many rounds away, the outbreak level and
+  ## multiplier, dens standing, and the tiebreak countdown. It keeps its wave
+  ## composition and its countdown AT EVERY WIDTH, including 360 px, because
+  ## it is the readout that makes the year make sense.
+  var nextRound = -1
+  var nextCounts = newJArray()
+  for row in w.map.schedule:
+    if row.round > w.currentRound:
+      nextRound = row.round
+      for i, kind in u16.ZombieSpawnTypes:
+        nextCounts.add(%*{"type": ($kind).toLowerAscii(),
+                          "count": row.counts[i]})
+      break
+  var schedule = newJArray()
+  for row in w.map.schedule:
+    var total = 0
+    for c in row.counts: total += c
+    schedule.add(%*{"round": row.round, "count": total,
+                    "past": row.round <= w.currentRound})
+  let level = u16.outbreakLevel(max(0, w.currentRound))
+  %*{
+    "alive": {
+      "standardzombie": w16.zombieCountByType(w, c16.rtStandardzombie),
+      "rangedzombie": w16.zombieCountByType(w, c16.rtRangedzombie),
+      "fastzombie": w16.zombieCountByType(w, c16.rtFastzombie),
+      "bigzombie": w16.zombieCountByType(w, c16.rtBigzombie)
+    },
+    "next_wave_round": nextRound,
+    "next_wave_in": (if nextRound < 0: -1 else: nextRound - w.currentRound),
+    "next_wave": nextCounts,
+    "schedule": schedule,
+    "outbreak_level": level,
+    "outbreak_multiplier_permille":
+      int(u16.outbreakMultiplier(max(0, w.currentRound)) * 1000.0),
+    "dens_standing": w16.densStanding(w),
+    "spawned": w.stats.zombiesSpawned,
+    "killed": w.stats.zombiesKilled,
+    "tiebreak_round": w.maxRounds - 1,
+    "rounds_to_go": max(0, w.maxRounds - 1 - w.currentRound)
+  }
+
+proc bc16Econ(w: w16.World, sideAslot: int): JsonNode =
+  ## `#bc16-econ`: parts banked, income per round (printed as `x.x`), parts
+  ## still on the map, dens destroyed and the bounty collected, neutrals
+  ## activated (and how many were ARCHONS), and IMPASSABLE SQUARES NOW VS AT
+  ## ROUND 0 — the rubble story, made visible.
+  var factions = newJArray()
+  var impassableStart = 0
+  for v in w.map.rubble:
+    if v >= c16.RubbleObstructionThresh: impassableStart += 1
+  for slot in 0 .. 1:
+    let team = u16.Team(if slot == sideAslot: 0 else: 1)
+    let t = ord(team)
+    factions.add(%*{
+      "alias": aliasFor(slot),
+      "parts": int(w.resources[t]),
+      "income_tenths": int(e16.incomeFor(w, team) * 10.0),
+      "parts_worth": w16.partsWorth(w, team),
+      "collected_tenths": w.stats.partsCollectedTenths[t],
+      "spent_tenths": w.stats.partsSpentTenths[t],
+      "dens_destroyed": w.stats.densDestroyed[t],
+      "den_bounty": w.stats.densDestroyed[t] * int(c16.DenPartReward),
+      "neutrals": w.stats.neutralsActivated[t],
+      "neutral_archons": w.stats.neutralArchonsActivated[t],
+      "rubble_cleared_tenths": w.stats.rubbleClearedTenths[t],
+      "rubble_created_tenths": w.stats.rubbleCreatedTenths[t]
+    })
+  %*{"factions": factions,
+     "parts_on_map": int(w16.partsOnMap(w)),
+     "impassable_now": w16.impassableSquares(w),
+     "impassable_start": impassableStart}
+
+proc bc16Units(w: w16.World, sideAslot: int): JsonNode =
+  ## `#bc16-units`: the six player-type census with archons emphasised, UNITS
+  ## STILL BUILDING shown separately (a soldier is inert for 12 turns and a
+  ## viper for 30 — the single most confusing thing on screen without it),
+  ## units infected, and robots lost / robots turned.
+  var factions = newJArray()
+  for slot in 0 .. 1:
+    let team = u16.Team(if slot == sideAslot: 0 else: 1)
+    let t = ord(team)
+    var building = 0
+    var infected = 0
+    for id in w.execOrder:
+      let r = w16.robotById(w, id)
+      if r == nil or r.team != team: continue
+      if not w16.isActive(r): building += 1
+      if h16.isInfected(r.inf): infected += 1
+    factions.add(%*{
+      "alias": aliasFor(slot),
+      "archons": w16.archonsAlive(w, team),
+      "scouts": w16.robotTypeCount(w, team, c16.rtScout),
+      "soldiers": w16.robotTypeCount(w, team, c16.rtSoldier),
+      "guards": w16.robotTypeCount(w, team, c16.rtGuard),
+      "vipers": w16.robotTypeCount(w, team, c16.rtViper),
+      "turrets": w16.robotTypeCount(w, team, c16.rtTurret),
+      "ttms": w16.robotTypeCount(w, team, c16.rtTtm),
+      "alive": w16.robotCountOf(w, team),
+      "building": building,
+      "infected": infected,
+      "built": w.stats.unitsBuilt[t],
+      "lost": w.stats.robotsLost[t],
+      "turned": w.stats.robotsTurned[t]
+    })
+  %*{"factions": factions}
+
+proc bc16Siege(w: w16.World, sideAslot: int): JsonNode =
+  ## `#bc16-siege`: the endcard war panel. Per faction, everything the note's
+  ## §Readouts list names, and the TIEBREAK LEDGER — all four rungs with both
+  ## sides' numbers and which one decided it.
+  var factions = newJArray()
+  for slot in 0 .. 1:
+    let team = u16.Team(if slot == sideAslot: 0 else: 1)
+    let t = ord(team)
+    factions.add(%*{
+      "alias": aliasFor(slot),
+      "archons_start": w.stats.archonsStart[t],
+      "archons_left": w16.archonsAlive(w, team),
+      "archons_lost": w.stats.archonsLost[t],
+      "units_built": w.stats.unitsBuilt[t],
+      "scouts_built": w.stats.scoutsBuilt[t],
+      "soldiers_built": w.stats.soldiersBuilt[t],
+      "guards_built": w.stats.guardsBuilt[t],
+      "vipers_built": w.stats.vipersBuilt[t],
+      "turrets_built": w.stats.turretsBuilt[t],
+      "dens_destroyed": w.stats.densDestroyed[t],
+      "neutrals_activated": w.stats.neutralsActivated[t],
+      "neutral_archons_activated": w.stats.neutralArchonsActivated[t],
+      "infections_suffered": w.stats.infectionsSuffered[t],
+      "infections_inflicted": w.stats.infectionsInflicted[t],
+      "robots_turned": w.stats.robotsTurned[t],
+      "enemy_damage_dealt": w.stats.enemyDamageDealt[t],
+      "enemy_damage_taken": w.stats.enemyDamageTaken[t],
+      "zombie_damage_dealt": w.stats.zombieDamageDealt[t],
+      "zombie_damage_taken": w.stats.zombieDamageTaken[t],
+      "repairs": w.stats.repairs[t],
+      "hp_repaired": w.stats.hpRepaired[t],
+      "rubble_cleared_tenths": w.stats.rubbleClearedTenths[t],
+      "rubble_created_tenths": w.stats.rubbleCreatedTenths[t],
+      "parts_collected_tenths": w.stats.partsCollectedTenths[t],
+      "parts_end": int(w.resources[t]),
+      "parts_worth_end": w16.partsWorth(w, team)
+    })
+  let aArchons = w16.archonsAlive(w, u16.teamA)
+  let bArchons = w16.archonsAlive(w, u16.teamB)
+  %*{
+    "factions": factions,
+    "ladder": [
+      {"rung": "more_archons", "a": aArchons, "b": bArchons},
+      {"rung": "more_archon_health",
+       "a": int(w16.archonHealthTotal(w, u16.teamA) * 10.0),
+       "b": int(w16.archonHealthTotal(w, u16.teamB) * 10.0)},
+      {"rung": "more_parts_net_worth",
+       "a": w16.partsWorth(w, u16.teamA), "b": w16.partsWorth(w, u16.teamB)},
+      {"rung": "highest_id",
+       "a": w16.highestArchonId(w, u16.teamA),
+       "b": w16.highestArchonId(w, u16.teamB)}
+    ],
+    "decided_by": (if w.tiebreakRung > 0:
+                     $u16.Domination(w.tiebreakRung)
+                   else: $w.domination)
+  }
+
+proc bc16ChromeJson*(
+  doc: ReplayDoc, w: w16.World, view: ViewerState,
+  frame, totalFrames, gameIndex, sideAslot: int,
+  beats: JsonNode, gameChips: JsonNode, ended: bool
+): string =
+  ## One frame of bc16 chrome. `t` / `st` / `mx` / `mt` are the GENERIC
+  ## timeline keys `chrome_common.js` reads, unchanged, so the clock, the
+  ## transport and the scrubber are driven by the starter's own code; the
+  ## `bc16_*` keys are what the APPENDED bc16 game block draws.
+  let phase = if ended: "gameover" else: "playing"
+  let points = r16.gamePoints(w)
+  var node = %*{
+    "t": frame,
+    "st": 0,
+    "mx": max(1, totalFrames - 1),
+    "mt": 0,
+    "sp": view.speed,
+    "pl": view.playing,
+    "lp": view.loop,
+    "sk": view.skipLulls,
+    "ff": false,
+    "en": true,
+    "ph": phase,
+    "lob": 0,
+    "pov": -1,
+    "nim": GameVersion,
+    "year": "bc16",
+    "beats": beats,
+    "game": gameIndex + 1,
+    "games": doc.games.len,
+    "map": doc.plan.maps[min(gameIndex, doc.plan.maps.high)],
+    "round": w.currentRound,
+    "rounds": doc.plan.maxRounds,
+    "aliases": [AliasA, AliasB],
+    "names": [doc.names[0], doc.names[1]],
+    "sides": [(if sideAslot == 0: "A" else: "B"),
+              (if sideAslot == 0: "B" else: "A")],
+    "points": [points[(if sideAslot == 0: 0 else: 1)],
+               points[(if sideAslot == 0: 1 else: 0)]],
+    "bc16_archons": bc16Archons(w, sideAslot),
+    "bc16_horde": bc16Horde(w),
+    "bc16_econ": bc16Econ(w, sideAslot),
+    "bc16_units": bc16Units(w, sideAslot),
+    "bc16_siege": bc16Siege(w, sideAslot),
+    "gamechips": gameChips,
+    "doctrines": doctrineWords(doc),
+    "result": doc.result
+  }
+  $node
+
 proc sessionChromeJson*(
   doc: ReplayDoc, s: Session, view: ViewerState,
   frame, totalFrames, gameIndex, sideAslot: int,
@@ -1575,4 +1897,7 @@ proc sessionChromeJson*(
       beats, gameChips, ended)
   of yBc22:
     bc22ChromeJson(doc, s.w22, view, frame, totalFrames, gameIndex, sideAslot,
+      beats, gameChips, ended)
+  of yBc16:
+    bc16ChromeJson(doc, s.w16, view, frame, totalFrames, gameIndex, sideAslot,
       beats, gameChips, ended)

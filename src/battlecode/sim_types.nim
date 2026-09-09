@@ -13,12 +13,42 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV10"
+  GameVersion* = "GV11"
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV11 — the `bc16` year module: Battlecode 2016 "Zombie Invasion"
+    ##        ported from battlecode-server-2016 at commit 11a0b09f (oracle
+    ##        jar 2016.0.2.2; THE OFFICIAL 2016 SPEC IS LOST and this year's
+    ##        `GameConstants` has no `SPEC_VERSION` at all, so the jar is
+    ##        pinned by sha256 AND size and the ENGINE SOURCE IS THE SPEC):
+    ##        the four-step round loop over an INSERTION-ordered exec list
+    ##        with by-value removal and a pre-sweep snapshot, ROUNDS NUMBERED
+    ##        FROM ZERO (`currentRound` starts at -1, so the last round is
+    ##        2999), the twelve robot types with their float64 core/weapon
+    ##        delay pair and its ASYMMETRIC set-up-to/add-to charging
+    ##        (`activateCoreAction` sets the weapon and adds the core;
+    ##        `activateAttack` adds the weapon and sets the core), the rubble
+    ##        economy (impassable at 100, double cost at 50, `0.95r - 10` per
+    ##        clear, and every UNINFECTED corpse adding its own max health,
+    ##        a third of it on a turret kill), parts income
+    ##        `max(0, 2 - 0.01 * robots)` with ARCHON-ONLY whole-square
+    ##        pickup, the public per-den zombie spawn schedule with its
+    ##        BUILD-TIME symmetric split, the outbreak ladder applied at the
+    ##        moment a zombie spawns, the verbatim zombie AI over THREE
+    ##        independent `Random(mapSeed)` streams, infection with its
+    ##        10/20-turn counters and its die-and-turn conversion, free
+    ##        neutral activation, and the four-rung round-2999 tiebreak
+    ##        ladder, behind `game_config.year`. The bytecode-dependent delay
+    ##        decay is PINNED TO 1.0 (a documented divergence, V1).
+    ##        bc20, bc21, bc22, bc23, bc24, bc25 AND bc26 SEMANTICS ARE
+    ##        UNCHANGED: no GV04..GV10 recording carries a byte whose meaning
+    ##        changed — this run makes no year-neutral behaviour change at all
+    ##        — which is why `ReplayCompatibleGameVersions` is EXTENDED rather
+    ##        than reset and every hosted replay keeps rendering.
     ##
     ## GV10 — the `bc22` year module: Battlecode 2022 "Mutation" ported
     ##        from battlecode22 at commit 6ed05b67 (oracle jar 2.2.1, whose
@@ -188,7 +218,7 @@ const
     ##        formation, squeaks, cats, backstab, float32-narrowed scoring.
 
   ReplayCompatibleGameVersions* = ["GV04", "GV05", "GV06", "GV07", "GV08",
-                                   "GV09", GameVersion]
+                                   "GV09", "GV10", GameVersion]
     ## Versions whose recordings this build can still re-derive. A replay
     ## carrying anything else is refused with a readable message rather than
     ## silently re-simulated under different rules.
@@ -236,6 +266,8 @@ type
     scExamplefuncsplayer23 = "examplefuncsplayer23"
     scWololo = "wololo"
     scExamplefuncsplayer22 = "examplefuncsplayer22"
+    scBulwark = "bulwark"
+    scGreenhorn = "greenhorn"
 
   ConfigError* = object of CatchableError
     ## An unusable `game_config`. The container exits 2 on this, per ctf.

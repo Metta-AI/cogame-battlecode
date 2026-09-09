@@ -30,9 +30,10 @@ import years/bc24/knobs as knobs24
 import years/bc25/knobs as knobs25
 import years/bc23/knobs as knobs23
 import years/bc22/knobs as knobs22
+import years/bc16/knobs as knobs16
 
 export sim_types, sheet_common, knobs26, knobs20, knobs21, knobs24,
-  knobs25, knobs23, knobs22
+  knobs25, knobs23, knobs22, knobs16
 
 const
   YearBc26* = "bc26"
@@ -42,6 +43,7 @@ const
   YearBc25* = "bc25"
   YearBc23* = "bc23"
   YearBc22* = "bc22"
+  YearBc16* = "bc16"
 
 type
   Sheet* = object
@@ -53,6 +55,7 @@ type
     doctrine25*: knobs25.Doctrine25   ## the bc25 knobs; defaults on another year
     doctrine23*: knobs23.Doctrine23   ## the bc23 knobs; defaults on another year
     doctrine22*: knobs22.Doctrine22   ## the bc22 knobs; defaults on another year
+    doctrine16*: knobs16.Doctrine16   ## the bc16 knobs; defaults on another year
     notes*: string
     motto*: string
     defaultsApplied*: seq[string]
@@ -72,6 +75,7 @@ proc knownKeysFor*(year: string): seq[string] =
   of YearBc25: @(knobs25.KnownKeys25)
   of YearBc23: @(knobs23.KnownKeys23)
   of YearBc22: @(knobs22.KnownKeys22)
+  of YearBc16: @(knobs16.KnownKeys16)
   else: @(knobs26.KnownKeys)
 
 proc defaultSheet*(year = YearBc26): Sheet =
@@ -82,6 +86,7 @@ proc defaultSheet*(year = YearBc26): Sheet =
         doctrine25: knobs25.defaultDoctrine25(),
         doctrine23: knobs23.defaultDoctrine23(),
         doctrine22: knobs22.defaultDoctrine22(),
+        doctrine16: knobs16.defaultDoctrine16(),
         notes: "", motto: "", submitted: "{}", envelope: "")
 
 proc validate*(payload: JsonNode, year = YearBc26): Sheet =
@@ -175,11 +180,13 @@ proc validate*(payload: JsonNode, year = YearBc26): Sheet =
   of YearBc23:
     result.doctrine23 = knobs23.applyKnobs23(seen, result.defaultsApplied)
   of YearBc22:
-    ## bc22 ALONE counts an ABSENT known key in `defaultsApplied` (the envelope
-    ## pin, item 2). Doing it year-neutrally would change what a bc26/bc20/bc21/
-    ## bc23/bc24/bc25 episode records in that array, which "prior years'
-    ## semantics unchanged" forbids.
+    ## bc22 and bc16 ALONE count an ABSENT known key in `defaultsApplied` (the
+    ## envelope pin, item 2). Doing it year-neutrally would change what a
+    ## bc26/bc20/bc21/bc23/bc24/bc25 episode records in that array, which
+    ## "prior years' semantics unchanged" forbids.
     result.doctrine22 = knobs22.applyKnobs22(seen, result.defaultsApplied)
+  of YearBc16:
+    result.doctrine16 = knobs16.applyKnobs16(seen, result.defaultsApplied)
   else:
     result.doctrine = knobs26.applyKnobs(seen, result.defaultsApplied)
 
@@ -204,6 +211,7 @@ proc toJson*(sheet: Sheet): JsonNode =
   of YearBc25: knobs25.toJson25(sheet.doctrine25)
   of YearBc23: knobs23.toJson23(sheet.doctrine23)
   of YearBc22: knobs22.toJson22(sheet.doctrine22)
+  of YearBc16: knobs16.toJson16(sheet.doctrine16)
   else: knobs26.toJson(sheet.doctrine)
 
 proc plainWords*(sheet: Sheet): seq[string] =
@@ -216,4 +224,5 @@ proc plainWords*(sheet: Sheet): seq[string] =
   of YearBc25: knobs25.plainWords25(sheet.doctrine25)
   of YearBc23: knobs23.plainWords23(sheet.doctrine23)
   of YearBc22: knobs22.plainWords22(sheet.doctrine22)
+  of YearBc16: knobs16.plainWords16(sheet.doctrine16)
   else: knobs26.plainWords(sheet.doctrine)

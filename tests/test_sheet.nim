@@ -345,8 +345,37 @@ block:
   let bc22empty = parseReply("""{"sheet":{}}""", YearBc22)
   checkEq("bc22 records all eleven of its knobs as defaulted",
     bc22empty.defaultsApplied.len, 11)
+  ## bc16 is the SECOND year to count absent keys, and it is the only other
+  ## one: doing it year-neutrally would change what a bc20/bc21/bc23/bc24/
+  ## bc25/bc26 episode records in that array.
+  let bc16empty = parseReply("""{"sheet":{}}""", YearBc16)
+  checkEq("and bc16 records all eleven of ITS knobs as defaulted",
+    bc16empty.defaultsApplied.len, 11)
   for year in [YearBc26, YearBc20, YearBc21, YearBc24, YearBc25, YearBc23]:
     let empty = parseReply("""{"sheet":{}}""", year)
     checkEq(year & " still records NONE", empty.defaultsApplied.len, 0)
+
+block:
+  ## THE YEAR-NEUTRAL SIDE OF THE ENVELOPE RESOLVER, FROM bc16. This run is
+  ## provably ADDITIVE for the seven shipped years: every existing vector
+  ## above still parses to the same `Sheet` it did before, and bc16 goes
+  ## through the SAME resolver with no year-neutral change at all.
+  let bc16 = parseReply(
+    """{"protocol":"x","doctrine":{"turret_count":9}}""", YearBc16)
+  checkEq("a bc16 sheet inside a protocol envelope is unwrapped",
+    bc16.doctrine16.turretCount, 9)
+  checkEq("with the rule recorded", bc16.envelope, "doctrine")
+  let bc16flat = parseReply("""{"turret_count":9}""", YearBc16)
+  checkEq("a BARE FLAT bc16 sheet needs no envelope", bc16flat.envelope, "")
+  checkEq("and its knobs apply", bc16flat.doctrine16.turretCount, 9)
+  checkEq("knownKeysFor routes bc16 to its own eleven",
+    knownKeysFor(YearBc16).len, 11)
+  check("and `chassis` is not one of them (D1)",
+    "chassis" notin knownKeysFor(YearBc16))
+  ## And a bc16 payload parsed AS ANOTHER YEAR leaves that year's doctrine at
+  ## its own defaults rather than bleeding across.
+  let asBc22 = parseReply("""{"turret_count":9}""", YearBc22)
+  checkEq("a bc16 knob name means nothing to bc22",
+    asBc22.doctrine22, parseReply("{}", YearBc22).doctrine22)
 
 finish("test_sheet")

@@ -130,9 +130,15 @@ proc allocateNextBlock(gen: var IdGenerator) =
     gen.reserved[i] = a
   gen.nextIdBlock += IdBlockSize
 
-proc initIdGenerator*(seed: int): IdGenerator =
+proc initIdGenerator*(seed: int, firstBlock = MinId): IdGenerator =
+  ## `new IDGenerator(seed)`. `firstBlock` is `IDGenerator.nextIDBlock`'s
+  ## starting value, which is NOT the same in every Battlecode year: 2020..2026
+  ## start it at the 10 000 floor (the default, so no existing call site
+  ## changes), while **2016 starts it at 0** and therefore mints ids from 1 —
+  ## `reservedIDs[i] = nextIDBlock + i + 1`. The block size, the Fisher-Yates
+  ## shuffle and its `nextInt(i+1)` call order are identical in both.
   result.random = initJavaRandom(seed)
-  result.nextIdBlock = MinId
+  result.nextIdBlock = firstBlock
   result.allocateNextBlock()
 
 proc nextId*(gen: var IdGenerator): int =

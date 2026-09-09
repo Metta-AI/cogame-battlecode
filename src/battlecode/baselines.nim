@@ -31,6 +31,8 @@ type
     blExamplefuncsplayer23 = "examplefuncsplayer23"
     blWololo = "wololo"
     blExamplefuncsplayer22 = "examplefuncsplayer22"
+    blBulwark = "bulwark"
+    blGreenhorn = "greenhorn"
 
 proc defaultBaselineFor*(year: string): Baseline =
   ## A seat that says nothing useful plays the year's STRONG published
@@ -42,6 +44,7 @@ proc defaultBaselineFor*(year: string): Baseline =
   of yBc25: blSpaark
   of yBc23: blLemonade
   of yBc22: blWololo
+  of yBc16: blBulwark
   of yBc26: blAwu
 
 proc baselineFor*(year, name: string): Baseline =
@@ -78,6 +81,14 @@ proc baselineFor*(year, name: string): Baseline =
     of "scaffold", "examplefuncsplayer", "examplefuncsplayer22", "example":
       blExamplefuncsplayer22
     else: blWololo
+  of yBc16:
+    ## `awu`, `bulwark` or anything unrecognised is the STRONG doctrine
+    ## chassis; `scaffold`, `greenhorn`, `example` and `examplefuncsplayer`
+    ## are the deliberately weak floor and the parity oracle's other side.
+    case key
+    of "scaffold", "greenhorn", "example", "examplefuncsplayer":
+      blGreenhorn
+    else: blBulwark
   of yBc26:
     case key
     of "scaffold", "examplefuncsplayer", "example": blScaffold
@@ -116,6 +127,8 @@ proc baselineChassis*(kind: Baseline): ScriptedChassis =
   of blExamplefuncsplayer23: scExamplefuncsplayer23
   of blWololo: scWololo
   of blExamplefuncsplayer22: scExamplefuncsplayer22
+  of blBulwark: scBulwark
+  of blGreenhorn: scGreenhorn
   of blAwu: scAwu
 
 proc baselineReply*(kind: Baseline): string =
@@ -210,6 +223,17 @@ proc baselineReply*(kind: Baseline): string =
                  "watchtower_policy":"home","anomaly_play":"time_pushes",
                  "archon_relocate":"safety","retreat_hp":40},
         "notes":"default wololo doctrine","motto":"Leave one lead behind."}"""
+  of blBulwark, blGreenhorn:
+    ## The all-defaults bc16 sheet, which is ALSO the fallback sheet
+    ## §Decisions prints verbatim. `greenhorn` reads no knob, so it answers
+    ## with the same sheet: the chassis, not the sheet, is what makes it the
+    ## weak floor (D1).
+    """{"sheet":{"opening":"turtle","turret_count":3,"guard_ratio":45,
+                 "zombie_kiting":"ranged_only","den_clear_round":900,
+                 "parts_priority":"units","archon_spread":"spread",
+                 "neutral_activation":"opportunistic","retreat_hp":35,
+                 "rubble_clear":"paths","infection_policy":"quarantine"},
+        "notes":"default bulwark doctrine","motto":"The wall holds."}"""
 
 proc baselineSheet*(year: string, kind: Baseline): Sheet =
   result = parseReply(baselineReply(kind), year)

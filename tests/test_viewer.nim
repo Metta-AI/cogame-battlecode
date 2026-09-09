@@ -837,9 +837,9 @@ block:
     "window.Bc25Block = {" in page)
   check("and the shared onText calls it",
     "if (window.Bc25Block) window.Bc25Block.onFrame(s);" in page)
-  check("and the bc26 branch is guarded off for bc25, bc23 and now bc22 " &
-    "too, so the discriminator is SEVEN-way",
-    "if (!isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 && !isBc25) {" in
+  check("and the bc26 branch is guarded off for bc25, bc23, bc22 and now " &
+    "bc16 too, so the discriminator is EIGHT-way",
+    "if (!isBc16 && !isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 &&" in
       page)
 
 block:
@@ -1130,9 +1130,9 @@ block:
     "if (window.Bc22Block) window.Bc22Block.onFrame(s);" in page)
   check("and the inherited block attaches the transport to it",
     "window.Bc22Block.attach({" in page)
-  check("the bc26 branch is guarded off for bc22 too, so the discriminator " &
-    "is SEVEN-way",
-    "if (!isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 && !isBc25) {" in
+  check("the bc26 branch is guarded off for bc22 and bc16 too, so the " &
+    "discriminator is EIGHT-way",
+    "if (!isBc16 && !isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 &&" in
       page)
   for alias in ["window.Bc20Block = {", "window.Bc21Block = {",
                 "window.Bc23Block = {", "window.Bc24Block = {",
@@ -1168,7 +1168,7 @@ block:
   check("#bc22-econ too",
     "#bc22-econ { bottom: calc(var(--band, 0px) + 8px); }" in page)
   check("and relayout() MEASURES both of them into --statrail",
-    "'bc22-econ', 'bc22-units']" in page)
+    "'bc22-econ', 'bc22-units'" in page)
   check("while #killfeed is still lifted above the rail",
     "calc(var(--band, 0px) + var(--statrail, 0px) + 8px)" in page)
 
@@ -1198,6 +1198,12 @@ block:
         if one.startsWith("#bc22-") or
            one.startsWith("html[data-year=\"bc22\"] ") or
            one.startsWith("html:not([data-year=\"bc22\"]) "):
+          continue
+        ## A LATER YEAR'S BLOCK LEGITIMATELY NAMES THIS YEAR'S IDS under its
+        ## OWN `data-year`, to hide them: `html[data-year="bc16"] #bc22-econ`
+        ## is year-scoped, just to a different year. Anything of that shape
+        ## is scoped; anything else is not.
+        if one.startsWith("html[data-year=\"bc") and "] #bc22-" in one:
           continue
         unscoped22.add(one)
     sel22 = ""
@@ -1271,5 +1277,183 @@ block:
                "red_archon_level3", "red_watchtower_portable_level2",
                "lead", "gold", "star"]:
     check("the bc22 atlas carries " & name, "\"" & name & "\"" in atlas)
+
+# ===========================================================================
+#  THE BC16 GAME BLOCK — §Tests item 27
+# ===========================================================================
+block:
+  ## The same five obligations every year module before it had to meet, plus
+  ## the two `--statrail` ids, the four-palette atlas and the endcard fixes.
+  let page = readFile("client/replay_broadcast.html")
+
+  ## 1. NO NAME COLLISIONS. `markBeat` is `chrome_common.js`'s and a
+  ##    same-named function here would HOIST OVER it (the tandem 2026-08-23
+  ##    collision).
+  checkEq("the bc16 block does not define `markBeat` at all",
+    page.count("function markBeat"), 0)
+  checkEq("its beat builder has its own name",
+    page.count("function buildBc16BeatButtons"), 1)
+  checkEq("and so does its spoiler gate",
+    page.count("function applyBc16BeatSpoilers"), 1)
+  for taken in ["function buildBeatButtons", "function buildBc20BeatButtons",
+                "function buildBc21BeatButtons",
+                "function buildBc22BeatButtons",
+                "function buildBc23BeatButtons",
+                "function buildBc24BeatButtons",
+                "function buildBc25BeatButtons"]:
+    checkEq("and it does not redefine " & taken, page.count(taken), 1)
+  for alias in ["window.Bc20Block = {", "window.Bc21Block = {",
+                "window.Bc22Block = {", "window.Bc23Block = {",
+                "window.Bc24Block = {", "window.Bc25Block = {"]:
+    checkEq("the bc16 block does not redeclare " & alias,
+      page.count(alias), 1)
+  ## And it shadows no `ChromeCommon` alias.
+  checkEq("the block registers on window.Bc16Block",
+    page.count("window.Bc16Block = {"), 1)
+  check("and the shared onText calls it",
+    "if (window.Bc16Block) window.Bc16Block.onFrame(s);" in page)
+  check("and the inherited block attaches the transport to it",
+    "window.Bc16Block.attach({" in page)
+
+  ## 2. THE SEVEN bc16 IDS ARE ALL PRESENT, and no starter element was
+  ##    removed to make room for them.
+  for id in ["bc16-archons", "bc16-horde", "bc16-econ", "bc16-units",
+             "bc16-doctrines", "bc16-doctrines-toggle", "bc16-siege"]:
+    check("the page carries #" & id, "id=\"" & id & "\"" in page)
+  for kept in ["coopchip", "bars", "gamechips", "econ", "doctrines",
+               "bc20-flood", "bc21-units", "bc22-archons", "bc23-islands",
+               "bc24-flags", "bc25-srp", "viewpanel", "killfeed", "scrub",
+               "endcard"]:
+    check("and the starter element #" & kept & " is still there",
+      "id=\"" & kept & "\"" in page)
+
+  ## 3. `#bc16-doctrines` is dismissible, capped-and-scrolling, and OUTSIDE
+  ##    var(--band).
+  check("the doctrine overlay has a dismiss control with an aria-label",
+    "id=\"bc16-doctrines-close\"" in page and
+    "aria-label=\"Dismiss doctrines\"" in page)
+  check("a re-open chip", "id=\"bc16-doctrines-toggle\"" in page)
+  check("an Escape binding scoped to bc16",
+    "getAttribute('data-year') !== 'bc16'" in page)
+  check("self-dismissal on the first playback advance",
+    "if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed)" in page)
+  check("and it is CAPPED AND SCROLLS rather than clipping",
+    "#bc16-doctrines {" in page and "overflow: auto;" in page)
+  check("and it carries the SUBMITTED-VS-APPLIED badge the envelope pin " &
+    "requires", "knobs defaulted" in page and
+    "what the cog actually sent" in page)
+
+  ## 4. THE TWO RAIL BOXES are above the band and IN the `--statrail` set;
+  ##    the two top-band pills are deliberately NOT.
+  check("#bc16-units is lifted above var(--band)",
+    "#bc16-units { bottom: calc(var(--band, 0px) + 76px); }" in page)
+  check("#bc16-econ too",
+    "#bc16-econ { bottom: calc(var(--band, 0px) + 8px); }" in page)
+  check("and relayout() MEASURES both of them into --statrail",
+    "'bc16-econ', 'bc16-units']" in page)
+  check("while #killfeed is still lifted above the rail",
+    "calc(var(--band, 0px) + var(--statrail, 0px) + 8px)" in page)
+  check("#bc16-archons is the headline pill, in the top band",
+    "top: calc(var(--topband, 0px) + 6px);" in page)
+  check("#bc16-horde is the signature readout, IMMEDIATELY above the band " &
+    "and never inside it",
+    "bottom: calc(var(--band, 0px) + 148px);" in page)
+
+  ## 5. EVERY #bc16-* CSS RULE IS SCOPED TO THE YEAR, one way or the other.
+  ##    The whole <style> block, not a line scan (r1-F24).
+  let cssOpen = page.find("<style>")
+  let cssClose = page.find("</style>")
+  var css = page[cssOpen + len("<style>") ..< cssClose]
+  while true:
+    let a = css.find("/*")
+    if a < 0: break
+    let b = css.find("*/", a)
+    if b < 0: break
+    css = css[0 ..< a] & " " & css[b + 2 .. ^1]
+  var unscoped16: seq[string]
+  var scanned16 = 0
+  var sel16 = ""
+  for ch in css:
+    if ch notin {'{', '}', ';'}:
+      sel16.add(ch)
+      continue
+    if ch == '{' and "bc16" in sel16:
+      for part in sel16.split(','):
+        let one = part.splitWhitespace().join(" ")
+        if "bc16" notin one: continue
+        if one.startsWith("@"): continue
+        inc scanned16
+        if one.startsWith("#bc16-") or
+           one.startsWith("html[data-year=\"bc16\"] ") or
+           one.startsWith("html:not([data-year=\"bc16\"]) "):
+          continue
+        unscoped16.add(one)
+    sel16 = ""
+  check("the scan saw the bc16 rules at all", scanned16 >= 20)
+  checkEq("and every one of them is year-scoped (" &
+    unscoped16.join(" | ") & ")", unscoped16.len, 0)
+
+  ## AND THE 41 SIBLING IDS ARE HIDDEN ON A bc16 REPLAY — what bc16 removes
+  ## is NOTHING from the page and EVERYTHING from the screen.
+  for id in ["coopchip", "econ", "doctrines", "bc20-flood", "bc21-units",
+             "bc22-archons", "bc22-anomaly", "bc23-islands", "bc24-flags",
+             "bc25-srp"]:
+    check("html[data-year=\"bc16\"] hides #" & id,
+      "html[data-year=\"bc16\"] #" & id in page)
+  for id in ["bc16-archons", "bc16-horde", "bc16-econ", "bc16-units",
+             "bc16-doctrines", "bc16-doctrines-toggle", "bc16-siege"]:
+    check("and every other year hides #" & id,
+      "html:not([data-year=\"bc16\"]) #" & id in page)
+
+  ## THE ENDCARD FIXES, for bc16.
+  let tableStart = page.find("var ENDCARD_NOUNS = {")
+  let tableEnd = page.find("};", tableStart)
+  let nounTable = page[tableStart .. tableEnd]
+  check("the noun table has a bc16 row", "bc16:" in nounTable)
+  check("with THIS year's nouns", "unit: 'archon'" in nounTable and
+    "res: 'parts'" in nounTable)
+  for line in nounTable.splitLines():
+    if "bc16:" notin line: continue
+    for noun in ["rat", "cheese", "king", "lead", "gold", "chips", "crumbs"]:
+      check("no `" & noun & "` on a bc16 card: " & line.strip(),
+        noun notin line)
+  check("every printed bc16 number goes through ONE formatter",
+    "function stat(value, kind) {" in page and
+    "if (kind === 'tenths') return (n / 10).toFixed(1);" in page)
+  check("a blank bc16 motto renders NOTHING",
+    "if (d.motto) html += '<br>\\u201c'" in page)
+  check("and the bc16 boxes are hidden while the endcard shows (no HUD " &
+    "bleed-through)",
+    "html[data-year=\"bc16\"] #endcard.show ~ #bc16-archons" in page and
+    "visibility: hidden;" in page)
+  ## The tiebreak ledger — all four rungs and which one decided it.
+  check("the war panel draws the whole tiebreak ledger",
+    "decided it" in page and "g.ladder" in page)
+
+  ## `#viewpanel` is KEPT: the bc16 played pool spans 36x30 to 45x45 and the
+  ## reserved large pool reaches 80x80, so the native 16 px render is 480 to
+  ## 1280 px wide — every single one of them LARGER than the 360 px
+  ## featured-match frame.
+  check("the zoom panel is still in the page", "id=\"viewpanel\"" in page)
+
+# --- the bc16 sprite atlas --------------------------------------------------
+block:
+  check("the bc16 atlas image is committed", fileExists("data/atlas_bc16.png"))
+  check("with its index", fileExists("data/atlas_bc16.json"))
+  let atlas = readFile("data/atlas_bc16.json")
+  ## ALL TWELVE ROBOT TYPES AT ALL FOUR `Team` PALETTES — which makes bc16 the
+  ## first year in this repository whose art can draw a NEUTRAL robot as
+  ## itself rather than as a greyed team sprite, and that matters because
+  ## `neutral_activation` is a headline knob.
+  var missing: seq[string]
+  for kind in ["archon", "scout", "soldier", "guard", "viper", "turret",
+               "ttm", "zombieden", "standardzombie", "rangedzombie",
+               "fastzombie", "bigzombie"]:
+    for team in ["a", "b", "neutral", "horde"]:
+      let name = team & "_" & kind
+      if "\"" & name & "\"" notin atlas: missing.add(name)
+  checkEq("all twelve types at all four palettes (" & missing.join(", ") &
+    ")", missing.len, 0)
+  check("plus the rubble texture", "\"creep\"" in atlas)
 
 finish("test_viewer")

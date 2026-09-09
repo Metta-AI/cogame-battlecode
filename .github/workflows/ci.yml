@@ -20,13 +20,12 @@ name: CI
 
 on:
   push:
-    # `bc20-year-module`, `bc21-year-module`, `bc22-year-module`,
-    # `bc23-year-module`, `bc24-year-module` and `bc25-year-module` are the
-    # branches the second, third, seventh, sixth, fourth and fifth year
-    # modules land on. main's trigger semantics are untouched; this only adds
-    # branches.
-    branches: [ main, bc20-year-module, bc21-year-module, bc22-year-module,
-                bc23-year-module, bc24-year-module, bc25-year-module ]
+    # `bc20-year-module` ... `bc25-year-module` and `bc16-year-module` are the
+    # branches the second through EIGHTH year modules land on. main's trigger
+    # semantics are untouched; this only adds branches.
+    branches: [ main, bc16-year-module, bc20-year-module, bc21-year-module,
+                bc22-year-module, bc23-year-module, bc24-year-module,
+                bc25-year-module ]
   pull_request:
   workflow_dispatch:
 
@@ -107,6 +106,24 @@ env:
   BC22_COMMIT: "6ed05b679c0822e9bbe332812ff5655812dd023e"
   BC22_JAR_URL: "https://releases.battlecode.org/maven/org/battlecode/battlecode22/2.2.1/battlecode22-2.2.1.jar"
 
+  # --- bc16, the EIGHTH year module and the first pre-2020 one -------------
+  # THE OFFICIAL 2016 SPECIFICATION IS LOST (dead S3 bucket, dead
+  # battlecode.org, no Wayback copy), so the ENGINE SOURCE IS THE SPEC and
+  # every rule in the port carries a file:line into this checkout. Both 2016
+  # upstreams are GPL-3.0 rather than AGPL-3.0 -- the first time this
+  # repository has taken in GPL-3.0 material -- and `NOTICE` records the
+  # GPL-3.0 section 13 reasoning that makes AGPL-3.0 a valid licence for the
+  # combined work.
+  #
+  # The oracle jar is pinned by URL, SIZE and SHA256 in
+  # tools/oracle/bc16/jar.lock and is SELF-CONTAINED: it bundles its own ASM,
+  # XStream, Jackson and commons-lang3 and carries 54 `.xml` map resources, so
+  # the parity job needs no Ant, no Ivy, no Gradle, no shim, no Maven list and
+  # no `--map-dir`. IT MUST RUN ON TEMURIN 8.
+  BC16_COMMIT: "11a0b09f26a70da19f33a61ebec4ceaf6e161aa3"
+  BC16_CLIENT_COMMIT: "317e1f3ff902ae568619c051813335ecdd72322c"
+  BC16_JAR_URL: "https://s3.amazonaws.com/battlecode-releases-2016/releases/battlecode-2016.0.2.2.jar"
+
 jobs:
   # ---------------------------------------------------------------------
   # Native Nim tests. Same nimby recipe as the Dockerfile build stage, so a
@@ -126,7 +143,7 @@ jobs:
     # 2026-09-08), and the heaviest bc22 shards play whole 2000-round games
     # with every range check on -- its knob sweep plays seventy-two of them in
     # the debug pass alone.
-    timeout-minutes: 130
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v5
 
@@ -376,6 +393,54 @@ jobs:
           echo "official .map22 files parsed: ${parsed}"
           test "${parsed}" = "75" || {
             echo "::error::expected all 75 .map22 files to parse, got ${parsed}"
+            exit 1; }
+
+      # The bc16 year module is generated from an EIGHTH pinned checkout,
+      # and every generated artefact is re-generated here and byte-diffed: the
+      # constants table, all twenty-two converted maps (INCLUDING their
+      # build-time symmetry and their pre-split per-den zombie schedules --
+      # D3/D4) and the sprite atlas cut from the 2016 client. A hand-edited
+      # generated file fails the build.
+      - name: Fetch the pinned Battlecode 2016 sources
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/engine16 /tmp/client16
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode-server-2016/archive/${BC16_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/engine16
+          echo "BC16_DIR=/tmp/engine16/battlecode-server-2016-${BC16_COMMIT}" \
+            >> "$GITHUB_ENV"
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode-client-2016/archive/${BC16_CLIENT_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/client16
+          echo "BC16_CLIENT_DIR=/tmp/client16/battlecode-client-2016-${BC16_CLIENT_COMMIT}" \
+            >> "$GITHUB_ENV"
+
+      - name: The bc16 generated files match the pinned 2016 sources
+        run: |
+          set -euo pipefail
+          # 2016's GameConstants is an INTERFACE, so its fields carry no
+          # `public static final` and the bc16 arm of the generator has its
+          # own regex -- recorded in the tool's docstring.
+          python3 tools/gen_year_constants.py --year bc16 --engine "$BC16_DIR" --check
+          python3 tools/convert_maps_bc16.py --engine "$BC16_DIR" \
+            --out data/maps/bc16 --check
+          python3 tools/build_sprite_atlas_bc16.py \
+            --client "$BC16_CLIENT_DIR" --out data --check
+          # And EVERY ONE of the 98 official `.xml` maps reads with the
+          # converter's own XML walk, not only the 22 that are committed: a
+          # reader that only works on the maps we ship is a reader nobody can
+          # extend the pool with. The two ARMAGEDDON maps are REFUSED with the
+          # stated reason (V4: both are two archons against ZERO over 12 000
+          # rounds -- a single-player survival mode, not a two-seat match).
+          # `2>&1` is load-bearing: the converter prints its per-map table on
+          # stdout and its SUMMARY LINE on stderr, so a bare `| tee` captures
+          # the table and loses the line this step greps for.
+          python3 tools/convert_maps_bc16.py --engine "$BC16_DIR" \
+            --parse-all 2>&1 | tee /tmp/bc16parse.txt
+          grep -q '98 official .xml files parsed, 2 refused' /tmp/bc16parse.txt || {
+            echo "::error::expected all 98 official .xml maps to parse with"
+            echo "::error::exactly the two armageddon maps refused"
             exit 1; }
 
       - name: Run tests
@@ -2527,6 +2592,599 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
   # ---------------------------------------------------------------------
+  # THE bc16 PARITY ORACLE. The published 2016 engine, run headlessly as a
+  # differential test, on TEMURIN 8 -- and that is not a preference: the jar
+  # bundles a 2016-era ASM and a 2016-era XStream and the whole instrumenter
+  # is built for Java 8 class files. Under a modern JDK the instrumenter
+  # throws inside ClassReader.<init> on every player class load and the job
+  # would exit 0 while proving nothing (docs/PARITY.md section bc16). There is
+  # no JDK in any image stage -- only here.
+  #
+  # **TIER A IS A REAL AND LARGE TIER FOR THIS YEAR, and that is the single
+  # most important thing to understand about bc16 parity.** The zombie half of
+  # this game is ENGINE-SIDE, so an IDLE player bot still exercises the den
+  # schedules and their per-den split, the spawn ring's direction and
+  # chirality, `spawnAllPossible` and its proximity-damage fallback, the whole
+  # eight-step zombie movement ladder, ALL THREE `java.util.Random` streams,
+  # infection and the die-and-turn conversion, the corpse-rubble deposit,
+  # `clearRubble` by digging zombies, the parts income curve, both factions'
+  # archons being eaten, the mid-turn DESTROYED check and the round-2999
+  # ladder. A tier that agrees bit for bit WHILE NOTHING HAPPENS proves
+  # nothing, so this job asserts off the JAVA trace that all of it really
+  # happened.
+  #
+  # MEASURED IN THE SANDBOX BEFORE THIS JOB WAS WRITTEN, with this jar and a
+  # real Temurin 8: ALL EIGHTEEN trace pairs -- `bc16idle` and `bc16greenhorn`
+  # on each of the nine parity maps -- are BIT-EXACT FOR WHOLE 3000-ROUND
+  # GAMES, 10k-129k trace lines a side, with the traced bytecode peak at 0 %
+  # of every limit and therefore never leaving the engine's own 1.0 branch of
+  # `decrementDelays`. That is why tools/ci/parity_ledger_bc16.json ships
+  # EMPTY. Three real defects were found and fixed getting there, and each is
+  # recorded in docs/PARITY.md section bc16:
+  #   1. `Collectors.toMap` accumulates with `HashMap.merge`, which PREPENDS
+  #      within a bucket, not `put`, which appends -- so the converter's
+  #      emulated `keySet()` order was reversed inside every shared bucket and
+  #      the per-den zombie split was permuted (`zigzag`, round 100);
+  #   2. `ZombieControlProvider.denQueues` is keyed by ROBOT ID, not by
+  #      `MapLocation`, so the driver's `q=` column read 0:0:0:0 for every den
+  #      on every round (`prisons`, round 1200);
+  #   3. `String.format("%.6f")` rounds HALF-UP where C's `printf` -- which is
+  #      what Nim's `formatFloat` calls -- rounds HALF-TO-EVEN, so a 900-term
+  #      sum over BYTE-IDENTICAL arrays printed differently (`checkers`, round
+  #      219). Both sides now print the two sums as raw IEEE-754 bit patterns.
+  # ---------------------------------------------------------------------
+  parity-oracle-bc16:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache nimby toolchain and nimcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nimby
+            ~/.cache/nim
+          key: nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-${{ hashFiles('nimby.lock') }}
+          restore-keys: |
+            nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-
+
+      - name: Install nimby and Nim
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/nimby" \
+            "https://github.com/treeform/nimby/releases/download/${NIMBY_VERSION}/nimby-Linux-X64"
+          chmod +x "$HOME/.local/bin/nimby"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/nimby" use "$NIM_VERSION"
+
+      - name: Sync Nim dependencies
+        run: nimby --global sync nimby.lock
+
+      - name: Regenerate nim.cfg from the synced package tree
+        run: |
+          set -euo pipefail
+          rm -f nim.cfg
+          for pkg in "$HOME"/.nimby/pkgs/*; do
+            [ -e "$pkg" ] || continue
+            if [ -d "$pkg/src" ]; then
+              echo "--path:\"$pkg/src\"" >> nim.cfg
+            else
+              echo "--path:\"$pkg\"" >> nim.cfg
+            fi
+          done
+          echo '--path:"src"' >> nim.cfg
+
+      # TEMURIN 8. NOT NEGOTIABLE. See the job comment.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+
+      - name: The JDK really is 8
+        run: |
+          set -euo pipefail
+          java -version 2>&1 | tee /tmp/javaver16
+          javac -version 2>&1 | tee -a /tmp/javaver16
+          grep -q '1\.8\.' /tmp/javaver16 || {
+            echo "::error::this oracle MUST run on Temurin 8: the jar bundles"
+            echo "::error::a 2016-era ASM and under a newer JDK the"
+            echo "::error::instrumenter throws on every player class load and"
+            echo "::error::this job would be green while proving nothing"
+            echo "::error::(docs/PARITY.md section bc16)."
+            exit 1; }
+          # And `--release` must NOT be used: it arrived in JDK 9 and dies
+          # with "invalid flag" here in seconds (the bc21 lesson). This
+          # asserts the trap rather than trusting a comment.
+          if javac --release 8 -version >/dev/null 2>&1; then
+            echo "::error::this javac accepts --release, so it is not 8"
+            exit 1
+          fi
+          echo "javac rejects --release, as a JDK-8 javac must"
+
+      - name: Fetch the published 2016 jar
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle16
+          curl -fsSL -o /tmp/oracle16/battlecode2016.jar "${BC16_JAR_URL}"
+
+      - name: Build the oracle (jar sha256, size AND version verified, JDK 8)
+        run: |
+          set -euo pipefail
+          ./tools/oracle/bc16/build_oracle.sh \
+            /tmp/oracle16/battlecode2016.jar /tmp/oracle16/build
+
+      # Tier B, part 1: every GameConstants field, PRINTED from the jar's own
+      # classes. THERE IS NO `SPEC_VERSION` IN 2016's GameConstants -- the
+      # field does not exist -- so the sha256, the size and the jar's own
+      # `battlecode-version` entry are the pins, and this step cross-checks
+      # every constant anyway. 2016's GameConstants is an INTERFACE, so its
+      # fields are implicitly `public static final` and reflection sees all of
+      # them.
+      - name: The jar's own constants, cross-checked against the generated table
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle16/build/classes
+          javac -nowarn -encoding UTF-8 -cp /tmp/oracle16/battlecode2016.jar \
+            -d /tmp/oracle16/build/classes tools/JavaBc16Tables.java
+          timeout 600 java -cp \
+            "/tmp/oracle16/battlecode2016.jar:/tmp/oracle16/build/classes" \
+            JavaBc16Tables constants | tee /tmp/oracle16/constants.txt
+          python3 - <<'PY'
+          import pathlib, re
+          jar = {}
+          for line in pathlib.Path("/tmp/oracle16/constants.txt").read_text().splitlines():
+              if "=" not in line:
+                  continue
+              k, v = line.split("=", 1)
+              jar[k] = v
+          src = pathlib.Path("src/battlecode/years/bc16/constants.nim").read_text()
+          def camel(name):
+              parts = name.split("_")
+              return parts[0].capitalize() + "".join(p.capitalize() for p in parts[1:])
+          bad = []
+          checked = 0
+          missing = []
+          for name, value in sorted(jar.items()):
+              m = re.search(r"^  " + re.escape(camel(name)) +
+                            r"\*: (\w+) = (.+)$", src, re.M)
+              if not m:
+                  missing.append(name)
+                  continue
+              kind, literal = m.group(1), m.group(2).strip()
+              checked += 1
+              if kind == "string":
+                  want = literal.strip('"')
+                  if want != value:
+                      bad.append(f"{name}: nim {want!r} jar {value!r}")
+              elif kind in ("float32", "float64"):
+                  if abs(float(literal) - float(value)) > 1e-9:
+                      bad.append(f"{name}: nim {literal} jar {value}")
+              else:
+                  if int(literal) != int(float(value)):
+                      bad.append(f"{name}: nim {literal} jar {value}")
+          print(f"cross-checked {checked} of {len(jar)} GameConstants fields "
+                f"against the jar")
+          # The ARMAGEDDON_* family and the instrumentation constants are
+          # DELIBERATELY not ported (V4, V5, V8), so they are named here
+          # rather than silently skipped.
+          for name in missing:
+              print(f"  not ported (see docs/RULES-BC16.md section "
+                    f"Divergences): {name}")
+          if checked < 25:
+              raise SystemExit(f"::error::only {checked} fields cross-checked; "
+                               f"the generated table has come apart from the jar")
+          for b in bad:
+              print(f"::error::{b}")
+          if bad:
+              raise SystemExit(1)
+          PY
+
+      # Tier B, part 2 (BLOCKING): the WHOLE FINITE ARITHMETIC DOMAIN,
+      # regenerated from the jar's own classes and BYTE-DIFFED against the
+      # committed table -- the twelve-row RobotType table with all seventeen
+      # constructor fields and the turnsInto graph, the eight derived
+      # predicates, the outbreak ladder for levels 0..12 with every type's
+      # scaled health and attack, the guard reduction over every reachable
+      # attack power, `Math.pow(k/8000, 1.5)` FOR ALL 8 001 k (the V1 table),
+      # `(int) Math.sqrt(r2)` for r2 0..10 000, THE WHOLE `directionTo`
+      # LATTICE for dx, dy in -80..80 (25 921 pairs), the rubble clear map and
+      # the parts income curve. bc16 has exactly TWO non-algebraic functions
+      # and both domains are finite, so this tier is not a sample: it is the
+      # entire domain.
+      - name: Tier B (BLOCKING) — the WHOLE finite arithmetic domain, byte-diffed
+        run: |
+          set -euo pipefail
+          timeout 600 java -cp \
+            "/tmp/oracle16/battlecode2016.jar:/tmp/oracle16/build/classes" \
+            JavaBc16Tables tables 2016.0.2.2 > /tmp/oracle16/tables.json
+          if ! diff -u data/bc16/tables.json /tmp/oracle16/tables.json \
+               | head -40; then
+            echo "::error::data/bc16/tables.json is not what the jar's own"
+            echo "::error::classes emit. Re-run tools/JavaBc16Tables.java and"
+            echo "::error::commit the result."
+            exit 1
+          fi
+          diff -q data/bc16/tables.json /tmp/oracle16/tables.json
+          echo "Tier B: the committed arithmetic table IS the jar's own output"
+
+      # AND THE ENGINE'S OWN `Math.pow` IS WITHIN ONE ULP OF THE TABLE.
+      #
+      # `pow_1_5` is tabled from `StrictMath.pow`, not from the `Math.pow` the
+      # engine actually calls, because `Math.pow` is permitted 1 ulp of error
+      # and IS NOT REPRODUCIBLE BETWEEN JDK BUILDS -- measured, Temurin 8u422
+      # and 8u452 disagree on this domain, and either disagrees with
+      # `StrictMath` on hundreds of the 8 001 cells. A byte-diff of a
+      # `Math.pow` table therefore fails for a reason that has nothing to do
+      # with this port. `StrictMath.pow` must reproduce fdlibm bit for bit on
+      # every conforming JVM, so the byte-diff above stays absolute -- and
+      # this step adds the assertion it would otherwise have lost: the RUNNING
+      # JDK's `Math.pow`, the call the engine makes, is within one ulp of
+      # every tabled value. Strictly more checks than a `Math.pow` byte-diff,
+      # not fewer. See docs/PARITY.md section bc16 and docs/RULES-BC16.md V1.
+      - name: Tier B (BLOCKING) — the running JDK's own Math.pow, within 1 ulp
+        run: |
+          set -euo pipefail
+          cat > /tmp/oracle16/PowCheck.java <<'JAVA'
+          import java.io.*;
+          import java.util.*;
+          public final class PowCheck {
+              public static void main(String[] a) throws Exception {
+                  String all = new Scanner(new File(a[0]), "UTF-8")
+                      .useDelimiter("\\A").next();
+                  int i = all.indexOf("\"pow_1_5\":");
+                  int lo = all.indexOf('[', i), hi = all.indexOf(']', lo);
+                  String[] cells = all.substring(lo + 1, hi).split(",");
+                  if (cells.length != 8001)
+                      throw new IllegalStateException(
+                          "pow_1_5 has " + cells.length + " cells, want 8001");
+                  int exact = 0, oneUlp = 0, worse = 0, firstBad = -1;
+                  for (int k = 0; k <= 8000; k++) {
+                      double want = Double.parseDouble(cells[k].trim());
+                      double got = Math.pow(k / 8000.0, 1.5);
+                      long g = Double.doubleToRawLongBits(got);
+                      long w = Double.doubleToRawLongBits(want);
+                      if (g == w) exact++;
+                      else if (Math.abs(g - w) <= 1L) oneUlp++;
+                      else { worse++; if (firstBad < 0) firstBad = k; }
+                  }
+                  System.out.println("this JDK's Math.pow against the tabled "
+                      + "StrictMath.pow: " + exact + " bit-exact, " + oneUlp
+                      + " one ulp apart, " + worse + " further");
+                  if (worse > 0) {
+                      System.out.println("::error::" + worse + " tabled "
+                          + "pow(k/8000,1.5) values are more than one ulp "
+                          + "from this JDK's Math.pow, first at k="
+                          + firstBad + ". That is not a rounding-mode "
+                          + "difference, it is a wrong table.");
+                      System.exit(1);
+                  }
+                  System.exit(0);
+              }
+          }
+          JAVA
+          javac -nowarn -encoding UTF-8 -d /tmp/oracle16/build/classes \
+            /tmp/oracle16/PowCheck.java
+          timeout 300 java -cp /tmp/oracle16/build/classes PowCheck \
+            data/bc16/tables.json
+
+      # Tier B, part 3 (BLOCKING): D3 AND D4, PROVED RATHER THAN TRUSTED. The
+      # committed maps carry a build-time SYMMETRY and a build-time PER-DEN
+      # SPLIT of the public zombie schedule, and both are reproduced here from
+      # the JVM's own `GameMap.getSymmetry()` and
+      # `GameMap.getZombieSpawnSchedule(denLoc)` and compared cell by cell.
+      # This is the step that catches a `HashMap` iteration-order bug, and it
+      # is the step that DID catch one.
+      - name: Tier B (BLOCKING) — the 22 maps' symmetry and per-den split, from the JVM
+        run: |
+          set -euo pipefail
+          cat > /tmp/oracle16/MapProbe.java <<'JAVA'
+          import battlecode.common.*;
+          import battlecode.world.*;
+          import java.util.*;
+          public final class MapProbe {
+              public static void main(String[] a) throws Exception {
+                  StringBuilder b = new StringBuilder();
+                  for (String name : a) {
+                      GameMap m = GameMapIO.loadMap(name, null);
+                      MapLocation o = m.getOrigin();
+                      b.append(name).append(" symmetry=")
+                       .append(m.getSymmetry().name().toLowerCase())
+                       .append('\n');
+                      List<String> rows = new ArrayList<String>();
+                      for (GameMap.InitialRobotInfo r : m.getInitialRobots()) {
+                          if (r.type != RobotType.ZOMBIEDEN) continue;
+                          MapLocation l = new MapLocation(
+                              r.originOffsetX, r.originOffsetY);
+                          ZombieSpawnSchedule s = m.getZombieSpawnSchedule(
+                              l.add(o.x, o.y));
+                          StringBuilder d = new StringBuilder();
+                          d.append(name).append(" den ").append(l.x)
+                           .append(',').append(l.y);
+                          for (int round : s.getRounds()) {
+                              d.append(" r").append(round).append('=');
+                              int[] c = new int[4];
+                              for (ZombieCount zc : s.getScheduleForRound(round)) {
+                                  RobotType t = zc.getType();
+                                  int i = t == RobotType.STANDARDZOMBIE ? 0
+                                        : t == RobotType.RANGEDZOMBIE ? 1
+                                        : t == RobotType.FASTZOMBIE ? 2 : 3;
+                                  c[i] += zc.getCount();
+                              }
+                              d.append(c[0]).append(':').append(c[1])
+                               .append(':').append(c[2]).append(':')
+                               .append(c[3]);
+                          }
+                          rows.add(d.toString());
+                      }
+                      Collections.sort(rows);
+                      for (String r : rows) b.append(r).append('\n');
+                  }
+                  System.out.print(b);
+                  System.exit(0);
+              }
+          }
+          JAVA
+          javac -nowarn -encoding UTF-8 -cp /tmp/oracle16/battlecode2016.jar \
+            -d /tmp/oracle16/build/classes /tmp/oracle16/MapProbe.java
+          MAPS="checkers zigzag swamp river prisons frogger closequarters
+                lockdown industrial quadrants turtle boxy voluted collision
+                caverns 6147 desert space scouting vortex wormy quarry"
+          timeout 600 java -cp \
+            "/tmp/oracle16/battlecode2016.jar:/tmp/oracle16/build/classes" \
+            MapProbe ${MAPS} > /tmp/oracle16/mapprobe.txt
+          wc -l /tmp/oracle16/mapprobe.txt
+          python3 - <<'PY'
+          import json, pathlib
+          # `RobotType`'s own SCREAMING names, because that is what the
+          # converter writes into the committed JSON. Lower-case keys read
+          # back as zero from every schedule row, every row is then dropped as
+          # empty, and the comparison reports `ours None` against a real JVM
+          # row on all 110 dens -- which is what it did.
+          TYPES = ["STANDARDZOMBIE", "RANGEDZOMBIE", "FASTZOMBIE",
+                   "BIGZOMBIE"]
+          want = {}
+          for line in pathlib.Path("/tmp/oracle16/mapprobe.txt").read_text().splitlines():
+              f = line.split()
+              if len(f) >= 2 and f[1].startswith("symmetry="):
+                  want[("sym", f[0])] = f[1].split("=", 1)[1]
+              elif len(f) >= 3 and f[1] == "den":
+                  x, y = f[2].split(",")
+                  rows = {}
+                  for cell in f[3:]:
+                      rnd, counts = cell[1:].split("=")
+                      rows[int(rnd)] = [int(v) for v in counts.split(":")]
+                  want[("den", f[0], int(x), int(y))] = rows
+          bad = []
+          dens = 0
+          for key, value in sorted(want.items(), key=lambda kv: str(kv[0])):
+              if key[0] == "sym":
+                  doc = json.loads(pathlib.Path(
+                      f"data/maps/bc16/{key[1]}.json").read_text())
+                  if doc["symmetry"] != value:
+                      bad.append(f"{key[1]}: symmetry {doc['symmetry']!r}, "
+                                 f"the JVM says {value!r}")
+                  continue
+              _, name, x, y = key
+              dens += 1
+              doc = json.loads(pathlib.Path(
+                  f"data/maps/bc16/{name}.json").read_text())
+              here = None
+              for den in doc["dens"]:
+                  if den["x"] == x and den["y"] == y:
+                      here = den
+              if here is None:
+                  bad.append(f"{name}: no den at {x},{y}")
+                  continue
+              got = {}
+              for rnd, counts in here["schedule"].items():
+                  got[int(rnd)] = [counts.get(t, 0) for t in TYPES]
+              got = {r: c for r, c in got.items() if any(c)}
+              wantrows = {r: c for r, c in value.items() if any(c)}
+              if got != wantrows:
+                  diff = [f"r{r}: ours {got.get(r)} jvm {wantrows.get(r)}"
+                          for r in sorted(set(got) | set(wantrows))
+                          if got.get(r) != wantrows.get(r)]
+                  bad.append(f"{name} den {x},{y}: " + "; ".join(diff[:4]))
+          print(f"compared 22 symmetries and {dens} per-den schedules against "
+                f"the JVM's own GameMap")
+          for b in bad[:20]:
+              print(f"::error::{b}")
+          if bad:
+              print("::error::D3/D4: the committed maps' build-time symmetry "
+                    "or per-den zombie split is not what the engine computes. "
+                    "This is the assertion that PROVES the java.util.HashMap "
+                    "iteration-order emulation rather than trusting it.")
+              raise SystemExit(1)
+          PY
+
+      - name: Build the Nim trace emitters (Tier A idle, Tier A″ greenhorn)
+        run: |
+          set -euo pipefail
+          # `-d:bc16Idle` is the Nim twin of tools/oracle/bc16/bc16idle,
+          # whose whole body is `while (true) Clock.yield();`.
+          nim c --hints:off -d:release -d:bc16Idle --path:src \
+            -o:/tmp/oracle16/pt_bc16idle tools/parity_trace_bc16.nim
+          nim c --hints:off -d:release --path:src \
+            -o:/tmp/oracle16/pt_bc16greenhorn tools/parity_trace_bc16.nim
+
+      # WHOLE GAMES on the nine parity pairs, for BOTH bots. The round cap is
+      # 3000, but neither oracle bot survives to it: an idle archon line is
+      # eaten by the horde and `greenhorn` only slows that down, so the
+      # MEASURED lengths are 298-683 rounds for `bc16idle` and 485-1424 for
+      # `bc16greenhorn`. That is not a weaker window -- the trace runs from
+      # round 0 to the engine's own `GameWorld.isRunning() == false`, so the
+      # end round, the winner and the end condition are themselves compared,
+      # and a port that ended one round early would diverge here. Every
+      # `java` invocation is wrapped in `timeout 900`, because the sandboxed
+      # player threads are NON-DAEMON and a driver that throws without
+      # System.exit() hangs for ever (measured).
+      - name: Run both engines on eighteen pairs (whole games, round 0 to the end)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle16/traces
+          for BOT in bc16idle bc16greenhorn; do
+            case "$BOT" in
+              bc16idle) NIMBIN=/tmp/oracle16/pt_bc16idle; NIMBOT=idle ;;
+              *) NIMBIN=/tmp/oracle16/pt_bc16greenhorn; NIMBOT=greenhorn ;;
+            esac
+            for MAP in checkers zigzag swamp river prisons frogger turtle \
+                       desert space; do
+              timeout 900 java -Xmx2g -XX:+UseSerialGC \
+                -cp "/tmp/oracle16/battlecode2016.jar:/tmp/oracle16/build/classes" \
+                battlecode.world.Bc16Trace "$MAP" 3000 "$BOT" \
+                /tmp/oracle16/build/classes \
+                > "/tmp/oracle16/traces/${BOT}.${MAP}.java" \
+                2> "/tmp/oracle16/traces/${BOT}.${MAP}.java.log"
+              tail -1 "/tmp/oracle16/traces/${BOT}.${MAP}.java.log"
+              "$NIMBIN" "$MAP" 3000 "$NIMBOT" \
+                > "/tmp/oracle16/traces/${BOT}.${MAP}.nim"
+              echo "${BOT}/${MAP}: java $(wc -l < "/tmp/oracle16/traces/${BOT}.${MAP}.java") lines," \
+                   "nim $(wc -l < "/tmp/oracle16/traces/${BOT}.${MAP}.nim") lines"
+            done
+          done
+
+      # EVERY GAME REALLY RAN, AND THE ENGINE'S OWN HALF REALLY HAPPENED.
+      # This is the step that catches the modern-JDK ASM trap from the other
+      # side, and it is also what stops a bit-exact tier from being vacuous.
+      # The floors are MEASURED over the eighteen pairs.
+      - name: Every game really ran (the ASM trap, and the anti-vacuity check)
+        run: |
+          set -euo pipefail
+          for BOT in bc16idle bc16greenhorn; do
+          for MAP in checkers zigzag swamp river prisons frogger turtle \
+                     desert space; do
+            log="/tmp/oracle16/traces/${BOT}.${MAP}.java.log"
+            rounds="$(sed -n 's/.* rounds=\([0-9]*\) .*/\1/p' "$log" | tail -1)"
+            zombies="$(sed -n 's/.* zombies_peak=\([0-9]*\) .*/\1/p' "$log" | tail -1)"
+            robots="$(sed -n 's/.* peak_robots=\([0-9]*\) .*/\1/p' "$log" | tail -1)"
+            pct="$(sed -n 's/.* peak_pct=\([0-9]*\) .*/\1/p' "$log" | tail -1)"
+            turn="$(sed -n 's/.* saw_zombie_turn=\([a-z]*\) .*/\1/p' "$log" | tail -1)"
+            inf="$(sed -n 's/.* saw_infection=\([a-z]*\)$/\1/p' "$log" | tail -1)"
+            echo "${BOT}/${MAP}: rounds=${rounds} zombies_peak=${zombies}" \
+                 "peak_robots=${robots} peak_bytecode=${pct}%" \
+                 "zombie_turn=${turn} infection=${inf}"
+            test "${rounds:-0}" -ge 250 || {
+              echo "::error::${BOT}/${MAP} only reached round ${rounds}."
+              echo "::error::Under a JDK newer than 8 the instrumenter kills"
+              echo "::error::every player robot as it spawns and the game is"
+              echo "::error::over in a handful of rounds. The floor is 250"
+              echo "::error::against a measured minimum of 298"
+              echo "::error::(bc16idle/swamp) and a measured maximum of 1424"
+              echo "::error::(bc16greenhorn/prisons) -- neither bot survives"
+              echo "::error::the 3000-round cap, which is the point."
+              exit 1; }
+            test "${robots:-0}" -ge 10 || {
+              echo "::error::${BOT}/${MAP} peaked at ${robots} robots."
+              exit 1; }
+            test "${pct:-100}" -le 20 || {
+              echo "::error::${BOT}/${MAP} peaked at ${pct}% of a bytecode"
+              echo "::error::limit, above the 20% headroom bound -- which is"
+              echo "::error::exactly \`limit - 8000\`, the knee of the"
+              echo "::error::engine's own decrementDelays. Past that point"
+              echo "::error::the comparison is no longer defined (V1)."
+              exit 1; }
+            test "${turn}" = "true" || {
+              echo "::error::${BOT}/${MAP}: NOT ONE ZOMBIE ever took a turn."
+              echo "::error::A tier that agrees bit for bit while nothing"
+              echo "::error::happens proves nothing."
+              exit 1; }
+          done
+          done
+          # AND THE HORDE REALLY ESCALATED. Across the eighteen pairs at least
+          # 150 zombies must have been on the board at once somewhere, and
+          # infection must have fired on at least one pair -- the two things
+          # that make this year itself.
+          total=0
+          infected=0
+          for BOT in bc16idle bc16greenhorn; do
+          for MAP in checkers zigzag swamp river prisons frogger turtle \
+                     desert space; do
+            log="/tmp/oracle16/traces/${BOT}.${MAP}.java.log"
+            z="$(sed -n 's/.* zombies_peak=\([0-9]*\) .*/\1/p' "$log" | tail -1)"
+            total=$(( total + ${z:-0} ))
+            if [ "$(sed -n 's/.* saw_infection=\([a-z]*\)$/\1/p' "$log" | tail -1)" = "true" ]; then
+              infected=$(( infected + 1 ))
+            fi
+          done
+          done
+          echo "peak zombies summed over the eighteen pairs: ${total};" \
+               "pairs that saw an infection: ${infected}/18"
+          test "${total}" -ge 150 || {
+            echo "::error::only ${total} zombies were ever on the board across"
+            echo "::error::the eighteen whole games (measured: 735). The dens"
+            echo "::error::did not spawn, so this oracle proved nothing."
+            exit 1; }
+          test "${infected}" -ge 9 || {
+            echo "::error::infection fired on only ${infected} of the"
+            echo "::error::eighteen pairs. A zombie bite infects for 10 turns"
+            echo "::error::and it is THE mechanic of this year."
+            exit 1; }
+
+      - name: Tiers A, A″ and C (all BLOCKING)
+        run: |
+          set -euo pipefail
+          # The comparator's own negative control first, covering all FOUR
+          # known comparator bugs -- a `bc=` column on one side only, a trace
+          # pair that differs only in LENGTH (in both directions), a
+          # zero-padded hex fold that is the same fold, and a HALF-UP versus
+          # HALF-TO-EVEN float tie -- plus the origin tripwire.
+          python3 tools/ci/parity_tiers_bc16.py --selftest
+          python3 tools/ci/parity_tiers_bc16.py \
+            --dir /tmp/oracle16/traces \
+            --maps checkers zigzag swamp river prisons frogger turtle \
+                   desert space \
+            --bots bc16idle bc16greenhorn \
+            --ledger tools/ci/parity_ledger_bc16.json \
+            --summary "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+      - name: Upload the traces (first 200 divergent lines and a digest)
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle16/upload
+          # `if: always()` means this runs after an EARLIER step failed too,
+          # in which case the traces were never produced. Reporting nothing is
+          # correct there; failing the job a second time for a missing
+          # directory only hides the real error.
+          if [ ! -d /tmp/oracle16/traces ]; then
+            echo "no traces were produced; an earlier step failed"
+            exit 0
+          fi
+          cd /tmp/oracle16/traces
+          for BOT in bc16idle bc16greenhorn; do
+          for MAP in checkers zigzag swamp river prisons frogger turtle \
+                     desert space; do
+            j="${BOT}.${MAP}.java"
+            n="${BOT}.${MAP}.nim"
+            [ -f "$j" ] && [ -f "$n" ] || continue
+            # A bc16 trace runs 0.9-16 MB a side; only the first 200
+            # divergent lines and a gzipped digest are uploaded.
+            sed -E 's/ bc=[0-9]+//' "$j" > "/tmp/j.$$"
+            diff "/tmp/j.$$" "$n" | head -200 \
+              > "/tmp/oracle16/upload/${BOT}.${MAP}.diff.txt" || true
+            head -400 "$j" | gzip -9 \
+              > "/tmp/oracle16/upload/${BOT}.${MAP}.java.head.gz"
+            head -400 "$n" | gzip -9 \
+              > "/tmp/oracle16/upload/${BOT}.${MAP}.nim.head.gz"
+            cp "${BOT}.${MAP}.java.log" "/tmp/oracle16/upload/" || true
+            rm -f "/tmp/j.$$"
+          done
+          done
+          ls -la /tmp/oracle16/upload
+
+      - name: Upload the parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-bc16
+          path: /tmp/oracle16/upload
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ---------------------------------------------------------------------
   docker-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -3068,6 +3726,160 @@ jobs:
             echo "::error::first one is scheduled for round 200 of 700."
             exit 1; }
 
+      # The EIGHTH episode: the bc16 year module, end to end, in the
+      # production image. Certification stays on bc26 (the design note's Out
+      # of scope), so this is the only thing that proves a bc16 episode runs
+      # in a container at all -- and its replay is what the wasm-viewer job
+      # loads in a real browser.
+      #
+      # 900 ROUNDS, AND NOT 400 OR 600, for two reasons that are both this
+      # year's. On the pinned map (`river`, 32x32, THREE archons a side, four
+      # dens, FIRST WAVE AT ROUND 150) a 400-round window would show ONE wave
+      # and no escalation, while 900 rounds guarantees three scheduled waves,
+      # an outbreak level change at round 300 and another at 600, and a viper
+      # affordable at all (120 parts against a 2-a-round income). And the
+      # across-the-pair substance assertions below need INFECTION and TURNING
+      # to have happened at least once, which needs zombies to have reached a
+      # unit. 900 rounds also records ~37 s of playback, which comfortably
+      # outlasts the viewer smoke's 15 s soak (the ecos 2026-08-23 scar).
+      #
+      # THE SEED IS PINNED TO DRAW `river`, whose 4.0 archon separation makes
+      # the two factions fight immediately, so the episode is short AND
+      # eventful -- and `tests/test_bc16_maps.nim` asserts that exact draw
+      # from the other side, so the smoke's map cannot drift silently.
+      #
+      # SMOKE_REQUIRE_STATS is the episode SUBSTANCE assertion (the LEARNINGS
+      # 2026-09-03 pin), enforced FOR BOTH SEATS by the script. THE FLOORS ARE
+      # MEASURED, NOT GUESSED: this exact episode -- seed 2016004, `river`,
+      # 900 rounds, bulwark against greenhorn -- produces
+      #
+      #   seat 0 (bulwark)    75 units built, 7357 damage, 7400 parts (tenths)
+      #   seat 1 (greenhorn)  72 units built, 4186 damage, 2600 parts (tenths)
+      #
+      # and the committed floors are roughly HALF the weak seat's value, which
+      # is also comfortably ABOVE every number the design note names (6 / 150
+      # / 500). GUARDS, TURRETS, NEUTRALS AND DENS ARE NOT IN THIS SET,
+      # because they are not things BOTH seats do: `greenhorn` builds only
+      # SOLDIERs, never activates a neutral and never kills a den -- that is
+      # what being the weak floor means. They are asserted ACROSS the seats in
+      # the step below instead.
+      - name: Raw-Docker episode smoke (bc16, scripted vs scripted)
+        env:
+          SMOKE_SLUG: ${{ env.SLUG }}
+          SMOKE_EXPECT_YEAR: bc16
+          # The manifest declares exactly the two players the certification
+          # fixture seats, and `PLAYER_SCRIPTED` resolves per year: on bc16
+          # `awu` is bulwark and `scaffold` is greenhorn
+          # (src/battlecode/baselines.nim).
+          SMOKE_PLAYER_IDS: awu,scaffold
+          SMOKE_CONFIG_OVERRIDE: >-
+            {"year":"bc16","pool":"small","seed":2016004,"gamesPerMatch":1,
+             "maxRounds":900,"perGameBudgetSeconds":90,
+             "matchBudgetSeconds":100,"connectTimeoutMs":15000}
+          SMOKE_REQUIRE_STATS: >-
+            {"units_built":30,"damage_dealt":1500,
+             "parts_collected_tenths":1000}
+          SMOKE_REPLAY_OUT: ${{ github.workspace }}/dist/smoke/replay-bc16.json
+          SMOKE_CONTRACT_PROBE: "0"
+        run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
+
+      # THE ACROSS-THE-PAIR HALF, and for this year it is the half that
+      # matters. The signatures of 2016 -- commissioning a GUARD or a TURRET,
+      # activating a NEUTRAL, being INFECTED and having one of your own units
+      # STAND BACK UP ON THE HORDE'S SIDE -- are things only a seat playing
+      # WELL does, and `greenhorn` does none of them, so asserting them
+      # per-seat would be asserting that the weak floor is not weak. Together
+      # they make an idle win machine-visible, which is exactly what the
+      # 2026-09-03 round-1 degenerate match lacked.
+      #
+      # IF `robots_turned >= 6` OR `guards_built >= 3` EVER STOPS HOLDING,
+      # THE FIX IS TO RAISE THE SMOKE'S `maxRounds` UNTIL IT DOES -- never to
+      # drop the assertion. An episode of this year in which nobody was ever
+      # infected is not this game being played.
+      #
+      # Measured on this exact episode (the numbers the floors are half of):
+      # units 147, damage 11543, guards 7, infections 70, turned 18,
+      # zombie damage 4150, zombies spawned 54, outbreak level 2.
+      - name: The bc16 episode really played bc16
+        run: |
+          set -euo pipefail
+          # Read from the REPLAY, whose `result` block is the results
+          # document verbatim: `dist/smoke/results.json` is overwritten by
+          # every episode in turn and naming it here would make this
+          # assertion depend on which episode happened to run last (the bc24
+          # fix).
+          sum() { jq -r "[.result.games[0].$1[]] | add" \
+            dist/smoke/replay-bc16.json; }
+          scalar() { jq -r ".result.games[0].$1" \
+            dist/smoke/replay-bc16.json; }
+          built="$(sum units_built)"
+          damage="$(sum damage_dealt)"
+          guards="$(sum guards_built)"
+          infected="$(sum infections_suffered)"
+          turned="$(sum robots_turned)"
+          zdamage="$(sum zombie_damage_dealt)"
+          spawned="$(scalar zombies_spawned)"
+          outbreak="$(scalar outbreak_level_end)"
+          echo "across the two seats: units=${built} damage=${damage}" \
+               "guards=${guards} infections=${infected} turned=${turned}" \
+               "zombie-damage=${zdamage} zombies=${spawned}" \
+               "outbreak=${outbreak}"
+          test "${built}" -ge 80 || {
+            echo "::error::the bc16 smoke episode built ${built} robots"
+            echo "::error::between the two seats. An archon builds a 30-part"
+            echo "::error::SOLDIER whenever parts allow and income is two a"
+            echo "::error::round: a faction does not build twenty in 900."
+            exit 1; }
+          test "${damage}" -ge 4000 || {
+            echo "::error::${damage} damage was dealt in the whole episode."
+            echo "::error::On `river` the two factions start 4.0 apart."
+            exit 1; }
+          test "${guards}" -ge 3 || {
+            echo "::error::nobody commissioned a GUARD. A guard is 145 HP"
+            echo "::error::against a soldier's 60, deals DOUBLE damage to"
+            echo "::error::zombies and blocks 4 off any hit above 10 -- it is"
+            echo "::error::the unit this year is about, and the strong"
+            echo "::error::chassis builds seven in this window."
+            exit 1; }
+          test "${infected}" -ge 20 || {
+            echo "::error::only ${infected} units were ever infected. A"
+            echo "::error::zombie bite infects for 10 turns and the first"
+            echo "::error::wave lands on round 150 of 900."
+            exit 1; }
+          test "${turned}" -ge 6 || {
+            echo "::error::not one unit stood back up on the horde's side."
+            echo "::error::A robot that dies INFECTED leaves no rubble and"
+            echo "::error::becomes a zombie of its own turnsInto -- it is THE"
+            echo "::error::mechanic of this year. RAISE maxRounds until it"
+            echo "::error::fires; do NOT drop this."
+            exit 1; }
+          test "${zdamage}" -ge 1500 || {
+            echo "::error::${zdamage} damage was dealt to the horde in the"
+            echo "::error::whole episode. Both factions fight it."
+            exit 1; }
+          test "${spawned}" -ge 25 || {
+            echo "::error::only ${spawned} zombies were spawned. `river`'s"
+            echo "::error::four dens owe 266 across the game and the first"
+            echo "::error::wave is round 150 of 900."
+            exit 1; }
+          test "${outbreak}" -ge 2 || {
+            echo "::error::the outbreak level ended at ${outbreak}. It rises"
+            echo "::error::every 300 rounds, so a 900-round episode reaches"
+            echo "::error::level 2 by arithmetic -- unless the episode ended"
+            echo "::error::early."
+            exit 1; }
+
+      # THE PACING NUMBER the next year module sizes its own probe from, and
+      # the number that decided this year's own `--timeout 120 --soak 15`
+      # (docs/RULES-BC16.md, "Playback pacing, measured").
+      - name: Print the bc16 episode's simulated seconds per round
+        run: |
+          set -euo pipefail
+          jq -r '"bc16 smoke: sim_seconds=\(.result.sim_seconds) " +
+                 "rounds=\(.result.games[0].rounds_played) " +
+                 "wall=\(.result.wall_clock_seconds)s"' \
+            dist/smoke/replay-bc16.json
+
       # THE PACING NUMBER the next year module sizes its own probe from, and
       # the number that decided this year's own `--timeout 120 --soak 15`
       # (docs/RULES-BC22.md, "Playback pacing, measured").
@@ -3079,13 +3891,13 @@ jobs:
                  "wall=\(.result.wall_clock_seconds)s"' \
             dist/smoke/replay-bc22.json
 
-      - name: All SEVEN smoke replays are present and are different years
+      - name: All EIGHT smoke replays are present and are different years
         run: |
           set -euo pipefail
           for f in dist/smoke/replay.json dist/smoke/replay-bc20.json \
                    dist/smoke/replay-bc21.json dist/smoke/replay-bc24.json \
                    dist/smoke/replay-bc25.json dist/smoke/replay-bc23.json \
-                   dist/smoke/replay-bc22.json; do
+                   dist/smoke/replay-bc22.json dist/smoke/replay-bc16.json; do
             test -s "$f" || { echo "::error::$f is missing"; exit 1; }
           done
           y26="$(jq -r .year dist/smoke/replay.json)"
@@ -3095,8 +3907,9 @@ jobs:
           y25="$(jq -r .year dist/smoke/replay-bc25.json)"
           y23="$(jq -r .year dist/smoke/replay-bc23.json)"
           y22="$(jq -r .year dist/smoke/replay-bc22.json)"
+          y16="$(jq -r .year dist/smoke/replay-bc16.json)"
           echo "replay.json year=$y26  bc20=$y20  bc21=$y21  bc24=$y24" \
-               "bc25=$y25  bc23=$y23  bc22=$y22"
+               "bc25=$y25  bc23=$y23  bc22=$y22  bc16=$y16"
           test "$y26" = "bc26" || { echo "::error::replay.json is not bc26"; exit 1; }
           test "$y20" = "bc20" || { echo "::error::replay-bc20.json is not bc20"; exit 1; }
           test "$y21" = "bc21" || { echo "::error::replay-bc21.json is not bc21"; exit 1; }
@@ -3104,9 +3917,10 @@ jobs:
           test "$y25" = "bc25" || { echo "::error::replay-bc25.json is not bc25"; exit 1; }
           test "$y23" = "bc23" || { echo "::error::replay-bc23.json is not bc23"; exit 1; }
           test "$y22" = "bc22" || { echo "::error::replay-bc22.json is not bc22"; exit 1; }
+          test "$y16" = "bc16" || { echo "::error::replay-bc16.json is not bc16"; exit 1; }
           if [ "$(printf '%s\n' "$y26" "$y20" "$y21" "$y24" "$y25" "$y23" \
-                  "$y22" | sort -u | wc -l)" -ne 7 ]; then
-            echo "::error::the seven smoke replays are not seven different years"
+                  "$y22" "$y16" | sort -u | wc -l)" -ne 8 ]; then
+            echo "::error::the eight smoke replays are not eight different years"
             exit 1
           fi
 
@@ -3216,7 +4030,7 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx --yes playwright@1.55.0 install --with-deps chromium
 
-      - name: Load the bundle in a real browser (ALL SEVEN years' replays)
+      - name: Load the bundle in a real browser (ALL EIGHT years' replays)
         run: |
           set -euo pipefail
           # A for-loop, not `ls … | head -1`: under `set -o pipefail` an unmatched
@@ -3228,7 +4042,8 @@ jobs:
                            dist/smoke/replay-bc24.json \
                            dist/smoke/replay-bc25.json \
                            dist/smoke/replay-bc23.json \
-                           dist/smoke/replay-bc22.json; do
+                           dist/smoke/replay-bc22.json \
+                           dist/smoke/replay-bc16.json; do
             if [ -f "${candidate}" ]; then replays="${replays} ${candidate}"; fi
           done
           test -n "${replays}" || {
@@ -3281,9 +4096,20 @@ jobs:
           # the game on every seek (docs/RULES-BC22.md, "Playback pacing,
           # measured"). The phase-60 check-8 dispatch for bc22 uses
           # `settle=20000 soak=15` for the same reason.
+          # bc16 GETS THE SAME LONGER LEASH, and it is the most exposed
+          # year this repository has: it is 3000 ROUNDS, 50 % LONGER THAN ANY
+          # OTHER YEAR, so a 100 % seek re-simulates the whole of it in the
+          # Worker. Measured in phase 20 the sim itself is fast -- 0.45 to
+          # 1.6 ms a round, and 2.2 s for a whole 3000-round mirror on
+          # `river` -- but the round COUNT is what the fixed-wait scrub probe
+          # sees (docs/RULES-BC16.md, "Playback pacing, measured"), and the
+          # phase-60 check-8 dispatch for bc16 uses `settle=20000 soak=15`
+          # for exactly the same reason. Decided here rather than discovered
+          # at phase 60.
           if [ "${replay}" = "dist/smoke/replay-bc24.json" ] || \
              [ "${replay}" = "dist/smoke/replay-bc25.json" ] || \
              [ "${replay}" = "dist/smoke/replay-bc22.json" ] || \
+             [ "${replay}" = "dist/smoke/replay-bc16.json" ] || \
              [ "${replay}" = "dist/smoke/replay-bc23.json" ]; then
             node tools/ci/viewer_smoke.mjs \
               --bundle dist/static-replay-viewer \
@@ -3354,7 +4180,7 @@ jobs:
       # The wasm module itself, under node: wasm32-only failures (int overflow
       # traps, address-space exhaustion) are invisible to the native tests --
       # and a brand-new year module is exactly where one would live.
-      - name: Smoke the emitted wasm module under node (all six years)
+      - name: Smoke the emitted wasm module under node (all eight years)
         run: |
           set -euo pipefail
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
@@ -3401,6 +4227,16 @@ jobs:
             "${{ github.workspace }}/dist/smoke/replay-bc22.json"
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
             "${{ github.workspace }}/tests/fixtures/replay-bc22.json"
+          # bc16: the smoke episode this run produced, and the COMMITTED bc16
+          # fixture -- which is the one that carries ALL THIRTEEN beat kinds
+          # (tests/test_bc16_beats.nim asserts emission, label and style
+          # against exactly these bytes). bc16 is the LONGEST recording in
+          # this repository at 3000 rounds, so it is also the year most
+          # likely to find a wasm32 address-space failure.
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/dist/smoke/replay-bc16.json"
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/tests/fixtures/replay-bc16.json"
 
       # The text the CI replay never carries. Every replay CI produces is
       # SCRIPTED, so its notes and motto are the short strings baselines.nim
