@@ -68,6 +68,17 @@
   // panels.
   var SIZES = [[360, 640], [720, 900], [1280, 720]];
   var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22', 'bc16'];
+  // The readouts a year's own CSS must suppress while the endcard is up,
+  // because `#endcard`'s background is a radial gradient at 0.82-0.95 alpha
+  // and is therefore NOT opaque over the board: a box left visible under it
+  // shows through the score screen. bc16 is the only year in this page with
+  // such a rule (`grep -c 'visibility: hidden'` → 1), and it shipped keyed on
+  // a class the page never sets and on the wrong sibling direction (r1-F1).
+  // A year that adds one adds an entry here and gets the check for free.
+  var SUPPRESSED_BY_ENDCARD = {
+    bc16: ['bc16-archons', 'bc16-horde', 'bc16-econ', 'bc16-units',
+           'bc16-doctrines']
+  };
 
   function runes(text) { return Array.from(text); }
   function repeatRunes(text, count) {
@@ -671,6 +682,12 @@
         '<button type="button" id="bc16-doctrines-close" ' +
         'aria-label="Dismiss doctrines">&times;</button>' +
         '<div id="bc16-doctrines-body">' + bc16Doctrines + '</div></div>' +
+      // The page's own endcard, EMPTY and `display: none` until a check
+      // raises it. It is here so the HUD-suppression rule can be read off the
+      // browser rather than off a text grep (r1-F1), and it must be a CHILD
+      // OF #chrome because that is where the page puts it and what the
+      // `#chrome:has(#endcard.on)` rule keys on.
+      '<div id="endcard"></div>' +
     '</div></div></div>';
 
   // The verdict: nothing may leave the frame, and nothing may hide text
@@ -683,6 +700,39 @@
         'absolute') {
       return 'page_styles.css did not load — the fixture would be testing ' +
         'nothing (extracted from client/replay_broadcast.html by ci.yml)';
+    }
+    // THE HUD MAY NOT BLEED THROUGH THE ENDCARD, read off the BROWSER
+    // (r1-F1). bc16's suppression rule shipped as `#endcard.show ~ #bc16-*`,
+    // which was dead twice over — `.show` is a class the page never sets, and
+    // `~` selects only FOLLOWING siblings while the `#bc16-*` boxes precede
+    // `#endcard` in #chrome — and the only coverage it had was a test
+    // asserting that dead string was PRESENT in the page. A grep cannot see
+    // either defect. This can: raise the card exactly as renderEndcard does
+    // and ask what `visibility` the browser computes.
+    var suppressed = SUPPRESSED_BY_ENDCARD[year];
+    if (suppressed) {
+      var card = document.getElementById('endcard');
+      if (!card) return 'the fixture has no #endcard to raise';
+      card.classList.add('on');
+      var bled = suppressed.filter(function (id) {
+        return getComputedStyle(document.getElementById(id)).visibility !==
+          'hidden';
+      });
+      card.classList.remove('on');
+      if (bled.length) {
+        return 'the endcard is up and #' + bled.join(', #') + ' is still ' +
+          'visible — the HUD bleeds through a score screen that is not opaque';
+      }
+      // And it may not be stuck on: every seek takes the card down, and the
+      // readouts have to come back when it does.
+      var stuck = suppressed.filter(function (id) {
+        return getComputedStyle(document.getElementById(id)).visibility ===
+          'hidden';
+      });
+      if (stuck.length) {
+        return '#' + stuck.join(', #') + ' stayed hidden after the endcard ' +
+          'came down — the scrubber can never pull the match back';
+      }
     }
     var frame = document.documentElement.getBoundingClientRect();
     // Content inside a SCROLLING box is laid out at its full height and

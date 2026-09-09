@@ -509,8 +509,18 @@ check("dismissEndcard takes it down with the same class",
 check("and nothing toggles the endcard with a class that has no rule",
   "$('endcard').classList.add('show')" notin page and
   "$('endcard').classList.remove('show')" notin page)
-check("there is no #endcard.show rule to justify one",
-  "#endcard.show {" notin page)
+## `#endcard.show {` was the wrong shape for this assertion: bc16 shipped a
+## rule reading `#endcard.show ~ #bc16-archons`, which the `{` form let
+## through, and it was dead for the whole run (r1-F1). The honest form reads
+## the page's whole <style> block and refuses the substring in ANY selector
+## shape. (The page's own prose comment in renderEndcard names the class to
+## say it does not exist, which is why this reads the CSS, not the file.)
+block:
+  let cssOpen = page.find("<style>")
+  let cssClose = page.find("</style>", cssOpen)
+  let css = page[cssOpen + len("<style>") ..< cssClose]
+  check("there is no #endcard.show rule to justify one, in any shape",
+    "#endcard.show" notin css)
 
 ## N1: the same rule for the hash-mismatch banner. `#mmwarn.on` is the only
 ## rule that displays it, so raising it with any other class leaves the
@@ -1444,10 +1454,42 @@ block:
     "if (kind === 'tenths') return (n / 10).toFixed(1);" in page)
   check("a blank bc16 motto renders NOTHING",
     "if (d.motto) html += '<br>\\u201c'" in page)
+  ## NO HUD BLEED-THROUGH. The static half below is a grep and a grep is NOT
+  ## coverage: this repo shipped `#endcard.show ~ #bc16-archons`, which named
+  ## a class the page never sets AND the wrong sibling direction, and a grep
+  ## for exactly that string was GREEN while the rule matched nothing (r1-F1).
+  ## The gate is a computed style in `tools/ci/renderer_fixture.html`, which
+  ## raises `#endcard` and reads `visibility` on all five boxes; this static
+  ## pair only pins the shape so a future edit cannot quietly drop it.
   check("and the bc16 boxes are hidden while the endcard shows (no HUD " &
     "bleed-through)",
-    "html[data-year=\"bc16\"] #endcard.show ~ #bc16-archons" in page and
+    "html[data-year=\"bc16\"] #chrome:has(#endcard.on) #bc16-archons" in
+      page and
     "visibility: hidden;" in page)
+  check("keyed on the class the page ACTUALLY toggles, parent-scoped rather " &
+    "than sibling-scoped",
+    "#endcard.show ~ #bc16-archons" notin page and
+    "#endcard.on ~ #bc16-archons" notin page)
+  for id in ["bc16-archons", "bc16-horde", "bc16-econ", "bc16-units",
+             "bc16-doctrines"]:
+    check("every bc16 box is named in the suppression rule: " & id,
+      "html[data-year=\"bc16\"] #chrome:has(#endcard.on) #" & id in page)
+  block:
+    let fixture = readFile("tools/ci/renderer_fixture.html")
+    check("and the FIXTURE proves it by computed style, not by grep",
+      "SUPPRESSED_BY_ENDCARD" in fixture and
+      "card.classList.add('on');" in fixture and
+      "getComputedStyle(document.getElementById(id)).visibility !==" in
+        fixture and
+      "the HUD bleeds through a score screen that is not opaque" in fixture)
+    check("on all five boxes",
+      "bc16: ['bc16-archons', 'bc16-horde', 'bc16-econ', 'bc16-units'," in
+        fixture and "'bc16-doctrines']" in fixture)
+    check("with #endcard a CHILD OF #chrome, which the rule keys on",
+      "'<div id=\"endcard\"></div>' +\n    '</div></div></div>';" in fixture)
+    check("and it takes the card down again so the boxes come back",
+      "card.classList.remove('on');" in fixture and
+      "stayed hidden after the endcard " in fixture)
   ## The tiebreak ledger — all four rungs and which one decided it.
   check("the war panel draws the whole tiebreak ledger",
     "decided it" in page and "g.ladder" in page)
