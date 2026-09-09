@@ -7,9 +7,9 @@ discharged by the repository itself.
 
 **No upstream Java source runs in any image this repository builds, and no
 JVM, JDK or JRE is installed in one.** The Java engines exist only inside the
-`parity-oracle`, `parity-oracle-bc20`, `-bc21`, `-bc22`, `-bc23`, `-bc24` and
-`-bc25` jobs of `.github/workflows/ci.yml`, where they are fetched at CI time
-and used as differential oracles (see `docs/PARITY.md`).
+`parity-oracle`, `parity-oracle-bc16`, `-bc20`, `-bc21`, `-bc22`, `-bc23`,
+`-bc24` and `-bc25` jobs of `.github/workflows/ci.yml`, where they are fetched
+at CI time and used as differential oracles (see `docs/PARITY.md`).
 
 ---
 
@@ -593,3 +593,139 @@ radius, which is the right shape for a year whose radii are 20 / 34 / 53.
 ported, not compiled, not read and not cloned** — the same rule as every other
 year. `5 Musketeers` is not published on GitHub and likewise contributes
 nothing.
+
+
+# ===========================================================================
+#  The `bc16` year module — Battlecode 2016 "Zombie Invasion"
+# ===========================================================================
+
+**This is the first year in this repository whose upstreams are GPL-3.0 rather
+than AGPL-3.0, and there are two of them.** GPL-3.0 §13 expressly permits the
+combination of GPL-3.0 material with AGPL-3.0 material, and AGPL-3.0 §13 says
+the same in the other direction, so AGPL-3.0 remains a valid licence for the
+combined work. The repository as a whole stays AGPL-3.0 and this file records
+the upstreams' own terms rather than leaving the reasoning implicit.
+
+**The official 2016 specification is lost** — the `s3.amazonaws.com/battlecode-specs`
+bucket and `battlecode.org` are both dead and there is no Wayback copy — so
+there is no prose to reconcile against and **the engine source is the spec**.
+Every rule the bc16 module implements carries a `file:line` citation into the
+pinned engine checkout, in `src/battlecode/years/bc16/**`'s own doc comments and
+in `docs/RULES-BC16.md`.
+
+## battlecode/battlecode-server-2016 engine — GPL-3.0
+
+Repository: <https://github.com/battlecode/battlecode-server-2016>, pinned at
+commit **`11a0b09f26a70da19f33a61ebec4ceaf6e161aa3`** (`HEAD` of `master`, last
+commit "Final maps"). **The repository root `COPYING` is the GNU General Public
+License v3** — not the Affero.
+
+What derives from it, named individually:
+
+* `src/battlecode/years/bc16/{units,delays,health,world,economy,signals,zombies,rules,maps,knobs}.nim`
+  — the 2016 rule set, **hand-written in Nim from reading the source** (a
+  behaviour port, not a translation of copied files) from
+  `world/GameWorld.java`, `world/InternalRobot.java`,
+  `world/RobotControllerImpl.java`, `world/GameMap.java`,
+  `world/control/ZombieControlProvider.java`, `world/GameMapIO.java`,
+  `world/IDGenerator.java`, `world/DominationFactor.java`, `util/SquareArray.java`
+  and `common/{GameConstants,RobotType,MapLocation,Direction,Team,Signal,ZombieCount,ZombieSpawnSchedule}.java`.
+  Every deliberate difference is in `docs/RULES-BC16.md` §Divergences;
+* `src/battlecode/years/bc16/zombies.nim` — **the one module that is a
+  near-literal reproduction**, and it says so in its own header: the whole of
+  `world/control/ZombieControlProvider.java`'s den turn, `spawnAllPossible`,
+  `getSpawnDirection`, `getSpawnChirality` and `processZombie`'s eight-step
+  ladder. The zombie AI is *the sim* in this year, not a chassis, so it is
+  reproduced action for action rather than paraphrased;
+* `src/battlecode/years/bc16/health.nim` and the `changeHealthLevel` proc in
+  `src/battlecode/years/bc16/world.nim` — `InternalRobot.changeHealthLevel`
+  (`:278-293`) and `GameWorld.visitDeathSignal` (`:857-903`). **The note's
+  layout put all of this in `health.nim`; the mutation half has to reach world
+  state (the rubble array, the occupancy index, the exec list and `spawnRobot`
+  for the zombie that stands up), so it lives in `world.nim` beside that state
+  and `health.nim` owns the decision.** There is still exactly ONE mutation
+  point for health. Recorded as `docs/RULES-BC16.md` §Divergences item 14;
+* `src/battlecode/years/bc16/constants.nim` — **generated** by
+  `tools/gen_year_constants.py --year bc16` from `common/GameConstants.java`
+  and `common/RobotType.java`, and re-generated and byte-diffed in CI, so the
+  constant table is provably the engine's and provably not hand-typed. (2016's
+  `GameConstants` is an *interface*, so its fields carry no `public static
+  final` and the bc16 arm has its own regex — recorded in the tool's
+  docstring.);
+* `data/maps/bc16/*.json` — 22 of the 98 official `.xml` maps, **converted** by
+  `tools/convert_maps_bc16.py`, which is a plain XML walk over
+  `world/resources/*.xml` with nothing beyond Python's stdlib. Each converted
+  map carries the map's **build-time computed symmetry**
+  (`GameMap.updateSymmetries`, D4) and its **pre-split per-den zombie spawn
+  schedule** (`GameMap.buildZombieSpawnMap`, D3) so the runtime sim never has
+  to reproduce a `java.util.HashMap` iteration order;
+* `data/bc16/tables.json` — the whole finite arithmetic domain, regenerated
+  under the CI **JDK 8** by `tools/JavaBc16Tables.java` straight out of the
+  released jar's own classes and byte-diffed by the `parity-oracle-bc16` job;
+* `tools/oracle/bc16/Bc16Trace.java` — a trace driver written against the
+  engine's own package-private API (`package battlecode.world;`), **compiled
+  only in CI**;
+* `src/battlecode/rng.nim` — already in this repository for the other years:
+  `java.util.Random`'s documented LCG plus `world/IDGenerator.java`. bc16 runs
+  **three** independent `Random(mapSeed)` streams from it, more than any other
+  year, and `initIdGenerator` gained one optional parameter because 2016's
+  `IDGenerator` starts its block at 0 and mints ids from 1.
+
+**The engine itself is used only at CI time**, and only as the published
+`battlecode-2016.0.2.2.jar`
+(<https://s3.amazonaws.com/battlecode-releases-2016/releases/battlecode-2016.0.2.2.jar>,
+6 563 607 bytes, sha256
+`c78ef341af0b666acabdabf545695862b77f84076f946766787bc1549b1fdc1c`, all three
+pinned in `tools/oracle/bc16/jar.lock`). The jar is self-contained — it bundles
+its own `org/objectweb/asm`, `com/thoughtworks/xstream`, `com/fasterxml` and
+`org/apache/commons/lang3`, so the oracle job needs no Ant, no Ivy, no Gradle
+and no Maven download list — and those bundled third-party classes reach only
+that job's classpath, never any image and never this repository's source tree.
+**No JDK, no JRE, no Java and no upstream Java source or bytecode exists in any
+image this repository builds.**
+
+## battlecode/battlecode-client-2016 sprites — GPL-3.0
+
+Repository: <https://github.com/battlecode/battlecode-client-2016>, pinned at
+commit **`317e1f3ff902ae568619c051813335ecdd72322c`**. **`COPYING` is the GNU
+General Public License v3** (35 147 bytes, present at the repository root).
+
+`data/atlas_bc16.png` and `data/atlas_bc16.json` are cut by
+`tools/build_sprite_atlas_bc16.py` from
+`src/main/battlecode/client/resources/art/**` at that commit — **49 sprites at
+16 px**: the family
+`{archon,scout,soldier,guard,viper,turret,ttm,zombieden,standardzombie,rangedzombie,fastzombie,bigzombie}{0,1,2,3}.png`,
+i.e. **all twelve robot types at all four `Team` palettes** (index 0 = A,
+1 = B, 2 = NEUTRAL, 3 = ZOMBIE, matching `Team.values()`), plus `creep.png`
+(the rubble texture). Because the 2016 client ships a NEUTRAL palette of every
+type, bc16 is the first year in this repository whose art can draw a neutral
+robot as itself rather than as a greyed team sprite — which matters, because
+`neutral_activation` is a headline knob. Palette follows the client's own team
+colours: **blue = side A, red = side B, green = the horde, grey = neutral.**
+
+**No client code is shipped, built or embedded.** The official 2016 Java Swing
+client, the `.rms` match stream and the XStream/Jackson serial layer have no
+port at all (`docs/RULES-BC16.md` §Divergences item 6).
+
+## TheDuck314/battlecode2016 and bshimanuki/battlecode2016 — NOT READ
+
+Both repositories carry **no licence anywhere**, so this run treats them as
+unreadable. They are **not cloned, not read, not copied, not vendored, not
+compiled and not translated**, and neither contributes a single line to this
+repository.
+
+The bc16 chassis `bulwark`
+(`src/battlecode/years/bc16/chassis/{bulwark,kit,econ,archon,combat,micro,turret,dens,neutral,rubble,infect,comms}.nim`)
+is designed from the engine's own mechanics and from the three archetypes the
+run's source idea itself names — turret turtle, aggressive soldier/viper, scout
+zombie-pull. Where this repository's documents say "the play the 2016 meta
+made", that is a statement about the *idea's* characterisation of the 2016
+finals, not a claim about any repository's contents.
+
+`src/battlecode/years/bc16/chassis/greenhorn.nim` is **this repository's own
+bot**, written for this run as the deliberately weak floor and as one side of
+the differential oracle; its Java twin
+`tools/oracle/bc16/bc16greenhorn/RobotPlayer.java` is likewise ours, written
+statement for statement against it. 2016 ships no example bot upstream, which
+is why the weak floor had to be written rather than ported — and it **may not
+gain behaviour**.

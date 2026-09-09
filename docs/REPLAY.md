@@ -279,3 +279,91 @@ field called `kind`.
 `heal`, `build`, `dig`, `fill`, `pickup`, `drop`, `upgrade`), `upgrade` from
 `Bc24UpgradeNames` (`attack`, `capture`, `heal` — `TeamInfo`'s own slot order)
 and `mastery.skill` from `Bc24SkillNames` (`attack`, `build`, `heal`).
+
+---
+
+## bc16
+
+`year: "bc16"`, `game_version: "GV11"`, everything else the same shape. The
+replay stores the events, the config, the seed, both doctrine sheets, the
+chassis each seat drove and the per-round hash chain — and **nothing else**.
+Rubble, parts, the zombie horde, infection timers, delays, den queues and the
+tiebreak ladder are pure functions of the sim, so the browser re-derives them
+and the endcard reads the re-derived totals. There are **no map bytes, no
+per-round state dump, no per-robot dump and no rubble grid** anywhere in the
+document, and `tests/test_bc16_replay.nim` asserts each of those absences by
+string.
+
+**Rounds are ZERO-BASED in bc16.** The engine counts from round 0 and the
+tiebreak fires at the end of round 2999, not 3000 — the only year in this
+repository that does. `years/dispatch.nim`'s `currentRound` arm therefore
+returns `world.currentRound + 1` so that the replay's chain index stays
+1-based like every other year's; the *events* carry the engine's own
+zero-based round.
+
+### The bc16 event vocabulary
+
+Every kind is bounded PER GAME — a 3000-round match with a hundred robots and
+a horde cannot be allowed to emit an event per bite — and every one has CSS in
+the appended bc16 game block.
+
+| `kind` | fields | bound | beat |
+|---|---|---|---|
+| `game_start` | `map`, `width`, `height`, `sides`, `archons`, `dens`, `parts_on_map`, `neutrals`, `schedule_rounds` | 1/game | `game` |
+| `first_action` | `alias`, **`action`** | 2/game | `build` |
+| `unit_milestone` | `alias`, `unit`, `total` | ≤ 10/game | `build` |
+| `zombie_wave` | `counts` (4-array), `total`, `dens_spawning`, `outbreak_level` | ≤ 30/game | `wave` |
+| `outbreak` | `level`, `multiplier_permille` | ≤ 10/game | `outbreak` |
+| `den_destroyed` | `alias`, `x`, `y`, `dens_left`, `bounty`, `queue_deleted` | ≤ 12/game | `den` |
+| `neutral_activated` | `alias`, `unit`, `x`, `y`, `total` | ≤ 20/game | `activate` |
+| `infection` | `alias`, `victim_unit`, `source`, `turns` | ≤ 20/game | `infect` |
+| `turned` | `alias`, `unit`, `became`, `x`, `y`, `outbreak_level` | ≤ 24/game | `turned` |
+| `archon_lost` | `alias`, `archons_left`, `cause` | ≤ 8/game | `archon` |
+| `rout` | `alias`, `lost` | ≤ 20/game | `rout` |
+| `duel` | `lost` (2-array) | ≤ 20/game | `duel` |
+| `tiebreak` | `rung`, `archons` (2), `archon_health_tenths` (2), `parts_worth` (2) | ≤ 1/game | `end` |
+| `game_end` | `winner_alias`, `winner_slot`, `end_reason`, `points`, `archons` | 1/game | `end` |
+| `game_abandoned` | `map` | ≤ 1/game | `end` |
+
+**`first_action`'s field is `action`, not `kind`.** `MatchEvent.toJson`
+flattens `fields` into the same object as the event's own `kind` key, so a
+field called `kind` SILENTLY OVERWRITES THE EVENT KIND — the bc24 scar. bc16
+follows bc24 and calls it `action`.
+
+`action` takes its value from `Bc16ActionNames` (`clear_rubble`, `move`,
+`attack`, `broadcast`, `broadcast_message`, `build`, `activate`, `repair`,
+`pack`, `unpack`, `disintegrate` — eleven, because bc16 has twelve unit types
+and naming the unit would say less than naming the act), `unit` / `victim_unit`
+/ `became` from `Bc16UnitNames` (`RobotType`'s own ordinals: `zombieden`,
+`standardzombie`, `rangedzombie`, `fastzombie`, `bigzombie`, `archon`, `scout`,
+`soldier`, `guard`, `viper`, `turret`, `ttm`) and `tiebreak.rung` from
+`Bc16RungNames` (`Domination`'s own ordinals: `-`, `archons_destroyed`,
+`more_archons`, `more_archon_health`, `more_parts_net_worth`, `highest_id`).
+
+### Four names bc16 shares with other years
+
+`first_action`, `rout`, `duel` and **`archon_lost`** are spelled the same by
+bc22, bc23 and bc25. Three of them carry the same shape; `archon_lost` does
+not — **bc22 carries `gold_dropped` and bc16 carries `cause`** — so
+`broadcast.nim`'s *label* switch tests the replay header's year there, and only
+there. The beat *kind* is `archon` for both, and the CSS that colours it is
+scoped per year (`html[data-year="bc16"] .beat-marker.archon`).
+
+### `outbreak` and `zombie_wave` travel as integers
+
+The outbreak multiplier is an integer **per-mille** (1000, 1100, … 3000) rather
+than a float, so the replay document stays float-free and re-derives bit for
+bit in wasm. The viewer renders it as `1.1x`. This is also the field that cost
+a defect: the label originally read `multiplier`, which does not exist, and a
+missing key in a `JsonNode` `{}` lookup reads back as zero — so the spectator
+was shown `0 zombies from 0 dens`. `tests/test_bc16_beats.nim` now asserts each
+label against the value in the event that produced it, not just against the
+words.
+
+### The thirteen beats
+
+`doctrine`, `game`, `build`, `wave`, `outbreak`, `den`, `activate`, `infect`,
+`turned`, `archon`, `rout`, `duel`, `end` — and **all thirteen are emitted by
+the committed fixture** `tests/fixtures/replay-bc16.json`, so
+`tests/test_bc16_beats.nim` proves emission, label and CSS together rather than
+inventorying a hand-written list.

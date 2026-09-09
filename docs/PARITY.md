@@ -1545,3 +1545,323 @@ repeat them:
   every rung ties.
 * **`rc.resign()`.** A real engine method that no doctrine sheet can call
   (D8).
+
+---
+
+# bc16 — Battlecode 2016 "Zombie Invasion"
+
+`.github/workflows/ci.yml` carries a **`parity-oracle-bc16`** job beside the
+other years'. It fetches the published **`battlecode-2016.0.2.2.jar`**, pins it
+by size and sha256, compiles a driver and two bots against it **on Temurin 8**,
+and diffs eighteen whole games against this sim.
+
+The result of that job, on the evidence in `tools/ci/parity_ledger_bc16.json`:
+
+> **All eighteen pairs are BIT-EXACT for whole games. The ledger is EMPTY.**
+
+## The jar, and the two pins that are the only ones available
+
+```
+url     https://s3.amazonaws.com/battlecode-releases-2016/releases/battlecode-2016.0.2.2.jar
+bytes   6 563 607
+sha256  c78ef341af0b666acabdabf545695862b77f84076f946766787bc1549b1fdc1c
+engine  Metta-AI mirror of battlecode-server-2016 @ 11a0b09f26a70da19f33a61ebec4ceaf6e161aa3
+client  battlecode-client-2016 @ 317e1f3ff902ae568619c051813335ecdd72322c
+```
+
+**There is no `SPEC_VERSION` in 2016's `GameConstants`.** The field simply does
+not exist — bc22's second pin, the engine's own version string, has no
+counterpart here. `tools/oracle/bc16/build_oracle.sh` therefore pins on three
+things instead: the byte count, the sha256, and the **`battlecode-version`
+entry** — which in this jar is a *file at the jar root* holding the bare string
+`2016.0.2.2`, not a manifest attribute (`META-INF/MANIFEST.MF` carries only
+`Manifest-Version`, `Ant-Version` and `Created-By`). `build_oracle.sh` reads it
+with `unzip -p "$JAR" battlecode-version`.
+Tier B then cross-checks every `GameConstants` field
+against the jar's own loaded classes anyway, so a substituted jar with the same
+size would still be caught.
+
+## The jar is self-contained: no Ant, no Ivy, no Gradle, no `deps.lock`
+
+2 484 entries, of which 449 are `battlecode` classes. It ships its own
+`org/objectweb/asm` (58 entries — the bytecode instrumenter),
+`com/thoughtworks/xstream` (463 — the map XML deserialiser), `com/fasterxml`
+(765), `org/apache/commons/lang3` (236),
+`battlecode/instrumenter/bytecode/resources/MethodCosts.txt`, and **54 `.xml`
+map resources**. `GameMapIO.loadMap(name, null)` takes the resource-fallback
+path (`GameMapIO.java:56-61`), every map in every bc16 pool is one of those 54,
+and so the job needs **no `--map-dir` and no dependency resolution of any
+kind**.
+
+**There is no `gnu/trove` and no `net/sf/jsi` in it, and neither is needed.**
+2016's engine iterates `LinkedHashMap` and `HashMap` from the JDK, so the
+trove-iteration-order problem that forced bc22's `trove.nim` does not arise
+here — but the JDK's own `HashMap` iteration order does, and it cost this run
+a real defect (below).
+
+## TEMURIN 8, AND WHY IT IS NOT NEGOTIABLE
+
+The jar bundles a **2016-era ASM** and a 2016-era XStream, and the whole
+instrumenter is built for Java 8 class files. Under any newer JDK the
+instrumenter throws `java.lang.IllegalArgumentException` inside
+`org.objectweb.asm.ClassReader.<init>` **on every player class load**. Nothing
+is ever built, the game is over in a round or two, and — this is the trap —
+**the job would exit 0 while proving nothing**. bc22 and bc23 both measured
+this failure mode; 2016's ASM is older still.
+
+Three independent defences, all in the repository:
+
+1. `ci.yml` asserts `java -version` and `javac -version` both say `1.8.`, and
+   additionally asserts that this `javac` **rejects `--release`** — a flag that
+   arrived in JDK 9 — so the check cannot pass on a mislabelled toolchain.
+   (`--release` is also never passed: it dies with "invalid flag" on a JDK-8
+   `javac`, the bc21 lesson.)
+2. `Bc16Trace.java` **exits 3** if nothing ever happened.
+3. The anti-vacuity step (below) fails if any pair ended too early, peaked at
+   too few robots, never saw a zombie take a turn, or never saw an infection.
+
+## Two things the driver had to get right, both measured
+
+* **NEUTRAL robots must be registered to a `NullControlProvider`, not to the
+  zombie one.** `TeamControlProvider` asserts that some provider owns every
+  team it is asked about, and a NEUTRAL robot's `runRobot` falls into
+  `ZombieControlProvider`'s "somehow controlling a non-zombie robot → kill it"
+  branch — which deletes every neutral on the board on round 0.
+  `world/control/NullControlProvider.java` exists for exactly this.
+* **The driver must call `System.exit()`.** The sandboxed player threads are
+  NON-DAEMON; a driver that returns or throws without it hangs for ever. Every
+  `java` invocation in the job is additionally wrapped in `timeout 900`.
+
+## The trace
+
+`tools/oracle/bc16/Bc16Trace.java` is `package battlecode.world;`, so it needs
+reflection only for `GameWorld.rubble` / `parts` / `gameObjectsByID` / `rand`
+and `ZombieControlProvider.random` — all private, and the only way to checksum
+the two map arrays, print in execution order and read the RNG states. Its Nim
+twin is `tools/parity_trace_bc16.nim`.
+
+One line per record, per round:
+
+```
+R <round> T <A|B> parts=<%.6f> ar= sc= so= gu= vi= tu= tt=
+R <round> Z zn= zs= zr= zf= zb= dens= neu= outbreak=
+R <round> G rubblechk=<fnv1a64> partschk=<fnv1a64>
+            rubblesum=<f64 BITS hex> partssum=<f64 BITS hex>
+R <round> U <id> team=<A|B|N|Z> ty= x= y= hp= cd= wd= zi= vi= ra= bd= [bc=]
+R <round> D <id> x= y= hp= q=<s>:<r>:<f>:<b>
+R <round> X world=<48-bit hex> zombie=<48-bit hex> idgen=<48-bit hex>
+R <round> W winner=<A|B|-> dom=<NAME|->
+```
+
+All coordinates are **origin-relative on both sides** (V3): the Java side
+subtracts `map.getOrigin()` in the emitter, so neither side can create or hide
+a divergence with a translation. `parity_tiers_bc16.py` additionally carries an
+origin tripwire that fails if a Java trace ever leaks an absolute coordinate.
+
+The `X` line is the load-bearing one: it prints the raw 48-bit state of **all
+three `java.util.Random` streams** every round. A port that shared a stream, or
+drew one extra value from one of them, diverges on the very next `X`.
+
+## THE TWO SUMS ARE PRINTED AS RAW BIT PATTERNS, AND THAT IS MEASURED
+
+`String.format("%.6f")` rounds **HALF-UP**; C's `printf` — which is what Nim's
+`formatFloat` calls — rounds **HALF-TO-EVEN**. A 900-term floating sum lands on
+an exact decimal tie often enough that it happened: on `checkers` at round 219
+the two sides held **byte-identical** rubble arrays and printed
+`88935.090413` against `88935.090412`. Both `rubblesum` and `partssum` are now
+emitted as the IEEE-754 bit pattern in hex on both sides. Bit patterns have no
+rounding mode.
+
+## The tiers
+
+| tier | what | gate |
+| --- | --- | --- |
+| **A** | `bc16idle` vs `bc16idle`, **nine maps**, whole games, every line bit-exact | **blocking** |
+| **A″** | `bc16greenhorn` vs `bc16greenhorn`, the same nine maps, whole games, every line bit-exact | **blocking** |
+| **B** | the **whole finite arithmetic domain** regenerated from the jar's own classes and byte-diffed against `data/bc16/tables.json`; plus all 42 `GameConstants` fields; plus all 22 maps' symmetry and per-den zombie split, read out of the JVM's own `GameMap` | **blocking** |
+| **C** | the first divergent round of every pair against `tools/ci/parity_ledger_bc16.json`, root-cause-or-fail | **blocking** |
+
+**Tiers A, A″, B and C all passing with an EMPTY ledger is the phase-30 exit
+condition, and that is what the job reports.**
+
+### Tier A is a large tier, not a trivial one
+
+This is the single most important thing to understand about bc16 parity.
+**The zombie half of this game is engine-side**, so an idle player still
+exercises: the den schedules and their per-den split; the spawn ring's
+direction and chirality; `spawnAllPossible` and its proximity-damage fallback;
+the whole eight-step zombie movement ladder; all three `java.util.Random`
+streams; infection and the die-and-turn conversion; the corpse-rubble deposit;
+`clearRubble` by digging zombies; the parts income curve; both factions'
+archons being eaten; the mid-turn `DESTROYED` check; and the end ladder.
+
+### Tier A″ is what proves the fourth stream
+
+`bc16greenhorn` is the one bot with a **live `java.util.Random(2016)` per
+robot**, so this tier proves `rng.nim` reproduces a fourth independent stream
+call for call alongside the engine's three. It is also the tier that exercises
+the player side — build, move and attack, with `senseHostileRobots()[0]`
+resolved in insertion order.
+
+### The nine pairs
+
+`checkers`, `zigzag`, `swamp`, `river`, `prisons`, `frogger`, `turtle`,
+`desert`, `space` — chosen for symmetry class, den count and size spread.
+
+### Tier B is the entire domain, not a sample
+
+bc16 has exactly **two** non-algebraic functions and both have finite domains,
+so `tools/JavaBc16Tables.java` emits and `data/bc16/tables.json` (304 594
+bytes) commits the whole of both:
+
+| table | rows |
+| --- | --- |
+| `robot_types` | 12 types × 17 constructor fields, plus the `turnsInto` graph |
+| `predicates` | 12 types × 8 derived predicates |
+| `outbreak_multiplier` / `outbreak_health` / `outbreak_attack` | levels 0…12, every type |
+| `guard_reduction` | every reachable attack power |
+| `pow_1_5` | `Math.pow(k/8000.0, 1.5)` for **all 8 001** k — the V1 table |
+| `int_sqrt` | `(int) Math.sqrt(r2)` for r2 0…10 000 |
+| `direction_to` | the **whole** `directionTo` lattice, dx,dy ∈ −80…80 — **25 921 pairs** |
+| `rubble_clear` | the rubble clear map, 0…1000 |
+| `parts_income` | the parts income curve, rounds 0…400 |
+| `constants` | all 42 `GameConstants` fields |
+
+The check is a **byte diff**, not a tolerance: the committed file must be
+exactly what the jar's own classes emit.
+
+## THREE REAL DEFECTS THE ORACLE FOUND
+
+Every one of these was a genuine bug in this repository that no unit test
+caught, and every one is why the tier exists.
+
+**1. `Collectors.toMap` PREPENDS within a `HashMap` bucket.**
+`tools/convert_maps_bc16.py` emulates `java.util.HashMap` iteration order so
+that the build-time per-den zombie split matches the engine's. Its `put`
+appended within a bucket. The engine reaches that map through
+`Collectors.toMap`, which is implemented with `HashMap.merge` — and `merge`
+**prepends** a new node rather than appending it. Fixed by making the
+emulator's insert prepend; **all 22 maps regenerated**, five of which changed
+bytes (`collision`, `frogger`, `quadrants`, `voluted`, `zigzag`). This is
+exactly the class of bug the Tier B map probe exists to catch, and it caught
+it.
+
+**2. `ZombieControlProvider.denQueues` is keyed by ROBOT ID, not by
+`MapLocation`.** The driver had it keyed by location. Two dens on the same
+square is impossible, so the two are equivalent until a den dies and its
+successor reuses the square — at which point the queue is inherited rather than
+reset. Fixed in the driver.
+
+**3. `ZombieControlProvider.matchEnded()` nulls its `random` field.** The
+driver read the RNG state through a reflected field *after* the match ended and
+got a `NullPointerException` on the last round. Fixed by holding the `Random`
+object by reference from the first round.
+
+## Anti-vacuity: a bit-exact tier that proves nothing is a failed tier
+
+**Neither oracle bot survives the 3000-round cap.** An idle archon line is
+eaten by the horde and `greenhorn` only slows that down. The traces therefore
+run from round 0 to the engine's own `isRunning() == false` — which means the
+**end round, the winner and the domination factor are themselves compared**, and
+a port that ended one round early would diverge on the `W` line.
+
+Measured over the eighteen pairs, and asserted by the job:
+
+| | rounds | peak robots | peak zombies | peak bytecode |
+| --- | --- | --- | --- | --- |
+| `bc16idle` (9 maps) | 298 – 683 | 36 – 88 | 13 – 59 | 1 of 20 000 (0 %) |
+| `bc16greenhorn` (9 maps) | 485 – 1424 | 75 – 162 | 29 – 70 | 294 of 10 000 (2 %) |
+
+Summed over the eighteen pairs: **735 peak zombies**, and **18 of 18** pairs saw
+an infection fire. The job's floors are 250 rounds, 10 robots, 150 summed
+zombies and 9 infected pairs, and it additionally requires
+`saw_zombie_turn=true` on every pair.
+
+**Trace volume, both bots, nine maps: 833 581 lines a side** — 148 342 for
+`bc16idle` and 685 239 for `bc16greenhorn` — **1 667 162 lines compared, all
+identical.**
+
+## The measured bytecode headroom, and why it matters
+
+V1 pins the port's delay decay to the `1.0` branch of the engine's
+`amountToDecrement`, which the engine itself leaves at `limit - 8000`. Twenty
+per cent of a 10 000-bytecode limit is 2 000, which **is** `limit - 8000` for
+every non-archon type — so the 20 % bound is not a taste, it is exactly the
+knee. Measured: `bc16idle` peaks at **one** bytecode and `bc16greenhorn` at
+**294**, i.e. 0 % and 2 % of their limits, so neither bot ever leaves the 1.0
+branch and the comparison is defined to the last round.
+
+**The job does not assume that.** It reads the `bc=` column out of the trace
+and fails if any robot on any round exceeds the bound, naming the round and the
+robot.
+
+## The comparator
+
+`tools/ci/parity_tiers_bc16.py` is bc22's script — whose three comparator bugs
+were already fixed there — plus **origin normalisation** (V3). It carries its
+own `--selftest`, run first in CI, covering all four known comparator bugs and
+the origin tripwire: a `bc=` column present on one side only, a trace pair that
+differs only in **length** (in both directions), a zero-padded hex fold that is
+the same fold, and a HALF-UP versus HALF-TO-EVEN float tie. Ten cases.
+
+**ROOT-CAUSE-OR-FAIL is the standing rule**, and it is the operator's ruling on
+the bc26 run, not this script's preference. Every ledger entry must name a
+round, a map and a root cause; a cause of `unknown` is rejected by the schema
+check. `tools/ci/parity_ledger_bc16.json` is `{"entries": []}`.
+
+## Tier A′ — NOT IMPLEMENTED, and named here rather than left implied
+
+The design note specified a **Tier A′** of four scenario bots
+(`bc16scenario`, `…annihilate`, `…tie`, `…turn`) to force the rare end-ladder
+paths. **The Java side was not written, and the job does not run them.** This
+is a scope deviation, recorded here so a reader does not infer coverage that
+does not exist.
+
+Precisely what does and does not exist:
+
+* `src/battlecode/years/bc16/chassis/scenario16.nim` — **the Nim half, and it
+  is complete for the base script.** It builds under `-d:bc16Scenario`, plays
+  a whole game (357 rounds on `river`, 18 605 trace lines), takes no RNG draw
+  of its own and stays far inside the bytecode headroom. Its own header says it
+  has no Java twin.
+* The three sub-variants (`…turn`, `…annihilate`, `…tie`) **do not exist on
+  either side.** `-d:bc16ScenarioTurn` does not imply `-d:bc16Scenario`, so a
+  build with only the sub-variant define plays `bulwark`; the sub-variant
+  defines are not read anywhere and the header no longer claims them.
+* `tools/oracle/bc16/bc16scenario/RobotPlayer.java` and its three siblings —
+  **not written.**
+
+What stands in their place, and what does not:
+
+* The **end ladder itself** is covered by `tests/test_bc16_endladder.nim` and
+  `tests/test_bc16_scoring.nim`, on the Nim side only — the four rungs
+  (`archons_destroyed`, `more_archon_health`, `more_parts_net_worth`, and the
+  round-cap tie) are unit-tested but **not differentially tested**.
+* Build, move and attack from the player side **are** differentially tested, by
+  Tier A″'s `bc16greenhorn`.
+* `DESTROYED` as an end condition **is** differentially tested: every one of the
+  eighteen pairs ends that way, and the `W` line compares winner and domination
+  factor.
+* The rungs below `DESTROYED` are **not** reached by either oracle bot, so
+  `more_archon_health` and `more_parts_net_worth` have no Java-side evidence.
+
+That is the exact shape of the gap. Closing it means adding the four bots to
+`tools/oracle/bc16/` and a `--bots` entry in the job; nothing else in the
+comparator or the driver needs to change.
+
+## What is NOT compared, and why
+
+* **Bytecode counts as a budget.** The port meters `DecisionOps`, not bytecode
+  (V1). The `bc=` column is read as a *headroom check*, never diffed.
+* **The instrumenter, the sandbox and `MethodCosts.txt`.** No counterpart: the
+  port has no bytecode rewriter.
+* **`.rms` match files and the flatbuffers/XStream serialiser.** The driver
+  constructs its `GameWorld` directly; there is no match-file writer on either
+  side.
+* **`Clock.yield()`'s threading.** The port is single-threaded by construction;
+  what is compared is the *observable effect* of a yield, which is the robot's
+  next turn.
+* **The `ARMAGEDDON_*` constant family and the instrumentation constants.**
+  Deliberately not ported (V4, V5, V8). The Tier B step **names each one it
+  skipped** in its log rather than silently passing over it.
+* **`rc.resign()`.** A real engine method that no doctrine sheet can call.
