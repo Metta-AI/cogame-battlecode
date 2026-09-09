@@ -133,8 +133,15 @@ const
   GuardRatioHi* = 100
   DenClearRoundLo* = 1
   DenClearRoundHi* = 2800
-  RetreatHpLo* = 0
-  RetreatHpHi* = 100
+  RetreatHpLo = 0
+  RetreatHpHi = 100
+    ## **DELIBERATELY NOT EXPORTED, unlike the four above.** bc22's `knobs.nim`
+    ## exports constants of exactly these names, `battlecode/sheet.nim`
+    ## re-exports both years' knob modules, and both modules are called
+    ## `knobs` — so exporting these two makes `RetreatHpLo` an AMBIGUOUS
+    ## IDENTIFIER in any test that pulls in a year fixture as well as `sheet`,
+    ## and `tests/test_bc22_sheet.nim` stops compiling. bc22 had the name
+    ## first; nothing outside this file reads bc16's pair.
 
   AttackersPerArchonFloor* = 3
     ## The unconditional minimum, at EVERY knob setting.
