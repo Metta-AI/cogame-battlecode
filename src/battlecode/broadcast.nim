@@ -162,8 +162,9 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
   let isBc16 = doc.year == "bc16"
   ## The bc23-only kinds below (`anchor_built`, `island_captured`,
   ## `island_lost`, `conquest_progress`, `well_transformed`, `well_upgraded`,
-  ## `first_elixir_unit`, `boost_field`, `destabilize_hit`, `duel`) need no
-  ## discriminator, because no other year emits them.
+  ## `first_elixir_unit`, `boost_field`, `destabilize_hit`) need no
+  ## discriminator, because no other year emits them. `duel` is NOT one of
+  ## them — bc22, bc23 and bc16 all emit it — so its LABEL tests the year.
   for e in doc.events:
     ## Pre-match events carry `ms` and `game = -1`, not a round. The two
     ## doctrine kinds still have a beat (every year's stylesheet ships
@@ -351,9 +352,16 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
         " for " & $e.fields{"damage"}.getInt() & ", game " &
         $(e.game + 1) & ", round " & $e.round
     of "duel":
-      ## bc22 spells `duel` with the SAME field name and a different meaning —
-      ## attackers lost, not launchers — so the label switch tests the year.
-      if isBc22:
+      ## THREE years emit `duel`, with the SAME field name and TWO meanings.
+      ## bc22 (`years/bc22/rules.nim:275`) and bc16
+      ## (`years/bc16/rules.nim:321`) both count `attackersLostThisRound` —
+      ## every unit that can attack, lost by both sides in the same round —
+      ## and read as a TRADE. bc23 (`years/bc23/rules.nim:397`) counts
+      ## `launchersLostThisRound`, one unit type, and reads as a LAUNCHER
+      ## DUEL. bc16 has no launcher, so it takes bc22's wording; testing
+      ## `isBc22` alone dropped bc16 into bc23's branch and told a bc16
+      ## spectator about a unit its year does not have.
+      if isBc22 or isBc16:
         label = "TRADE — " & $e.fields{"lost"}[0].getInt() &
           " attackers lost to " & $e.fields{"lost"}[1].getInt() & ", game " &
           $(e.game + 1) & ", round " & $e.round
