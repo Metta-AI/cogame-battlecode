@@ -16,10 +16,13 @@
 ##
 ## Four beat NAMES collide with other years and each needs the year test:
 ## `first_action` and `rout` (bc22/bc23/bc25 map them the same way and bc16
-## joins them), `duel` (bc22's and bc23's, whose field means launchers lost
-## rather than attackers lost), and **`archon_lost`**, which bc22 emits with
-## `gold_dropped` where bc16 carries `cause` — so the LABEL switch tests the
-## year there too.
+## joins them), **`duel`** (bc22 and bc16 count ATTACKERS lost, bc23 counts
+## LAUNCHERS, all under the same field name), and **`archon_lost`**, which
+## bc22 emits with `gold_dropped` where bc16 carries `cause` — so the LABEL
+## switch tests the year in both places.
+##
+## Section 2b is the generalisation of that: no bc16 label may carry ANY
+## other year's vocabulary, whether or not the beat name is shared.
 
 import std/[algorithm, json, os, sequtils, strutils, unicode]
 import harness
@@ -211,6 +214,105 @@ block:
     let label = labelFor("archon_lost", "archon")
     check("the ARCHON label carries how many are left",
       $e.fields{"archons_left"}.getInt() & " left" in label)
+
+# --- 2b. NO OTHER YEAR'S VOCABULARY -----------------------------------------
+block:
+  ## r3-D1: A SHARED BEAT MAY NOT SPEAK ANOTHER YEAR'S VOCABULARY. THREE years
+  ## emit `duel`, with the same field name and two meanings: bc22
+  ## (`years/bc22/rules.nim:275`) and bc16 (`years/bc16/rules.nim:321`) count
+  ## `attackersLostThisRound`, bc23 (`years/bc23/rules.nim:397`) counts
+  ## `launchersLostThisRound`. `beatsFor`'s label switch tested `isBc22`
+  ## ALONE, so bc16 fell through to bc23's branch and a live bc16 killfeed
+  ## read "LAUNCHER DUEL — 1 lost to 1, game 3, round 828" — eleven times in
+  ## one replay, naming a unit the 2016 rule set does not have. Nothing here
+  ## asserted the WORDING of a shared beat PER YEAR, which is why it shipped
+  ## green; this is the same guard `tests/test_viewer.nim` (r2-E1) puts on the
+  ## endcard's shared win-condition branches.
+  proc firstEventOf(kind: string): MatchEvent =
+    for e in doc.events:
+      if e.kind == kind: return e
+    raise newException(ValueError, "no " & kind & " event in the fixture")
+  proc duelLabelUnder(year: string): string =
+    var d = doc
+    d.year = year
+    for b in beatsFor(d, frameOf):
+      if b["k"].getStr() == "duel": return b["label"].getStr()
+    ""
+  let duel = firstEventOf("duel")
+  let lostA = $duel.fields{"lost"}[0].getInt()
+  let lostB = $duel.fields{"lost"}[1].getInt()
+  let tail = ", game " & $(duel.game + 1) & ", round " & $duel.round
+  checkEq("bc16's `duel` reads as a TRADE in attackers, which is what bc16 " &
+    "counts", duelLabelUnder("bc16"),
+    "TRADE — " & lostA & " attackers lost to " & lostB & tail)
+  check("and says nothing about a LAUNCHER, a unit bc16 does not have",
+    "LAUNCHER" notin duelLabelUnder("bc16").toUpperAscii())
+  ## The other two emitters, rendered from the SAME event: the fix widened
+  ## bc16 into bc22's branch and left both of their renderings untouched.
+  checkEq("bc22's `duel` is unchanged", duelLabelUnder("bc22"),
+    "TRADE — " & lostA & " attackers lost to " & lostB & tail)
+  checkEq("and bc23's is unchanged — bc23 really does count launchers",
+    duelLabelUnder("bc23"),
+    "LAUNCHER DUEL — " & lostA & " lost to " & lostB & tail)
+
+  ## AND THE WHOLE FEED, not just the beat that was caught. Every kind bc16
+  ## emits, rendered under bc16, must be free of every word that belongs to
+  ## exactly ONE OTHER year's rule set. bc16's own vocabulary (archon, parts,
+  ## rubble, zombie, den, horde, viper, guard, scout, soldier, turret,
+  ## infection, outbreak) is not on the list, and a word two years share is
+  ## not a leak.
+  const Foreign = ["launcher", "singularity", "rat king", "cheese", "cats",
+                   "soup", "dirt", "influence", "enlightenment", "crumb",
+                   "duck", "chip", "paint", "adamantium", "mana", "elixir",
+                   "anchor", "boost", "destabilis", "destabiliz", "hq",
+                   "headquarters", "tower"]
+  ## The committed fixture carries every bc16 event kind except the two it
+  ## cannot reach — `tiebreak` fires only when the round limit decides a game
+  ## and `game_abandoned` only on the wall clock — so those two are appended
+  ## here with the fields `match.nim:507-525` and `match.nim:584` give them,
+  ## and the audit really does cover every kind bc16 can put in a killfeed.
+  var full = doc
+  full.events.add(ev("tiebreak", game = 0, round = doc.games[0].rounds,
+    fields = %*{"rung": "more_archon_health", "archons": [2, 2],
+                "archon_health_tenths": [4210, 3990],
+                "parts_worth": [1200, 1180]}))
+  full.events.add(ev("game_abandoned", game = doc.games.len - 1,
+    round = doc.games[^1].rounds,
+    fields = %*{"map": doc.games[^1].map}))
+  let fullBeats = beatsFor(full, frameOf)
+  var sawTiebreak = false
+  var sawAbandoned = false
+  var auditedKinds: seq[string]
+  for b in fullBeats:
+    let k = b["k"].getStr()
+    if k notin auditedKinds: auditedKinds.add(k)
+    let label = b["label"].getStr()
+    if "decides it: archons" in label: sawTiebreak = true
+    if "abandoned at the wall clock" in label: sawAbandoned = true
+    ## A map's NAME is data, not wording: bc16's own pool is what it is, and
+    ## a bc16 map called `towers` would be bc16's own word for it.
+    var text = label.toLowerAscii()
+    for g in doc.games: text = text.replace(g.map.toLowerAscii(), "")
+    for word in Foreign:
+      check("the bc16 `" & k & "` label says nothing about `" & word & "`: " &
+        label, word notin text)
+  check("the appended `tiebreak` really rendered, so its audit is not vacuous",
+    sawTiebreak)
+  check("and so did the appended `game_abandoned`", sawAbandoned)
+  for k in Bc16BeatKinds:
+    check("and the audit covered the `" & k & "` kind", k in auditedKinds)
+  ## The negative control for the search itself: the SAME events read as bc23
+  ## do trip it, so a clean bc16 audit means the words are absent rather than
+  ## the mechanism being broken. (This is the label bc16 shipped.)
+  var trippedOn: seq[string]
+  var d23 = full
+  d23.year = "bc23"
+  for b in beatsFor(d23, frameOf):
+    for word in Foreign:
+      if word in b["label"].getStr().toLowerAscii() and word notin trippedOn:
+        trippedOn.add(word)
+  check("the word search really fires: the same feed read as bc23 trips on " &
+    trippedOn.join(", "), "launcher" in trippedOn)
 
 # --- 3. STYLE ---------------------------------------------------------------
 block:
