@@ -268,4 +268,30 @@ block:
     check("and `plan.abandon_after` carries the load-bearing record",
       doc["plan"]["abandon_after"][0].getInt() >= 0)
 
+# --- the COMMITTED fixture re-derives, to its LAST round ------------------
+block:
+  ## The chain is a tripwire, and a tripwire is only as good as the artefact
+  ## it is checked against. `tools/wasm_replay_smoke.cjs` steps the committed
+  ## fixture for 200 FRAMES, so it reads the first 200 rounds of a 3025-round
+  ## recording and reports `mismatch_round: -1` on the strength of that. This
+  ## check runs the deriver to the END of every game in the file, which is
+  ## what proves the recording and the sim still agree after F7 widened the
+  ## per-type census fields out of their packed base-100 slots.
+  const Fixture = "tests" / "fixtures" / "replay-bc16.json"
+  check("the committed bc16 fixture exists", fileExists(Fixture))
+  let fx = parseReplay(readFile(Fixture))
+  checkEq("and it is this build's game version", fx.gameVersion, GameVersion)
+  var rounds = 0
+  for g in fx.games: rounds += g.rounds
+  check("and it is LONGER than the wasm smoke's 200-frame window (" &
+    $rounds & " rounds), so a prefix check cannot stand in for this one",
+    rounds > 200)
+  let d = newDeriver(fx)
+  var frames = 0
+  while d.advance(): frames += 1
+  checkEq("the committed fixture re-derives to its LAST round, not just " &
+    "the first 200", d.mismatchRound, -1)
+  check("and the deriver walked every recorded round, not a prefix",
+    frames >= rounds)
+
 finish("test_bc16_replay")

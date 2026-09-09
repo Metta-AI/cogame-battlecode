@@ -1860,6 +1860,41 @@ the bc26 run, not this script's preference. Every ledger entry must name a
 round, a map and a root cause; a cause of `unknown` is rejected by the schema
 check. `tools/ci/parity_ledger_bc16.json` is `{"entries": []}`.
 
+## The hash chain's packed fields, and the year-neutral half NOT changed (r1-F7)
+
+bc16's per-round hash chain is a **tripwire**: `src/battlecode/replay.nim:303-312`
+compares it frame by frame against the recording, and a collision can only
+*hide* a divergence, never manufacture one. It shipped with three packed
+values, and a packed field that overflows is a blind spot in the tripwire:
+
+* `src/battlecode/years/bc16/rules.nim` folded the six player-type censuses
+  base-100/base-1000000 into two `mixHash` calls and the four zombie censuses
+  base-100 into one. **Any single count of 100 or more carried into the next
+  field**, so two distinct censuses could fold to the same chain value. That
+  was not hypothetical here: the parity job measures `peak_robots` of
+  **104–162** and the survival gate builds **177–212** units a seat on
+  `checkers`/`prisons`. **FIXED**: every count is now its own `mixHash` call
+  (nineteen per-team values and thirteen globals), and
+  `tests/fixtures/replay-bc16.json` was re-recorded against the new chain with
+  `tools/gen_bc16_fixture_replay.nim`. No assertion was weakened to make the
+  new fixture pass; a new one was added
+  (`tests/test_bc16_replay.nim`) that re-derives the committed fixture to its
+  **last** round rather than to the 200-frame prefix
+  `tools/wasm_replay_smoke.cjs` walks.
+
+* `src/battlecode/match.nim:498-506` packs `archons` `div/mod 100` and
+  `parts_worth` `div/mod 100000` in the year-neutral results writer. **This is
+  DELIBERATELY NOT CHANGED**, and the limit is recorded rather than fixed:
+  those fields are year-neutral, so widening them would move the committed
+  chain values of **every sibling year** (bc20–bc26) and require re-recording
+  seven more fixtures — a cross-year edit far beyond what a bc16 round
+  authorises. The margin is finite but large on the evidence: `archons` is
+  bounded by the maps' archon counts (≤ 4 a side in the played pool) and
+  `parts_worth` = `int(parts) + Σ partCost` over live robots, against the
+  largest played map's 20 520 parts (`quadrants`) and a 100 000 field. **A
+  future year whose census can exceed 99 archons or whose economy can exceed
+  100 000 parts-worth must widen these two fields before it ships.**
+
 ## Tier A′ — NOT IMPLEMENTED, and named here rather than left implied
 
 The design note specified a **Tier A′** of four scenario bots

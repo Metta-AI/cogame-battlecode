@@ -384,20 +384,31 @@ proc runRound*(w: World, sides: array[2, Side],
       w.stats.archonsAliveAt2000[t] = w.archonsAlive(Team(t))
   w.checkEndOfMatch()
 
-  ## The per-round hash chain: FIFTEEN per-team values plus ELEVEN globals,
-  ## so a re-derivation that diverged in only one of them cannot reproduce the
-  ## chain (the GV02 lesson). Folding the TWO RNG STATES is a bc16-specific
-  ## decision and it is the cheapest possible tripwire for a missed or extra
-  ## draw (D2b/D2c).
+  ## The per-round hash chain: NINETEEN per-team values plus THIRTEEN
+  ## globals, so a re-derivation that diverged in only one of them cannot
+  ## reproduce the chain (the GV02 lesson). Folding the TWO RNG STATES is a
+  ## bc16-specific decision and it is the cheapest possible tripwire for a
+  ## missed or extra draw (D2b/D2c).
+  ##
+  ## EVERY COUNT IS ITS OWN `mixHash` CALL (r1-F7). The six player-type
+  ## censuses were packed base-100/base-1000000 into two values and the four
+  ## zombie censuses base-100 into one, so any single count of 100 or more
+  ## carried into the next field and two distinct censuses could fold to the
+  ## same chain value. That is not hypothetical on this year: the parity job
+  ## measures `peak_robots` of 104-162 and the survival gate builds 177-212
+  ## units a seat on `checkers`/`prisons`. A collision can only HIDE a
+  ## divergence, never manufacture one, which is exactly why it had to go:
+  ## the chain is a tripwire and a tripwire with a blind spot is worse than a
+  ## loud one.
   for t in 0 .. 1:
     let team = Team(t)
     w.mixHash(w.archonsAlive(team))
-    w.mixHash(w.robotTypeCount(team, rtScout) * 1000000 +
-              w.robotTypeCount(team, rtSoldier) * 10000 +
-              w.robotTypeCount(team, rtGuard) * 100 +
-              w.robotTypeCount(team, rtViper))
-    w.mixHash(w.robotTypeCount(team, rtTurret) * 100 +
-              w.robotTypeCount(team, rtTtm))
+    w.mixHash(w.robotTypeCount(team, rtScout))
+    w.mixHash(w.robotTypeCount(team, rtSoldier))
+    w.mixHash(w.robotTypeCount(team, rtGuard))
+    w.mixHash(w.robotTypeCount(team, rtViper))
+    w.mixHash(w.robotTypeCount(team, rtTurret))
+    w.mixHash(w.robotTypeCount(team, rtTtm))
     w.mixHash(w.totalHealthTenths(team))
     w.mixHash(int(w.archonHealthTotal(team) * 10.0))
     w.mixHash(int(w.resources[t] * 10.0))
@@ -415,10 +426,10 @@ proc runRound*(w: World, sides: array[2, Side],
   w.mixHashU(w.partsChecksum())
   w.mixHashU(w.execOrderChecksum())
   w.mixHash(w.execOrder.len)
-  w.mixHash(w.zombieCountByType(rtStandardzombie) * 1000000 +
-            w.zombieCountByType(rtRangedzombie) * 10000 +
-            w.zombieCountByType(rtFastzombie) * 100 +
-            w.zombieCountByType(rtBigzombie))
+  w.mixHash(w.zombieCountByType(rtStandardzombie))
+  w.mixHash(w.zombieCountByType(rtRangedzombie))
+  w.mixHash(w.zombieCountByType(rtFastzombie))
+  w.mixHash(w.zombieCountByType(rtBigzombie))
   w.mixHash(w.densStanding())
   w.mixHash(w.neutralsStanding())
   w.mixHashU(cast[uint64](w.rand.seed))
