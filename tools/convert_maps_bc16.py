@@ -120,10 +120,30 @@ def _loc_hash(x: int, y: int) -> int:
 class JavaHashMap:
     """Java 8's `HashMap` insertion + iteration order, for `MapLocation` keys.
 
-    Only what `buildZombieSpawnMap` needs: `put` of distinct keys and a
-    `keySet()` walk. Bins are chains (never trees): treeification needs eight
-    keys in ONE bucket and the official rosters top out at 104 robots, so it
-    cannot be reached — and `--parse-all` asserts it for all 98 maps.
+    Only what `buildZombieSpawnMap` needs: the insertion of distinct keys and
+    a `keySet()` walk. Bins are chains (never trees): treeification needs
+    eight keys in ONE bucket and the official rosters top out at 104 robots,
+    so it cannot be reached — and `--parse-all` asserts it for all 98 maps.
+
+    **THE BIN IS BUILT BY `merge`, WHICH PREPENDS — NOT BY `put`, WHICH
+    APPENDS.** `buildZombieSpawnMap` builds `byLoc` with
+    `Arrays.stream(initialRobots).collect(Collectors.toMap(...))`, and
+    `Collectors.toMap`'s accumulator is `map.merge(k, v, mergeFunction)`.
+    `HashMap.merge`'s insert is `tab[i] = newNode(hash, key, value, first)` —
+    the new node takes the head and the old head becomes its `next` — while
+    `HashMap.put`'s walks the chain and appends at the tail. **So within a
+    bucket the iteration order is REVERSE insertion order**, and getting that
+    backwards permutes `denLocs`, which permutes which den receives each
+    leftover zombie, which changes which SQUARE a zombie spawns on.
+
+    MEASURED, and it is the whole reason the parity oracle exists: on
+    `zigzag` the `put` form produced
+    `[(0,0), (5,9), (25,13), ...]` and the JVM's own `keySet()` produces
+    `[(25,13), (5,9), (0,0), ...]` — three keys share bucket 0 — and the
+    resulting den split gave den (0,0) a RANGEDZOMBIE at round 100 that the
+    engine gives to den (0,29). The Tier A trace diverged on that round.
+    `--parse-all` re-checks the emulation against the recorded JVM order for
+    every one of the 98 official rosters.
     """
 
     def __init__(self) -> None:
@@ -148,7 +168,11 @@ class JavaHashMap:
         if len(self.table[i]) >= 7:
             raise RefuseMap("a HashMap bucket would treeify; "
                             "the chain emulation is not valid here")
-        self.table[i].append((h, key))
+        # PREPEND: `Collectors.toMap` accumulates with `HashMap.merge`, whose
+        # insert is `tab[i] = newNode(hash, key, value, first)`. See the class
+        # docstring -- this one line is the difference between the engine's
+        # den split and a permuted one.
+        self.table[i].insert(0, (h, key))
         self.size += 1
         if self.size > self.threshold:
             self._resize()
