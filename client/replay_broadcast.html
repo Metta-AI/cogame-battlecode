@@ -3612,6 +3612,232 @@ html[data-year="bc22"] .beat-marker.end      { background: #ffffff; }
   #bc22-doctrines { max-width: 96%; font-size: 10px; }
 }
 
+/* ======================================================================
+   BC16 additions to the inherited cogame-battlecode chrome
+   ----------------------------------------------------------------------
+   Battlecode 2016 "Zombie Invasion". NO STARTER ELEMENT IS REMOVED FROM
+   THE PAGE: the bc26 block's ids and the bc20/bc21/bc22/bc23/bc24/bc25
+   blocks' all stay exactly where they are, and what bc16 removes is
+   nothing from the page and everything from the SCREEN. Every rule below
+   is scoped to `html[data-year="bc16"]`, including every beat-marker
+   colour (the bc21 r1-F4 fix), so none of them can restyle another year's
+   marker of the same name.
+   ====================================================================== */
+html[data-year="bc16"] #coopchip,
+html[data-year="bc16"] #bars,
+html[data-year="bc16"] #econ,
+html[data-year="bc16"] #doctrines,
+html[data-year="bc16"] #bc20-flood,
+html[data-year="bc16"] #bc20-soup,
+html[data-year="bc16"] #bc20-units,
+html[data-year="bc16"] #bc20-doctrines,
+html[data-year="bc16"] #bc20-doctrines-toggle,
+html[data-year="bc16"] #bc20-chain,
+html[data-year="bc16"] #bc21-votes,
+html[data-year="bc16"] #bc21-influence,
+html[data-year="bc16"] #bc21-units,
+html[data-year="bc16"] #bc21-doctrines,
+html[data-year="bc16"] #bc21-doctrines-toggle,
+html[data-year="bc16"] #bc21-bids,
+html[data-year="bc16"] #bc23-islands,
+html[data-year="bc16"] #bc23-econ,
+html[data-year="bc16"] #bc23-units,
+html[data-year="bc16"] #bc23-doctrines,
+html[data-year="bc16"] #bc23-doctrines-toggle,
+html[data-year="bc16"] #bc23-tempest,
+html[data-year="bc16"] #bc24-flags,
+html[data-year="bc16"] #bc24-crumbs,
+html[data-year="bc16"] #bc24-levels,
+html[data-year="bc16"] #bc24-doctrines,
+html[data-year="bc16"] #bc24-doctrines-toggle,
+html[data-year="bc16"] #bc24-traps,
+html[data-year="bc16"] #bc25-coverage,
+html[data-year="bc16"] #bc25-towers,
+html[data-year="bc16"] #bc25-econ,
+html[data-year="bc16"] #bc25-doctrines,
+html[data-year="bc16"] #bc25-doctrines-toggle,
+html[data-year="bc16"] #bc25-srp,
+html[data-year="bc16"] #bc22-archons,
+html[data-year="bc16"] #bc22-anomaly,
+html[data-year="bc16"] #bc22-econ,
+html[data-year="bc16"] #bc22-units,
+html[data-year="bc16"] #bc22-doctrines,
+html[data-year="bc16"] #bc22-doctrines-toggle,
+html[data-year="bc16"] #bc22-mutation { display: none !important; }
+
+html:not([data-year="bc16"]) #bc16-archons,
+html:not([data-year="bc16"]) #bc16-horde,
+html:not([data-year="bc16"]) #bc16-econ,
+html:not([data-year="bc16"]) #bc16-units,
+html:not([data-year="bc16"]) #bc16-doctrines,
+html:not([data-year="bc16"]) #bc16-doctrines-toggle,
+html:not([data-year="bc16"]) #bc16-siege { display: none !important; }
+
+/* THE HEADLINE READOUT AND THE YEAR'S WHOLE STORY: a two-sided archon
+   tally with a health pip per archon that drains as it is shot (1000 HP
+   each), a GREEN ring on any archon that is zombie-infected and a VIOLET
+   one on any that is viper-infected. It flashes red when an archon dies,
+   because that is the only event that can end the game. Top-centre pill
+   slot, ABOVE the board and never inside the transport band. */
+#bc16-archons {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(var(--topband, 0px) + 6px);
+  display: flex; gap: 8px; align-items: baseline;
+  font: 700 12px/1 var(--mono); color: #d9cdb8;
+  background: rgba(10, 12, 18, .82); border: 1px solid #2a3342;
+  border-radius: 999px; padding: 5px 12px; z-index: 7; white-space: nowrap;
+}
+#bc16-archons.flash { animation: bc16flash .9s ease-out 1; }
+@keyframes bc16flash {
+  0% { box-shadow: 0 0 0 0 rgba(224, 82, 58, .9); }
+  100% { box-shadow: 0 0 0 14px rgba(224, 82, 58, 0); }
+}
+#bc16-archons .ash { color: #7fb2e8; }
+#bc16-archons .basil { color: #e0523a; }
+#bc16-archons .pips { letter-spacing: .08em; }
+#bc16-archons .zinf { color: #7fd48f; }
+#bc16-archons .vinf { color: #b98ad0; }
+#bc16-archons .lost { color: #6f6558; }
+
+/* THE YEAR'S SIGNATURE READOUT, AND THE ONE NO OTHER YEAR HAS: THE HORDE
+   CLOCK. Zombies alive by type, the next scheduled wave with its
+   composition and how many rounds away, the outbreak level and multiplier,
+   dens standing and the tiebreak countdown. It sits IMMEDIATELY ABOVE
+   var(--band), never inside it, and it KEEPS its wave composition, its
+   multiplier and its countdown at EVERY width including 360 px. */
+#bc16-horde {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--band, 0px) + 148px);
+  display: flex; gap: 8px; align-items: center;
+  font: 600 11px/1 var(--mono); color: #cdbfa6;
+  background: rgba(10, 12, 18, .82); border: 1px solid #2a3342;
+  border-radius: 8px; padding: 4px 10px; z-index: 7; white-space: nowrap;
+  max-width: 92%; overflow: hidden;
+}
+#bc16-horde .alive { color: #7fd48f; font-weight: 800; }
+#bc16-horde .wave { color: #ffb347; font-weight: 800; }
+#bc16-horde .ob { color: #e0523a; font-weight: 800; }
+#bc16-horde .dens { color: #b98ad0; }
+#bc16-horde .togo { color: #8b8375; }
+#bc16-horde .tl { letter-spacing: .12em; color: #6f6558; }
+#bc16-horde .tl b { color: #f2e8d8; }
+#bc16-horde.struck { color: #f2e8d8; border-color: #6a5a3a; }
+
+#bc16-econ, #bc16-units {
+  position: absolute; left: 8px;
+  width: max-content; max-width: calc(100% - 16px);
+  font: 500 10px/1.35 var(--mono); color: #cdbfa6;
+  background: rgba(10, 12, 18, .78); border: 1px solid #2a3342;
+  border-radius: 8px; padding: 5px 8px; z-index: 6;
+}
+#bc16-units { bottom: calc(var(--band, 0px) + 76px); }
+#bc16-econ { bottom: calc(var(--band, 0px) + 8px); }
+#bc16-econ .row, #bc16-units .row {
+  display: flex; gap: 7px; align-items: baseline; white-space: nowrap;
+}
+#bc16-econ .who, #bc16-units .who {
+  min-width: 4.2em; color: #8b8375; font-weight: 700;
+}
+#bc16-econ .pt { color: #e8c46a; }
+#bc16-econ .inc { color: #9fb0bd; }
+#bc16-econ .den { color: #b98ad0; }
+#bc16-econ .neu { color: #7fd48f; }
+#bc16-econ .rub { color: #a08a5e; }
+#bc16-econ .lbl { color: #8b8375; }
+#bc16-units .arc { color: #e0523a; font-weight: 700; }
+#bc16-units .grd { color: #9fb0bd; }
+#bc16-units .tur { color: #e8c46a; }
+#bc16-units .bld { color: #8b8375; }
+#bc16-units .inf { color: #7fd48f; }
+#bc16-units .lbl { color: #8b8375; }
+
+/* The dismissible doctrine overlay: a close control, an Escape binding, a
+   re-open chip and self-dismissal on the first playback advance. CAPPED
+   AND SCROLLING (the bc23/bc25 doctrine-card clipping finding). It sits
+   ABOVE the board and NEVER inside the transport band, and it carries the
+   SUBMITTED-VS-APPLIED BADGE the envelope pin requires. */
+#bc16-doctrines {
+  position: absolute; left: 8px; right: 8px;
+  top: calc(var(--topband, 0px) + 34px);
+  max-height: min(46vh,
+    calc(100% - var(--topband, 0px) - var(--band, 0px) - 46px));
+  overflow: auto;
+  font: 500 11px/1.4 var(--mono); color: #d9cdb8;
+  background: rgba(10, 12, 18, .9); border: 1px solid #2a3342;
+  border-radius: 8px; padding: 8px 26px 8px 10px; z-index: 8;
+}
+#bc16-doctrines.dismissed { display: none !important; }
+#bc16-doctrines-close {
+  position: absolute; top: 3px; right: 6px;
+  background: none; border: 0; color: #b6a892; cursor: pointer;
+  font: 700 15px/1 var(--mono); padding: 2px 4px;
+}
+#bc16-doctrines-close:hover { color: #fff; }
+#bc16-doctrines .dline { margin-bottom: 6px; }
+#bc16-doctrines .dname { color: #f2e8d8; font-weight: 700; }
+#bc16-doctrines .dfall { color: #e0523a; }
+#bc16-doctrines .dbadge { color: #ffb347; font-weight: 700; }
+#bc16-doctrines .dsub { color: #8b8375; }
+
+/* The endcard war panel. Nothing about archons, parts, rubble, dens or
+   zombies is stored in the replay: the wasm sim re-derives every round. */
+#bc16-siege {
+  margin-top: 8px; font: 500 11px/1.45 var(--mono);
+  color: #d9cdb8; max-height: 30vh; overflow: auto;
+}
+#bc16-siege .clan b { color: #f0d070; }
+#bc16-siege .ladder { color: #b6a892; }
+#bc16-siege .ladder .won { color: #f2e8d8; font-weight: 700; }
+
+/* THE HUD MAY NOT BLEED THROUGH THE ENDCARD (the bc23 finding). */
+html[data-year="bc16"] #endcard.show ~ #bc16-archons,
+html[data-year="bc16"] #endcard.show ~ #bc16-horde,
+html[data-year="bc16"] #endcard.show ~ #bc16-econ,
+html[data-year="bc16"] #endcard.show ~ #bc16-units,
+html[data-year="bc16"] #endcard.show ~ #bc16-doctrines {
+  visibility: hidden;
+}
+
+/* Beat markers, EVERY ONE scoped to html[data-year="bc16"]. THIRTEEN
+   kinds, and `tests/test_bc16_beats.nim` asserts that the COMMITTED
+   FIXTURE REPLAY emits every one of them -- emission, label and style, all
+   three, and the CSS check reads the kinds the fixture ACTUALLY EMITTED
+   rather than a hand-written list (the bc25 r1-F26 finding). Seven of the
+   names already exist for other years (`doctrine`, `game`, `build`,
+   `archon`, `rout`, `duel`, `end`), which is exactly why the scoping is
+   mandatory; six are new (`wave`, `outbreak`, `den`, `activate`, `infect`,
+   `turned`). */
+html[data-year="bc16"] .beat-marker.doctrine { background: #9a8ad0; }
+html[data-year="bc16"] .beat-marker.game     { background: #b6a892; }
+html[data-year="bc16"] .beat-marker.build    { background: #7fb2e5; }
+html[data-year="bc16"] .beat-marker.wave     { background: #7fd48f; width: 3px; }
+html[data-year="bc16"] .beat-marker.outbreak { background: #ffb347; width: 3px; }
+html[data-year="bc16"] .beat-marker.den      { background: #b98ad0; }
+html[data-year="bc16"] .beat-marker.activate { background: #6ac4ff; }
+html[data-year="bc16"] .beat-marker.infect   { background: #8fd48f; }
+html[data-year="bc16"] .beat-marker.turned   { background: #4fae6a; width: 3px; }
+html[data-year="bc16"] .beat-marker.archon   { background: #e0523a; width: 3px; }
+html[data-year="bc16"] .beat-marker.rout     { background: #c0392b; width: 3px; }
+html[data-year="bc16"] .beat-marker.duel     { background: #e07a3a; }
+html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
+
+@media (max-width: 640px) {
+  /* 360 px is the featured-match iframe width and the width this page is
+     checked at. The boxes drop their word labels to glyphs -- but
+     `#bc16-horde` KEEPS its wave composition, its outbreak multiplier and
+     its countdown at every width, because it is the readout that makes the
+     year make sense. */
+  #bc16-archons { font-size: 10px; gap: 5px; }
+  #bc16-archons .lost { display: none; }
+  #bc16-horde { font-size: 9px; gap: 5px; }
+  #bc16-horde .tl { display: none; }
+  #bc16-econ, #bc16-units { font-size: 9px; }
+  #bc16-econ .who, #bc16-units .who { min-width: 2.6em; }
+  #bc16-econ .lbl, #bc16-units .lbl { display: none; }
+  #bc16-doctrines { max-width: 96%; font-size: 10px; }
+}
+
+
 </style>
 </head>
 <body>
@@ -3662,6 +3888,9 @@ html[data-year="bc22"] .beat-marker.end      { background: #ffffff; }
                   title="Show the doctrines">doctrines</button>
           <!-- BC22: re-opens #bc22-doctrines after it has been dismissed. -->
           <button type="button" id="bc22-doctrines-toggle" hidden
+                  title="Show the doctrines">doctrines</button>
+          <!-- BC16: re-opens #bc16-doctrines after it has been dismissed. -->
+          <button type="button" id="bc16-doctrines-toggle" hidden
                   title="Show the doctrines">doctrines</button>
         </div>
       </div>
@@ -3758,6 +3987,18 @@ html[data-year="bc22"] .beat-marker.end      { background: #ffffff; }
       <div id="bc23-doctrines-body"></div>
     </div>
 
+    <!-- BC16 additions to the inherited cogame-battlecode chrome -->
+    <div id="bc16-archons"></div>
+    <div id="bc16-horde"></div>
+    <div id="bc16-units"></div>
+    <div id="bc16-econ"></div>
+    <div id="bc16-doctrines" role="region" aria-label="Doctrines">
+      <button type="button" id="bc16-doctrines-close"
+              aria-label="Dismiss doctrines" title="Dismiss doctrines (Esc)"
+              >&times;</button>
+      <div id="bc16-doctrines-body"></div>
+    </div>
+
     <!-- BC22 additions to the inherited cogame-battlecode chrome -->
     <div id="bc22-archons"></div>
     <div id="bc22-anomaly"></div>
@@ -3838,6 +4079,10 @@ html[data-year="bc22"] .beat-marker.end      { background: #ffffff; }
            or anomalies is stored in the replay -- the wasm sim re-derives
            every round. -->
       <div id="bc22-mutation"></div>
+      <!-- BC16: the war panel. Nothing about archons, parts, rubble, dens
+           or zombies is stored in the replay -- the wasm sim re-derives
+           every round. -->
+      <div id="bc16-siege"></div>
       <div class="ec-replay" id="ec-replay"></div>
     </div>
   </div>
@@ -5375,6 +5620,386 @@ html[data-year="bc22"] .beat-marker.end      { background: #ffffff; }
 </script>
 
 <!-- ======================================================================
+     BC16 additions to the inherited cogame-battlecode chrome
+     ----------------------------------------------------------------------
+     The game block for the `bc16` year. It registers itself on
+     `window.Bc16Block` BEFORE the inherited block runs, and the inherited
+     block calls into it: two lines there, everything else here. No function
+     name in this file collides with `chrome_common.js`, with the bc26 block
+     or with the bc20, bc21, bc22, bc23, bc24 and bc25 ones -- the beat
+     builder is `buildBc16BeatButtons`, never `markBeat` (the tandem
+     2026-08-23 hoisting collision), never `buildBeatButtons` (bc26), and
+     never `buildBc20BeatButtons`, `buildBc21BeatButtons`,
+     `buildBc22BeatButtons`, `buildBc23BeatButtons`, `buildBc24BeatButtons`
+     or `buildBc25BeatButtons`.
+     ====================================================================== -->
+<script>
+(function () {
+  'use strict';
+
+  var api = null;                    // {C, send, seek, dismissEndcard}
+  var beatsBuilt = false;
+  var beatEls = [];
+  var dismissed = false;
+  var pinned = false;                // the viewer opened it themselves
+  var lastFrame = -1;
+  var lastArchons = [-1, -1];
+  var feedShown = {};
+
+  function $(id) { return document.getElementById(id); }
+  function esc(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  // ONE formatter for every printed number (endcard fix 3): integers as
+  // integers, tenths as `x.x`, percentages as `NN %`. That is why every bc16
+  // float statistic is reported in TENTHS as an integer.
+  function stat(value, kind) {
+    var n = Number(value || 0);
+    if (kind === 'tenths') return (n / 10).toFixed(1);
+    if (kind === 'pct') return Math.round(n) + ' %';
+    return String(Math.round(n));
+  }
+
+  // ---- the dismissible doctrine overlay --------------------------------
+  function setDoctrinesOpen(open) {
+    dismissed = !open;
+    var panel = $('bc16-doctrines');
+    var chip = $('bc16-doctrines-toggle');
+    if (panel) panel.classList.toggle('dismissed', dismissed);
+    if (chip) chip.hidden = !dismissed;
+  }
+
+  function wireDoctrines() {
+    var close = $('bc16-doctrines-close');
+    if (close) {
+      close.addEventListener('click', function (event) {
+        event.stopPropagation();
+        pinned = false;
+        setDoctrinesOpen(false);
+      });
+    }
+    var chip = $('bc16-doctrines-toggle');
+    if (chip) {
+      chip.addEventListener('click', function (event) {
+        event.stopPropagation();
+        // A panel the viewer opened by hand STAYS open -- that is their
+        // choice, not a lid the page left on the board.
+        pinned = true;
+        setDoctrinesOpen(true);
+      });
+    }
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape' && event.key !== 'Esc') return;
+      if (document.documentElement.getAttribute('data-year') !== 'bc16') return;
+      pinned = false;
+      setDoctrinesOpen(false);
+    });
+    // The viewer who never presses play still gets the board back.
+    setTimeout(function () {
+      if (!pinned) setDoctrinesOpen(false);
+    }, 6000);
+  }
+
+  // ---- beats ------------------------------------------------------------
+  function buildBc16BeatButtons(s) {
+    if (beatsBuilt || !s.beats || !s.beats.length) return;
+    beatsBuilt = true;
+    var scrub = $('scrub');
+    var span = Math.max(1, (s.mx || 1) - (s.st || 0));
+    s.beats.forEach(function (b) {
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'beat-marker ' + (b.k || 'game');
+      el.style.left =
+        (Math.min(1, Math.max(0, (b.t - (s.st || 0)) / span)) * 100) + '%';
+      el.setAttribute('aria-label', b.label || b.k);
+      el.title = b.label || b.k;
+      el.__tick = b.t;
+      el.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (api) api.seek(b.t / span);
+      });
+      if (scrub && scrub.parentNode) scrub.parentNode.appendChild(el);
+      beatEls.push(el);
+    });
+  }
+
+  function applyBc16BeatSpoilers(s) {
+    if (!beatEls.length) return;
+    var show = !!s.sp0 || s.ph === 'gameover';
+    beatEls.forEach(function (el) {
+      el.style.visibility = (show || el.__tick <= s.t) ? 'visible' : 'hidden';
+    });
+  }
+
+  // ---- the archon pill: the only readout that can end the game -----------
+  function archonPips(faction) {
+    var out = '';
+    (faction.pips || []).slice(0, 8).forEach(function (a) {
+      var frac = a.max > 0 ? a.health / a.max : 0;
+      var glyph = ['\u25cb', '\u25d4', '\u25d1', '\u25d5', '\u25cf'][
+        Math.max(0, Math.min(4, Math.round(frac * 4)))];
+      if (a.viper_infected > 0) {
+        out += '<span class="vinf">(' + glyph + ')</span>';
+      } else if (a.zombie_infected > 0) {
+        out += '<span class="zinf">(' + glyph + ')</span>';
+      } else {
+        out += glyph;
+      }
+    });
+    return out || '\u00b7';
+  }
+
+  function renderArchons(s) {
+    var box = $('bc16-archons');
+    var data = s.bc16_archons;
+    if (!box || !data) return;
+    var a = data.factions[0];
+    var b = data.factions[1];
+    box.innerHTML =
+      '<span class="ash">' + esc(a.alias) + '</span>' +
+      '<span class="pips ash">' + archonPips(a) + '</span>' +
+      '<span>' + stat(a.alive, 'int') + ' \u2014 ' +
+      stat(b.alive, 'int') + '</span>' +
+      '<span class="pips basil">' + archonPips(b) + '</span>' +
+      '<span class="basil">' + esc(b.alias) + '</span>' +
+      '<span class="lost">lost ' + stat(a.lost, 'int') + '/' +
+      stat(b.lost, 'int') + '</span>';
+    // It FLASHES RED when an archon dies, because that is the only event
+    // that can end the game.
+    if ((lastArchons[0] >= 0 && a.alive < lastArchons[0]) ||
+        (lastArchons[1] >= 0 && b.alive < lastArchons[1])) {
+      box.classList.remove('flash');
+      void box.offsetWidth;
+      box.classList.add('flash');
+    }
+    lastArchons = [a.alive, b.alive];
+  }
+
+  // ---- the horde clock: the year's signature readout --------------------
+  function renderHorde(s) {
+    var box = $('bc16-horde');
+    var h = s.bc16_horde;
+    if (!box || !h) return;
+    var alive = h.alive || {};
+    var live = '\u25c6' + stat(alive.standardzombie, 'int') +
+      ' \u27a4' + stat(alive.rangedzombie, 'int') +
+      ' \u26a1' + stat(alive.fastzombie, 'int') +
+      ' \u25cf' + stat(alive.bigzombie, 'int');
+    var wave = '';
+    if (h.next_wave_round >= 0) {
+      var parts = (h.next_wave || []).filter(function (c) {
+        return c.count > 0;
+      }).map(function (c) { return String(c.count); });
+      wave = 'WAVE ' + (parts.length ? parts.join('+') : '0') +
+        ' in ' + stat(h.next_wave_in, 'int');
+    } else {
+      wave = 'NO WAVE LEFT';
+    }
+    // The whole remaining schedule as a mini-timeline.
+    var tl = (h.schedule || []).map(function (row) {
+      return row.past ? '<b>\u00b7</b>' : '\u00b7';
+    }).join('');
+    box.innerHTML =
+      '<span class="alive">' + live + '</span>' +
+      '<span class="wave">' + esc(wave) + '</span>' +
+      '<span class="ob">OUTBREAK ' + stat(h.outbreak_level, 'int') +
+      ' \u2014 \u00d7' + (h.outbreak_multiplier_permille / 1000).toFixed(1) +
+      '</span>' +
+      '<span class="dens">DENS ' + stat(h.dens_standing, 'int') + '</span>' +
+      '<span class="tl">' + tl + '</span>' +
+      '<span class="togo">ROUND ' + stat(h.tiebreak_round, 'int') +
+      ' \u2014 ' + stat(h.rounds_to_go, 'int') + ' to go</span>';
+  }
+
+  // ---- the two rail boxes ----------------------------------------------
+  function renderEcon(s) {
+    var box = $('bc16-econ');
+    var e = s.bc16_econ;
+    if (!box || !e) return;
+    var html = '';
+    e.factions.forEach(function (f) {
+      html += '<div class="row"><span class="who">' + esc(f.alias) +
+        '</span><span class="pt">' + stat(f.parts, 'int') + ' parts</span>' +
+        '<span class="inc">+' + stat(f.income_tenths, 'tenths') +
+        '/round</span>' +
+        '<span class="den">dens ' + stat(f.dens_destroyed, 'int') +
+        ' (+' + stat(f.den_bounty, 'int') + ')</span>' +
+        '<span class="neu">neutrals ' + stat(f.neutrals, 'int') +
+        (f.neutral_archons > 0
+          ? ' (' + stat(f.neutral_archons, 'int') + ' archon)' : '') +
+        '</span>' +
+        '<span class="rub">rubble +' +
+        stat(f.rubble_created_tenths, 'tenths') + ' / \u2212' +
+        stat(f.rubble_cleared_tenths, 'tenths') + '</span></div>';
+    });
+    html += '<div class="row"><span class="who lbl">map</span>' +
+      '<span class="pt">' + stat(e.parts_on_map, 'int') +
+      ' parts left</span>' +
+      '<span class="rub">impassable ' + stat(e.impassable_now, 'int') +
+      ' of ' + stat(e.impassable_start, 'int') + ' at round 0</span></div>';
+    box.innerHTML = html;
+  }
+
+  function renderUnits(s) {
+    var box = $('bc16-units');
+    var u = s.bc16_units;
+    if (!box || !u) return;
+    var html = '';
+    u.factions.forEach(function (f) {
+      html += '<div class="row"><span class="who">' + esc(f.alias) +
+        '</span><span class="arc">\u25b2' + stat(f.archons, 'int') +
+        '</span>' +
+        '<span class="grd">G' + stat(f.guards, 'int') + '</span>' +
+        '<span>S' + stat(f.soldiers, 'int') + '</span>' +
+        '<span>Sc' + stat(f.scouts, 'int') + '</span>' +
+        '<span>V' + stat(f.vipers, 'int') + '</span>' +
+        '<span class="tur">T' +
+        stat(f.turrets + f.ttms, 'int') + '</span>' +
+        '<span class="bld">building ' + stat(f.building, 'int') + '</span>' +
+        '<span class="inf">infected ' + stat(f.infected, 'int') + '</span>' +
+        '<span class="lbl">lost ' + stat(f.lost, 'int') + ' \u00b7 turned ' +
+        stat(f.turned, 'int') + '</span></div>';
+    });
+    box.innerHTML = html;
+  }
+
+  // ---- the doctrine card, with the submitted-vs-applied badge ----------
+  function renderDoctrines(s) {
+    var body = $('bc16-doctrines-body');
+    if (!body || !s.doctrines) return;
+    var html = '';
+    s.doctrines.forEach(function (d) {
+      html += '<div class="dline"><span class="dname">' + esc(d.alias) +
+        '</span> \u2014 ' + esc(d.name) +
+        (d.fallback ? ' <span class="dfall">[fallback: ' +
+          esc(d.fallback) + ']</span>' : '');
+      var defaulted = (d.defaults_applied || []).length;
+      var knobs = d.knob_count || 11;
+      if (d.envelope || defaulted > 0) {
+        html += ' <span class="dbadge">envelope: ' +
+          esc(d.envelope || 'none') + ' \u00b7 ' + defaulted + ' of ' +
+          knobs + ' knobs defaulted</span>';
+      }
+      html += '<br>' + esc((d.words || []).join(' \u00b7 '));
+      if (d.motto) html += '<br>\u201c' + esc(d.motto) + '\u201d';
+      if (d.notes) html += '<br>' + esc(d.notes);
+      if (d.submitted) {
+        html += '<br><span class="dsub">what the cog actually sent: ' +
+          esc(d.submitted) + '</span>';
+      }
+      html += '</div>';
+    });
+    body.innerHTML = html;
+  }
+
+  // ---- the killfeed ------------------------------------------------------
+  function renderFeed(s) {
+    var feed = $('killfeed');
+    if (!feed || !s.beats) return;
+    var lines = [];
+    s.beats.forEach(function (b) {
+      if (b.t > s.t) return;
+      if (!b.label) return;
+      lines.push(b);
+    });
+    var tail = lines.slice(-7);
+    var html = '';
+    tail.forEach(function (b) {
+      html += '<div class="kf ' + esc(b.k) + '">' + esc(b.label) + '</div>';
+    });
+    feed.innerHTML = html;
+    feedShown = {};
+  }
+
+  // ---- the endcard war panel --------------------------------------------
+  function renderEndcardExtras(s) {
+    var panel = $('bc16-siege');
+    var g = s.bc16_siege;
+    if (!panel || !g) return;
+    var html = '';
+    g.factions.forEach(function (f) {
+      html += '<div class="clan"><b>' + esc(f.alias) + '</b>: archons ' +
+        stat(f.archons_start, 'int') + ' started, ' +
+        stat(f.archons_lost, 'int') + ' lost, ' +
+        stat(f.archons_left, 'int') + ' left' +
+        '<br>parts: ' + stat(f.parts_collected_tenths, 'tenths') +
+        ' collected, ' + stat(f.parts_end, 'int') + ' banked, worth ' +
+        stat(f.parts_worth_end, 'int') +
+        '<br>units: ' + stat(f.units_built, 'int') + ' built \u00b7 ' +
+        stat(f.soldiers_built, 'int') + ' soldiers, ' +
+        stat(f.guards_built, 'int') + ' guards, ' +
+        stat(f.scouts_built, 'int') + ' scouts, ' +
+        stat(f.vipers_built, 'int') + ' vipers, ' +
+        stat(f.turrets_built, 'int') + ' turrets' +
+        '<br>dens destroyed: ' + stat(f.dens_destroyed, 'int') +
+        ' \u00b7 neutrals activated: ' +
+        stat(f.neutrals_activated, 'int') +
+        (f.neutral_archons_activated > 0
+          ? ' (' + stat(f.neutral_archons_activated, 'int') + ' ARCHON)'
+          : '') +
+        '<br>infection: ' + stat(f.infections_suffered, 'int') +
+        ' suffered, ' + stat(f.infections_inflicted, 'int') +
+        ' inflicted, and ' + stat(f.robots_turned, 'int') +
+        ' of its own stood back up on the horde\u2019s side' +
+        '<br>damage: ' + stat(f.enemy_damage_dealt, 'int') + ' dealt to / ' +
+        stat(f.enemy_damage_taken, 'int') + ' taken from the enemy \u00b7 ' +
+        stat(f.zombie_damage_dealt, 'int') + ' dealt to / ' +
+        stat(f.zombie_damage_taken, 'int') + ' taken from the horde' +
+        '<br>rubble: ' + stat(f.rubble_cleared_tenths, 'tenths') +
+        ' cleared, ' + stat(f.rubble_created_tenths, 'tenths') +
+        ' created \u00b7 repairs: ' + stat(f.repairs, 'int') + ' for ' +
+        stat(f.hp_repaired, 'int') + ' health' +
+        '</div>';
+    });
+    // THE TIEBREAK LEDGER: all four rungs with both sides' numbers and which
+    // one decided it.
+    html += '<div class="ladder">round ' +
+      stat((s.bc16_horde || {}).tiebreak_round, 'int') + ' ladder:';
+    (g.ladder || []).forEach(function (rung) {
+      var won = rung.rung === g.decided_by;
+      html += '<br>' + (won ? '<span class="won">' : '<span>') +
+        esc(rung.rung.replace(/_/g, ' ')) + ': ' +
+        stat(rung.a, 'int') + ' vs ' + stat(rung.b, 'int') +
+        (won ? ' \u2190 decided it' : '') + '</span>';
+    });
+    html += '</div>';
+    panel.innerHTML = html;
+  }
+
+  window.Bc16Block = {
+    attach: function (host) {
+      api = host;
+      wireDoctrines();
+    },
+    // True while a bc16 replay is on screen; the inherited block asks before
+    // it draws its own year's readouts.
+    active: function (s) { return s && s.year === 'bc16'; },
+    onFrame: function (s) {
+      if (s.year !== 'bc16') return;
+      buildBc16BeatButtons(s);
+      // The board is where the story is -- so the first frame that advances
+      // the playhead closes the panel, unless the viewer opened it by hand.
+      if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {
+        setDoctrinesOpen(false);
+      }
+      lastFrame = s.t;
+      renderArchons(s);
+      renderHorde(s);
+      renderEcon(s);
+      renderUnits(s);
+      renderDoctrines(s);
+      renderFeed(s);
+      applyBc16BeatSpoilers(s);
+      renderEndcardExtras(s);
+    }
+  };
+})();
+</script>
+
+<!-- ======================================================================
      BC22 additions to the inherited cogame-battlecode chrome
      ----------------------------------------------------------------------
      The game block for the `bc22` year. It registers itself on
@@ -5827,6 +6452,16 @@ html[data-year="bc22"] .beat-marker.end      { background: #ffffff; }
     });
   }
 
+  // BC16 HOOK (1 of 2): the same two lines for the eighth year.
+  if (window.Bc16Block) {
+    window.Bc16Block.attach({
+      C: C,
+      send: send,
+      seek: function (frac) { seek(frac); },
+      dismissEndcard: function () { dismissEndcard(); }
+    });
+  }
+
   // ---- beats ------------------------------------------------------------
   // Deliberately NOT named markBeat: the starter's chrome_common already
   // exports one, and a same-named function in this block would hoist over
@@ -6086,7 +6721,10 @@ html[data-year="bc22"] .beat-marker.end      { background: #ffffff; }
     bc22: { unit: 'archon', units: 'archons', res: 'lead' },
     bc23: { unit: 'headquarters', units: 'headquarters', res: 'adamantium' },
     bc24: { unit: 'duck', units: 'ducks', res: 'crumbs' },
-    bc25: { unit: 'tower', units: 'towers', res: 'chips' }
+    bc25: { unit: 'tower', units: 'towers', res: 'chips' },
+    // bc16's own nouns (endcard fix 1): the archon and its parts, so no
+    // other year's unit or resource word can reach a bc16 card.
+    bc16: { unit: 'archon', units: 'archons', res: 'parts' }
   };
 
   function endcardNouns(year) {
@@ -6207,7 +6845,8 @@ html[data-year="bc22"] .beat-marker.end      { background: #ffffff; }
       var railBottom = -Infinity;
       ['econ', 'bc20-soup', 'bc20-units', 'bc21-influence', 'bc21-units',
        'bc24-crumbs', 'bc24-levels', 'bc25-towers', 'bc25-econ',
-       'bc23-econ', 'bc23-units', 'bc22-econ', 'bc22-units']
+       'bc23-econ', 'bc23-units', 'bc22-econ', 'bc22-units',
+       'bc16-econ', 'bc16-units']
         .forEach(function (id) {
           var el = document.getElementById(id);
           if (!el || !el.offsetParent) return;
@@ -6339,6 +6978,7 @@ html[data-year="bc22"] .beat-marker.end      { background: #ffffff; }
     var isBc25 = !!(window.Bc25Block && window.Bc25Block.active(s));
     var isBc23 = !!(window.Bc23Block && window.Bc23Block.active(s));
     var isBc22 = !!(window.Bc22Block && window.Bc22Block.active(s));
+    var isBc16 = !!(window.Bc16Block && window.Bc16Block.active(s));
     if (window.Bc20Block) window.Bc20Block.onFrame(s);
     // BC21 HOOK (2 of 2).
     if (window.Bc21Block) window.Bc21Block.onFrame(s);
@@ -6349,7 +6989,10 @@ html[data-year="bc22"] .beat-marker.end      { background: #ffffff; }
     // BC23 HOOK (2 of 2).
     if (window.Bc23Block) window.Bc23Block.onFrame(s);
     if (window.Bc22Block) window.Bc22Block.onFrame(s);
-    if (!isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 && !isBc25) {
+    // BC16 HOOK (2 of 2).
+    if (window.Bc16Block) window.Bc16Block.onFrame(s);
+    if (!isBc16 && !isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 &&
+        !isBc25) {
       buildBeatButtons(s);
       renderCoop(s);
       renderEcon(s);
@@ -6360,7 +7003,8 @@ html[data-year="bc22"] .beat-marker.end      { background: #ffffff; }
     renderGameChips(s);
     C.renderClock(s);
     C.renderTransport(s);
-    if (!isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 && !isBc25) {
+    if (!isBc16 && !isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 &&
+        !isBc25) {
       applyBeatSpoilers(s);
     }
     $('clock-caption').textContent = s.ph === 'gameover'
