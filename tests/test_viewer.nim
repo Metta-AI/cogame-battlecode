@@ -1274,6 +1274,45 @@ block:
   check("the bc26 branch is guarded rather than being the default",
     "if (s.year === 'bc26' || !s.year) {" in page)
 
+  ## r2-E1: A SHARED END REASON MAY NOT CARRY ONE YEAR'S LORE. `more_archons`
+  ## is bc22's PWNED and bc16 REUSES it (`src/battlecode/results.nim`'s own
+  ## note on `EndReasons`), and that branch shipped hard-coded to bc22's
+  ## Singularity — so the endcard of a live bc16 ladder match read "THE
+  ## SINGULARITY CAME AT ROUND 3000 AND CLAN BASIL HAD MORE ARCHONS LEFT",
+  ## naming a mechanic bc16 does not have. Nothing here asserted the wording
+  ## of a SHARED reason PER YEAR, which is why it shipped green.
+  let winStart = page.find("function endcardWinCondition(")
+  let winEnd = page.find("\n  }\n", winStart)
+  check("the win-condition function reads whole",
+    winStart >= 0 and winEnd > winStart)
+  let winFn = page[winStart .. winEnd]
+  check("the year's row supplies the clause for the shared rung",
+    "(nouns.limit || " in winFn)
+  check("bc22 keeps its Singularity, in its own row",
+    "limit: 'the Singularity came'" in nounTable)
+  check("and bc16 gets its own round limit, in its own row",
+    "limit: 'the round limit ran out'" in nounTable)
+  ## The END REASONS MORE THAN ONE YEAR EMITS. `results.nim`: bc16 reuses
+  ## bc22's `more_archons`, bc20's `highest_id` and our `abandoned`;
+  ## `annihilated` is bc21's and bc22's; `coin_flip` is bc22's rung and
+  ## bc25's WON_BY_DUBIOUS_REASONS. A branch for one of these speaks to every
+  ## year that lands on it, so it may only use words every one of them has.
+  for reason in ["more_archons", "annihilated", "coin_flip", "abandoned",
+                 "highest_id"]:
+    let caseAt = winFn.find("case '" & reason & "':")
+    if caseAt < 0: continue  ## no branch of its own: the default is neutral
+    var branchEnd = winFn.find("case '", caseAt + 6)
+    if branchEnd < 0: branchEnd = winFn.find("default:", caseAt)
+    check("the " & reason & " branch has an end", branchEnd > caseAt)
+    let branch = winFn[caseAt ..< branchEnd]
+    ## Words that belong to exactly ONE year's rule set.
+    for lore in ["Singularity", "rat king", "cheese", "cats", "soup", "dirt",
+                 "influence", "Enlightenment", "crumb", "duck", "chip",
+                 "paint", "adamantium", "mana", "elixir", "anchor", "zombie",
+                 "horde", "rubble", "gold", "lead"]:
+      check("the shared `" & reason & "` branch says nothing about " & lore &
+        ": " & branch.strip(), lore notin branch)
+
   ## FIX 2: no clipping or overflow at 1280x800.
   check("#endcard's content scrolls rather than running off the bottom",
     "overscroll-behavior: contain;" in page)
@@ -1281,6 +1320,46 @@ block:
   check("and viewer_smoke.mjs makes it a GATE",
     "#endcard overflows at 1280x800" in smoke and
     "endcard_overflow" in smoke)
+
+  ## r2-E2: ...AND THE CARD SCROLLS INSTEAD OF SQUEEZING ITS BANDS. A flex
+  ## item shrinks below its own content by default, so the card met a
+  ## too-tall stack by squashing every band: `#ec-headline` drew a slice of
+  ## its own capitals on a live bc16 endcard, and `#endcard`'s scrollHeight
+  ## never exceeded its clientHeight, so FIX 2's gate above passed on a card
+  ## that was clipping. A grep is not coverage here either — the gate is a
+  ## measurement in `tools/ci/renderer_fixture.html`, which raises a POPULATED
+  ## endcard at 360/720/1280 px and reads the headline's box against its own
+  ## line; this pins the shape so a future edit cannot quietly drop it.
+  check("the endcard's bands keep their natural height",
+    "#endcard.on > * { flex: none; }" in page)
+  check("and the card centres SAFELY, so an overflowing card can still be " &
+    "scrolled up to its headline",
+    "justify-content: safe center;" in page)
+  let fixture = readFile("tools/ci/renderer_fixture.html")
+  check("the fixture's endcard carries this year's own doctrine text",
+    "id=\"ec-headline\"" in fixture and "id=\"ec-teams\"" in fixture and
+    "var ENDCARD_WORDS = {" in fixture)
+  check("and it fails when the headline is squeezed",
+    "the endcard headline is squeezed into" in fixture)
+  check("and when the headline is stranded above the scrollport",
+    "above the card\\u2019s scrollport and cannot be scrolled to" in fixture)
+
+  ## r2-E3: A DOCTRINE PANEL IS A SENTENCE, NOT A LABEL. The 52 % cap on
+  ## `.ec-teams` is sized for the BR field list; on the two-panel doctrine
+  ## variant it hid more than half of each team's doctrine, cut mid-word, with
+  ## no ellipsis and no dismiss control. Item 15: if a remark is being cut the
+  ## box is too small. The panels are laid out whole, up to 430u wide, and the
+  ## card's own scroll is the one place endcard content may overflow to.
+  check("the doctrine panels are not capped inside the card",
+    "#endcard .ec-teams:not(.br) { max-height: none; }" in page)
+  check("and they take the width the card has to spare",
+    "#endcard .ec-teams:not(.br) .ec-team {" in page and
+    "max-width: calc(430 * var(--u));" in page)
+  check("the BR field list keeps its own cap", "max-height: 62%;" in page)
+  check("and the fixture fails when a doctrine panel is cut off",
+    "the endcard doctrine panels are cut off: " in fixture)
+  check("with both seats' endcard text at full length before it measures",
+    "the endcard motto on seat " in fixture)
 
   ## FIX 3: no raw unrounded floats.
   check("there is exactly ONE formatter", page.count("window.fmtStat =") == 1)
@@ -1539,8 +1618,10 @@ block:
     check("on all five boxes",
       "bc16: ['bc16-archons', 'bc16-horde', 'bc16-econ', 'bc16-units'," in
         fixture and "'bc16-doctrines']" in fixture)
-    check("with #endcard a CHILD OF #chrome, which the rule keys on",
-      "'<div id=\"endcard\"></div>' +\n    '</div></div></div>';" in fixture)
+    check("with #endcard a CHILD OF #chrome, which the rule keys on, and " &
+      "with the card's own bands on it (r2-E2)",
+      "'<div id=\"endcard\">' + endcard + '</div>' +\n    " &
+        "'</div></div></div>';" in fixture)
     check("and it takes the card down again so the boxes come back",
       "card.classList.remove('on');" in fixture and
       "stayed hidden after the endcard " in fixture)

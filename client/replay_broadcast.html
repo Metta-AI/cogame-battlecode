@@ -1860,6 +1860,15 @@ body.sidelanes-both #killfeed {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* ...but SAFELY (r2-E2). A centred column flex box that is also the scroll
+     container puts its overflow BEYOND SCROLL REACH AT THE TOP — the same
+     trap `.ec-teams.br` below documents, one level up. With the card's bands
+     no longer collapsible (see `#endcard > *` under `#endcard.on`), a
+     full-cap card is taller than the board region and the headline is the
+     thing that goes out of reach. `safe` degrades to plain centring when the
+     content fits, and a browser that does not know the keyword keeps the
+     line above. */
+  justify-content: safe center;
   gap: calc(12 * var(--u));
   background: radial-gradient(80% 70% at 50% 45%, rgba(16, 11, 7, 0.82), rgba(9, 6, 3, 0.95));
   z-index: 30;
@@ -1876,6 +1885,17 @@ body.sidelanes-both #killfeed {
   overscroll-behavior: contain;
 }
 #endcard.on { display: flex; animation: ec-shake 160ms ease-out; }
+/* EVERY BAND KEEPS ITS OWN TEXT (r2-E2). A flex item shrinks below its
+   content by default, so on a card whose content is taller than the board
+   region the browser squeezed every band instead of scrolling the card:
+   at 1280x800 `#ec-headline` was given 16 px for a 33 px line and, being
+   `overflow: hidden`, showed a horizontal slice of its own glyphs — which is
+   how "CLAN BASIL — DAVEEY-1" reached a live endcard with its capitals cut
+   off (runs/2026-09-09-battlecode-2016/viewer-check/viewer-smoke.png). It
+   also meant `#endcard`'s scrollHeight never exceeded its clientHeight, so
+   the FIX 2 overflow gate above passed on a card that was clipping. Bands
+   keep their natural height; the card scrolls, which is what it is for. */
+#endcard.on > * { flex: none; }
 @keyframes cardfade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ec-shake {
   0% { transform: translate(0, 0); }
@@ -1961,6 +1981,29 @@ body.sidelanes-both #killfeed {
   max-height: 52%;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+/* ...EXCEPT WHERE THE CARDS ARE SENTENCES (r2-E3). The 52 % cap above is
+   sized for the BR field list, where a row is a name and three numbers and
+   the tail is genuinely optional reading. The two-panel doctrine variant is
+   not that: each panel is one team's whole doctrine in plain words, and at
+   bc16's eleven clauses the cap hid more than half of it — cut mid-word,
+   with no ellipsis, inside a scroll box with no dismiss control (the live
+   endcard's cards ended "...activates a"). Phase 30's item 15 is explicit
+   that ellipsis is a label's choice and a sentence's defect: if a remark is
+   being cut, the box is too small. So the doctrine panels are laid out whole
+   and given the width the card has to spare — up to 430u each, the same
+   bound `.ec-teams.br` uses for its own name track — and the ONE place
+   endcard content may overflow to is the card's own scroll (see #endcard).
+   `.br` keeps its own 62 % cap and is untouched. */
+#endcard .ec-teams:not(.br) { max-height: none; }
+#endcard .ec-teams:not(.br) .ec-team {
+  /* `width: auto` is load-bearing: the card is centred, so `.ec-teams` is
+     shrink-to-fit and a panel still carrying the base rule's fixed width
+     contributes exactly that width to it — the row could never grow into the
+     space the frame has. */
+  width: auto;
+  flex: 1 1 calc(215 * var(--u));
+  max-width: calc(430 * var(--u));
 }
 /* ---- BR (elim) variant: a winner-dominant hero card + a ranked, compressed
    field list — replaces the per-team KDA panel grid above, which is still
@@ -6829,13 +6872,20 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
     bc20: { unit: 'HQ', units: 'HQs', res: 'soup' },
     bc21: { unit: 'Enlightenment Center', units: 'Enlightenment Centers',
             res: 'influence' },
-    bc22: { unit: 'archon', units: 'archons', res: 'lead' },
+    // `limit` is HOW THIS YEAR'S GAME RUNS OUT, for the end reasons a year
+    // SHARES with another one. bc22's is its anomaly schedule's last beat,
+    // the Singularity at round 2000 (docs/RULES-BC22.md).
+    bc22: { unit: 'archon', units: 'archons', res: 'lead',
+            limit: 'the Singularity came' },
     bc23: { unit: 'headquarters', units: 'headquarters', res: 'adamantium' },
     bc24: { unit: 'duck', units: 'ducks', res: 'crumbs' },
     bc25: { unit: 'tower', units: 'towers', res: 'chips' },
     // bc16's own nouns (endcard fix 1): the archon and its parts, so no
-    // other year's unit or resource word can reach a bc16 card.
-    bc16: { unit: 'archon', units: 'archons', res: 'parts' }
+    // other year's unit or resource word can reach a bc16 card. bc16 has NO
+    // Singularity: its games run to a 3000-round limit and are then decided
+    // on the four-rung tiebreak ladder (docs/RULES-BC16.md).
+    bc16: { unit: 'archon', units: 'archons', res: 'parts',
+            limit: 'the round limit ran out' }
   };
 
   function endcardNouns(year) {
@@ -6845,6 +6895,16 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
   // The win condition in PLAIN WORDS, per year, from the game's own
   // `end_reason`. bc26's three reasons are one branch among seven, not the
   // default every year falls into.
+  //
+  // A SHARED END REASON SPEAKS FOR EVERY YEAR THAT LANDS ON IT (r2-E1).
+  // `more_archons` is bc22's PWNED and bc16 REUSES it
+  // (src/battlecode/results.nim says so in as many words), so its branch
+  // shipped hard-coded to bc22's Singularity and a live bc16 endcard read
+  // "THE SINGULARITY CAME AT ROUND 3000 AND CLAN BASIL HAD MORE ARCHONS
+  // LEFT" — a mechanic bc16 does not have. The clause that names HOW THE
+  // GAME RAN OUT now comes from the year's own row in ENDCARD_NOUNS, and
+  // `tests/test_viewer.nim` fails on any year-specific word inside a branch
+  // for a reason more than one year emits.
   function endcardWinCondition(s, last, games) {
     if (!last) return '';
     var nouns = endcardNouns(s.year);
@@ -6858,8 +6918,9 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
       case 'annihilated':
         return alias + ' destroyed the last enemy ' + nouns.unit + tail;
       case 'more_archons':
-        return 'the Singularity came at round ' + last.rounds_played +
-          ' and ' + alias + ' had more archons left';
+        // Shared rung: bc22's and bc16's. `limit` is the year's own row.
+        return (nouns.limit || 'the round limit ran out') + ' at round ' +
+          last.rounds_played + ' and ' + alias + ' had more archons left';
       case 'more_gold_net_worth':
         return 'archons were level, and ' + alias + ' won on gold net worth';
       case 'more_lead_net_worth':
