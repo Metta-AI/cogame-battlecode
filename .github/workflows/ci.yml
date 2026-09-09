@@ -2938,7 +2938,13 @@ jobs:
           wc -l /tmp/oracle16/mapprobe.txt
           python3 - <<'PY'
           import json, pathlib
-          TYPES = ["standardzombie", "rangedzombie", "fastzombie", "bigzombie"]
+          # `RobotType`'s own SCREAMING names, because that is what the
+          # converter writes into the committed JSON. Lower-case keys read
+          # back as zero from every schedule row, every row is then dropped as
+          # empty, and the comparison reports `ours None` against a real JVM
+          # row on all 110 dens -- which is what it did.
+          TYPES = ["STANDARDZOMBIE", "RANGEDZOMBIE", "FASTZOMBIE",
+                   "BIGZOMBIE"]
           want = {}
           for line in pathlib.Path("/tmp/oracle16/mapprobe.txt").read_text().splitlines():
               f = line.split()
