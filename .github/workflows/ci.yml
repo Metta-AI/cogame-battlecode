@@ -433,8 +433,11 @@ jobs:
           # extend the pool with. The two ARMAGEDDON maps are REFUSED with the
           # stated reason (V4: both are two archons against ZERO over 12 000
           # rounds -- a single-player survival mode, not a two-seat match).
+          # `2>&1` is load-bearing: the converter prints its per-map table on
+          # stdout and its SUMMARY LINE on stderr, so a bare `| tee` captures
+          # the table and loses the line this step greps for.
           python3 tools/convert_maps_bc16.py --engine "$BC16_DIR" \
-            --parse-all | tee /tmp/bc16parse.txt
+            --parse-all 2>&1 | tee /tmp/bc16parse.txt
           grep -q '98 official .xml files parsed, 2 refused' /tmp/bc16parse.txt || {
             echo "::error::expected all 98 official .xml maps to parse with"
             echo "::error::exactly the two armageddon maps refused"
@@ -3076,6 +3079,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/oracle16/upload
+          # `if: always()` means this runs after an EARLIER step failed too,
+          # in which case the traces were never produced. Reporting nothing is
+          # correct there; failing the job a second time for a missing
+          # directory only hides the real error.
+          if [ ! -d /tmp/oracle16/traces ]; then
+            echo "no traces were produced; an earlier step failed"
+            exit 0
+          fi
           cd /tmp/oracle16/traces
           for BOT in bc16idle bc16greenhorn; do
           for MAP in checkers zigzag swamp river prisons frogger turtle \
