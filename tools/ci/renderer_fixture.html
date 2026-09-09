@@ -593,6 +593,72 @@
       notes.slice(0, 120) + '</span></div>';
   }
 
+  // --- the ENDCARD, WITH SOMETHING ON IT (r2-E2) -------------------------
+  // `#endcard` was laid out EMPTY here, purely so the HUD-suppression rule
+  // could be read off the browser. An empty card cannot show what a full one
+  // does: the card is a column flex box and a flex item shrinks below its own
+  // content by default, so once the bands add up to more than the board
+  // region the browser squeezed every band instead of scrolling the card —
+  // `#ec-headline` was handed 16 px for a 33 px line and, being
+  // `overflow: hidden`, drew a horizontal slice of its own capitals on a live
+  // bc16 endcard. The same squeeze kept `#endcard`'s scrollHeight equal to its
+  // clientHeight, so the FIX 2 overflow gate in `viewer_smoke.mjs` passed on a
+  // card that was clipping. Fed the same seats and the same 48-rune motto as
+  // the panel above, this measures the card a spectator actually meets.
+  var ENDCARD_WORDS = {
+    bc26: WORDS, bc20: BC20_WORDS, bc21: BC21_WORDS, bc24: BC24_WORDS,
+    bc25: BC25_WORDS, bc23: BC23_WORDS, bc22: BC22_WORDS,
+    bc16: [BC16_WORDS[0].join(', '), BC16_WORDS[1].join(', ')]
+  };
+  // renderEndcard()'s own markup: `<b>alias</b> name`, the year's words joined
+  // into one sentence, and the motto in quotes when there is one.
+  var endcardTeams = '';
+  for (var ec = 0; ec < 2; ec++) {
+    endcardTeams += '<div class="ec-team"><b>' + ALIASES[ec] + '</b> ' +
+      NAMES[ec] + '<br>' + ENDCARD_WORDS[year][ec] +
+      '<br><i>\u201c' + motto + '\u201d</i></div>';
+  }
+  // The widest of the shared win-condition clauses, at this game's own
+  // 3000-round limit, and the `how` line renderEndcard() builds beside it.
+  // `#bc16-siege` is renderEndcardExtras()'s own markup at this year's
+  // measured-widest numbers, and it belongs INSIDE the card because that is
+  // where the page puts it: the war panel is most of what makes a real
+  // endcard taller than the board region. It is year-scoped in the page's own
+  // CSS, so the other rows lay it out at 0x0. A year that adds an endcard
+  // panel adds it here and gets the checks below for free.
+  var bc16Siege = '';
+  for (var f16 = 0; f16 < 2; f16++) {
+    bc16Siege += '<div class="clan"><b>' + ALIASES[f16] + '</b>: archons 4 ' +
+      'started, 4 lost, 4 left' +
+      '<br>parts: 1660.0 collected, 618 banked, worth 1703' +
+      '<br>units: 200 built \u00b7 110 soldiers, 28 guards, 3 scouts, ' +
+      '1 vipers, 3 turrets' +
+      '<br>dens destroyed: 4 \u00b7 neutrals activated: 12 (1 ARCHON)' +
+      '<br>infection: 115 suffered, 115 inflicted, and 70 of its own stood ' +
+      'back up on the horde\u2019s side' +
+      '<br>damage: 12777 dealt to / 10969 taken from the enemy \u00b7 6701 ' +
+      'dealt to / 12966 taken from the horde' +
+      '<br>rubble: 31716.7 cleared, 15716.2 created \u00b7 repairs: 2352 ' +
+      'for 2329 health</div>';
+  }
+  bc16Siege += '<div class="ladder">round 3000 ladder:' +
+    '<br><span>archons: 4 vs 4</span>' +
+    '<br><span class="won">archon health: 20725 vs 34194 ' +
+    '\u2190 decided it</span>' +
+    '<br><span>parts net worth: 1703 vs 515</span>' +
+    '<br><span>highest id: 21708 vs 21707</span></div>';
+  var endcard =
+    '<div class="headline" id="ec-headline">' +
+      (ALIASES[1] + ' \u2014 ' + NAMES[1]).toUpperCase() + '</div>' +
+    '<div class="wincond" id="ec-wincond">the round limit ran out at round ' +
+      '3000 and ' + ALIASES[1] + ' had more archons left</div>' +
+    '<div class="how" id="ec-how">score 23 \u2014 476 \u00b7 2 games ' +
+      'played \u00b7 3000 rounds in the last one</div>' +
+    '<div class="ec-teams" id="ec-teams">' + endcardTeams + '</div>' +
+    '<div id="bc16-siege">' + bc16Siege + '</div>' +
+    '<div class="ec-replay" id="ec-replay">replay <b>3000</b> rounds \u00b7 ' +
+      '<b>2</b> games</div>';
+
   document.body.innerHTML =
     '<div id="viewport"><div id="stage"><div id="chrome">' +
       '<div id="scorebug">' +
@@ -683,12 +749,14 @@
         '<button type="button" id="bc16-doctrines-close" ' +
         'aria-label="Dismiss doctrines">&times;</button>' +
         '<div id="bc16-doctrines-body">' + bc16Doctrines + '</div></div>' +
-      // The page's own endcard, EMPTY and `display: none` until a check
-      // raises it. It is here so the HUD-suppression rule can be read off the
-      // browser rather than off a text grep (r1-F1), and it must be a CHILD
-      // OF #chrome because that is where the page puts it and what the
-      // `#chrome:has(#endcard.on)` rule keys on.
-      '<div id="endcard"></div>' +
+      // The page's own endcard, `display: none` until a check raises it. It is
+      // here so the HUD-suppression rule can be read off the browser rather
+      // than off a text grep (r1-F1), and it must be a CHILD OF #chrome
+      // because that is where the page puts it and what the
+      // `#chrome:has(#endcard.on)` rule keys on. Its bands carry this year's
+      // own full-cap doctrine text (r2-E2), because an empty card measures
+      // nothing about the card.
+      '<div id="endcard">' + endcard + '</div>' +
     '</div></div></div>';
 
   // The verdict: nothing may leave the frame, and nothing may hide text
@@ -735,6 +803,30 @@
           'came down — the scrubber can never pull the match back';
       }
     }
+    // EVERY BAND ON THE ENDCARD KEEPS ITS OWN TEXT, AND STAYS REACHABLE
+    // (r2-E2). Raised, with this year's doctrine text on it, the card is
+    // measured the way a spectator meets it: the headline must have at least
+    // its own line to draw in (it is `overflow: hidden`, so a squeezed band
+    // shows a slice of the capitals and reports nothing), and it must sit
+    // inside the card's scrollport (a centred column flex box that is also
+    // the scroll container puts overflow past the TOP, beyond scroll reach).
+    var raised = document.getElementById('endcard');
+    raised.classList.add('on');
+    var endcardFault = null;
+    var cardBox = raised.getBoundingClientRect();
+    var head = document.getElementById('ec-headline');
+    var headLine = parseFloat(getComputedStyle(head).lineHeight);
+    if (isFinite(headLine) && head.clientHeight + 1 < headLine) {
+      endcardFault = 'the endcard headline is squeezed into ' +
+        head.clientHeight + 'px of its own ' + Math.round(headLine) +
+        'px line — it draws a slice of its own capitals';
+    } else if (head.getBoundingClientRect().top < cardBox.top - 1) {
+      endcardFault = 'the endcard headline sits ' +
+        Math.round(cardBox.top - head.getBoundingClientRect().top) +
+        'px above the card\u2019s scrollport and cannot be scrolled to';
+    }
+    raised.classList.remove('on');
+    if (endcardFault) return endcardFault;
     var frame = document.documentElement.getBoundingClientRect();
     // Content inside a SCROLLING box is laid out at its full height and
     // clipped by the box, so its rect legitimately runs past the frame. The

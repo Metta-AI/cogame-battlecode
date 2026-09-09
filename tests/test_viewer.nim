@@ -1321,6 +1321,29 @@ block:
     "#endcard overflows at 1280x800" in smoke and
     "endcard_overflow" in smoke)
 
+  ## r2-E2: ...AND THE CARD SCROLLS INSTEAD OF SQUEEZING ITS BANDS. A flex
+  ## item shrinks below its own content by default, so the card met a
+  ## too-tall stack by squashing every band: `#ec-headline` drew a slice of
+  ## its own capitals on a live bc16 endcard, and `#endcard`'s scrollHeight
+  ## never exceeded its clientHeight, so FIX 2's gate above passed on a card
+  ## that was clipping. A grep is not coverage here either — the gate is a
+  ## measurement in `tools/ci/renderer_fixture.html`, which raises a POPULATED
+  ## endcard at 360/720/1280 px and reads the headline's box against its own
+  ## line; this pins the shape so a future edit cannot quietly drop it.
+  check("the endcard's bands keep their natural height",
+    "#endcard.on > * { flex: none; }" in page)
+  check("and the card centres SAFELY, so an overflowing card can still be " &
+    "scrolled up to its headline",
+    "justify-content: safe center;" in page)
+  let fixture = readFile("tools/ci/renderer_fixture.html")
+  check("the fixture's endcard carries this year's own doctrine text",
+    "id=\"ec-headline\"" in fixture and "id=\"ec-teams\"" in fixture and
+    "var ENDCARD_WORDS = {" in fixture)
+  check("and it fails when the headline is squeezed",
+    "the endcard headline is squeezed into" in fixture)
+  check("and when the headline is stranded above the scrollport",
+    "above the card\\u2019s scrollport and cannot be scrolled to" in fixture)
+
   ## FIX 3: no raw unrounded floats.
   check("there is exactly ONE formatter", page.count("window.fmtStat =") == 1)
   check("and the endcard's own numbers go through it",
@@ -1578,8 +1601,10 @@ block:
     check("on all five boxes",
       "bc16: ['bc16-archons', 'bc16-horde', 'bc16-econ', 'bc16-units'," in
         fixture and "'bc16-doctrines']" in fixture)
-    check("with #endcard a CHILD OF #chrome, which the rule keys on",
-      "'<div id=\"endcard\"></div>' +\n    '</div></div></div>';" in fixture)
+    check("with #endcard a CHILD OF #chrome, which the rule keys on, and " &
+      "with the card's own bands on it (r2-E2)",
+      "'<div id=\"endcard\">' + endcard + '</div>' +\n    " &
+        "'</div></div></div>';" in fixture)
     check("and it takes the card down again so the boxes come back",
       "card.classList.remove('on');" in fixture and
       "stayed hidden after the endcard " in fixture)

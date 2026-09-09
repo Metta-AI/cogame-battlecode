@@ -1860,6 +1860,15 @@ body.sidelanes-both #killfeed {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* ...but SAFELY (r2-E2). A centred column flex box that is also the scroll
+     container puts its overflow BEYOND SCROLL REACH AT THE TOP — the same
+     trap `.ec-teams.br` below documents, one level up. With the card's bands
+     no longer collapsible (see `#endcard > *` under `#endcard.on`), a
+     full-cap card is taller than the board region and the headline is the
+     thing that goes out of reach. `safe` degrades to plain centring when the
+     content fits, and a browser that does not know the keyword keeps the
+     line above. */
+  justify-content: safe center;
   gap: calc(12 * var(--u));
   background: radial-gradient(80% 70% at 50% 45%, rgba(16, 11, 7, 0.82), rgba(9, 6, 3, 0.95));
   z-index: 30;
@@ -1876,6 +1885,17 @@ body.sidelanes-both #killfeed {
   overscroll-behavior: contain;
 }
 #endcard.on { display: flex; animation: ec-shake 160ms ease-out; }
+/* EVERY BAND KEEPS ITS OWN TEXT (r2-E2). A flex item shrinks below its
+   content by default, so on a card whose content is taller than the board
+   region the browser squeezed every band instead of scrolling the card:
+   at 1280x800 `#ec-headline` was given 16 px for a 33 px line and, being
+   `overflow: hidden`, showed a horizontal slice of its own glyphs — which is
+   how "CLAN BASIL — DAVEEY-1" reached a live endcard with its capitals cut
+   off (runs/2026-09-09-battlecode-2016/viewer-check/viewer-smoke.png). It
+   also meant `#endcard`'s scrollHeight never exceeded its clientHeight, so
+   the FIX 2 overflow gate above passed on a card that was clipping. Bands
+   keep their natural height; the card scrolls, which is what it is for. */
+#endcard.on > * { flex: none; }
 @keyframes cardfade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ec-shake {
   0% { transform: translate(0, 0); }
