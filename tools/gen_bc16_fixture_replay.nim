@@ -30,13 +30,24 @@
 ## THE MAPS ARE CHOSEN SO THE RECORDING CARRIES ALL THIRTEEN BEAT KINDS, and
 ## that was MEASURED rather than hoped:
 ##   `frogger` (35x35, FOUR archons a side, TWELVE dens, ZERO impassable
-##     squares) is where the `den`, `turned`, `rout` and `duel` beats come
+##     squares) is where the `den`, `turned` and `duel` beats come
 ##     from — twelve dens on open ground is the densest horde in the pool;
 ##   `checkers` (30x30, two archons a side, THIRTY neutrals) is where
 ##     `activate` comes from;
-##   `river` (32x32, three archons a side, MINIMUM ARCHON SEPARATION 4.0) is
-##     where the early `build`, `infect` and `archon` beats come from, because
-##     the two factions start in contact.
+##   `closequarters` (36x30, FOUR archons a side, four dens, rotational) is
+##     where `rout` comes from — `rout` needs FIVE robots lost by one side in
+##     ONE round (`years/bc16/rules.nim:324`) and this is the map in the whole
+##     twenty-two-map set whose third-slot recording reaches it. It also
+##     supplies the early `build`, `infect` and `archon` beats, because the
+##     two factions start in contact.
+## `river` was the third map until this round and it no longer reaches the
+## `rout` threshold on the shipped chassis: the recording it produced carried
+## twelve kinds and `tests/test_bc16_beats.nim` names all thirteen, which is
+## exactly the tripwire this program's own note describes ("a rule change
+## therefore turns those tests red: re-record with this program"). Measured
+## over all twenty-two bc16 maps in the third slot, `closequarters` is the one
+## substitution that restores the thirteenth kind while keeping the other two
+## maps and the three-game shape.
 ## The sides alternate, exactly as an episode's do.
 
 import std/[json, os]
@@ -51,7 +62,7 @@ const
     ## Long enough for FIVE outbreak steps, several scheduled waves, a viper
     ## (120 parts against a 2-a-round income) and the den programme to
     ## commit — and short enough that the committed fixture stays small.
-  Maps = ["frogger", "checkers", "river"]
+  Maps = ["frogger", "checkers", "closequarters"]
   SideAslots = [1, 0, 1]
 
 proc main() =

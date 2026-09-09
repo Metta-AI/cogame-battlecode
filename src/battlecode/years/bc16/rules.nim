@@ -384,20 +384,31 @@ proc runRound*(w: World, sides: array[2, Side],
       w.stats.archonsAliveAt2000[t] = w.archonsAlive(Team(t))
   w.checkEndOfMatch()
 
-  ## The per-round hash chain: FIFTEEN per-team values plus ELEVEN globals,
-  ## so a re-derivation that diverged in only one of them cannot reproduce the
-  ## chain (the GV02 lesson). Folding the TWO RNG STATES is a bc16-specific
-  ## decision and it is the cheapest possible tripwire for a missed or extra
-  ## draw (D2b/D2c).
+  ## The per-round hash chain: NINETEEN per-team values plus THIRTEEN
+  ## globals, so a re-derivation that diverged in only one of them cannot
+  ## reproduce the chain (the GV02 lesson). Folding the TWO RNG STATES is a
+  ## bc16-specific decision and it is the cheapest possible tripwire for a
+  ## missed or extra draw (D2b/D2c).
+  ##
+  ## EVERY COUNT IS ITS OWN `mixHash` CALL (r1-F7). The six player-type
+  ## censuses were packed base-100/base-1000000 into two values and the four
+  ## zombie censuses base-100 into one, so any single count of 100 or more
+  ## carried into the next field and two distinct censuses could fold to the
+  ## same chain value. That is not hypothetical on this year: the parity job
+  ## measures `peak_robots` of 104-162 and the survival gate builds 177-212
+  ## units a seat on `checkers`/`prisons`. A collision can only HIDE a
+  ## divergence, never manufacture one, which is exactly why it had to go:
+  ## the chain is a tripwire and a tripwire with a blind spot is worse than a
+  ## loud one.
   for t in 0 .. 1:
     let team = Team(t)
     w.mixHash(w.archonsAlive(team))
-    w.mixHash(w.robotTypeCount(team, rtScout) * 1000000 +
-              w.robotTypeCount(team, rtSoldier) * 10000 +
-              w.robotTypeCount(team, rtGuard) * 100 +
-              w.robotTypeCount(team, rtViper))
-    w.mixHash(w.robotTypeCount(team, rtTurret) * 100 +
-              w.robotTypeCount(team, rtTtm))
+    w.mixHash(w.robotTypeCount(team, rtScout))
+    w.mixHash(w.robotTypeCount(team, rtSoldier))
+    w.mixHash(w.robotTypeCount(team, rtGuard))
+    w.mixHash(w.robotTypeCount(team, rtViper))
+    w.mixHash(w.robotTypeCount(team, rtTurret))
+    w.mixHash(w.robotTypeCount(team, rtTtm))
     w.mixHash(w.totalHealthTenths(team))
     w.mixHash(int(w.archonHealthTotal(team) * 10.0))
     w.mixHash(int(w.resources[t] * 10.0))
@@ -415,10 +426,10 @@ proc runRound*(w: World, sides: array[2, Side],
   w.mixHashU(w.partsChecksum())
   w.mixHashU(w.execOrderChecksum())
   w.mixHash(w.execOrder.len)
-  w.mixHash(w.zombieCountByType(rtStandardzombie) * 1000000 +
-            w.zombieCountByType(rtRangedzombie) * 10000 +
-            w.zombieCountByType(rtFastzombie) * 100 +
-            w.zombieCountByType(rtBigzombie))
+  w.mixHash(w.zombieCountByType(rtStandardzombie))
+  w.mixHash(w.zombieCountByType(rtRangedzombie))
+  w.mixHash(w.zombieCountByType(rtFastzombie))
+  w.mixHash(w.zombieCountByType(rtBigzombie))
   w.mixHash(w.densStanding())
   w.mixHash(w.neutralsStanding())
   w.mixHashU(cast[uint64](w.rand.seed))
@@ -428,10 +439,26 @@ proc runRound*(w: World, sides: array[2, Side],
 #  One game
 # ---------------------------------------------------------------------------
 
-proc endReasonFor(w: World): string =
-  case w.domination
-  of dfNone: $dfPwned
-  else: $w.domination
+proc endReasonFor*(w: World): string =
+  ## FAULT, never mislabel (r1-F8). `dfNone` is "no winner at all" and it was
+  ## rendered as `$dfPwned` — `more_archons` — which is a silent lie about
+  ## what happened. It is UNREACHABLE in the shipped configuration:
+  ## `checkEndOfMatch` (`:216-234`) fires at `currentRound >= maxRounds - 1`
+  ## and always sets a winner via one of the four rungs, the abandoned path
+  ## returns before this proc is called, and the only way in is
+  ## `maxRounds <= 0`, which `config_schema.maxRounds.minimum = 50` forbids.
+  ## An impossible state that reports a plausible answer is the wrong failure
+  ## mode: a future rule change that makes it reachable has to surface as a
+  ## FAILURE, not as a wrong `end_reason` in a shipped replay. Raised rather
+  ## than `doAssert`-ed so it holds under `-d:danger` too.
+  if w.domination == dfNone:
+    raise newException(Defect,
+      "bc16: the game ended with domination factor `dfNone` (no winner at " &
+      "all) at round " & $w.currentRound & " of " & $w.maxRounds &
+      ", hasWinner=" & $w.hasWinner & ". checkEndOfMatch's four-rung ladder " &
+      "cannot produce that while maxRounds >= 1, so a rule has changed. " &
+      "Labelling it `" & $dfPwned & "` would hide the change.")
+  $w.domination
 
 proc harvest(w: World, outcome: var GameOutcome16) =
   for team in [teamA, teamB]:

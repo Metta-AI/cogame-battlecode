@@ -188,4 +188,27 @@ block:
     "zombified" notin reasons)
   check("nor `cleansed`", "cleansed" notin reasons)
 
+# --- `dfNone` FAULTS, it does not get relabelled --------------------------
+block:
+  ## `dfNone` is "no winner at all" and it is unreachable in the shipped
+  ## configuration — `checkEndOfMatch` always sets a winner and
+  ## `config_schema.maxRounds.minimum` is 50. It used to be rendered as
+  ## `$dfPwned` (`more_archons`), i.e. an impossible state reporting a
+  ## plausible answer into a shipped replay (r1-F8). It now faults.
+  let w = bare(rounds = 60, maxRounds = 60)
+  checkEq("a fresh world has no domination factor yet", w.domination, dfNone)
+  check("and `endReasonFor` REFUSES to name one", (block:
+    var raised = false
+    try:
+      discard w.endReasonFor()
+    except Defect:
+      raised = true
+    raised))
+  ## And a real winner still round-trips through the same proc.
+  w.setWinner(teamB, dfBarelyBeat)
+  checkEq("while a decided game reports its own rung",
+    w.endReasonFor(), "more_parts_net_worth")
+  check("which is never `more_archons` by accident",
+    w.endReasonFor() != $dfPwned)
+
 finish("test_bc16_endladder")

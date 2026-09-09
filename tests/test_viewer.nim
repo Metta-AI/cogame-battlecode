@@ -394,8 +394,8 @@ block:
 block:
   let fixture = readFile("tools/ci/renderer_fixture.html")
   check("the fixture has a row per year",
-    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22'];" in
-      fixture)
+    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22', " &
+      "'bc16'];" in fixture)
   check("and fills bc21's own readouts",
     "bc21-influence" in fixture and "bc21-votes" in fixture and
     "bc21-doctrines-body" in fixture)
@@ -427,6 +427,26 @@ block:
   check("and the fixture refuses to pass on a shortened string",
     "the notes on seat ' + d + ' were shortened" in fixture and
     "the motto on seat ' + s + ' was shortened" in fixture)
+  ## bc16's row: the eighth year, and the reason it exists is that
+  ## `#bc16-doctrines-body` is where bc16's 280-rune `notes`, 48-rune `motto`
+  ## and 120-rune submitted sheet are drawn, and no gate rendered any of them
+  ## at a full cap at any width until this row existed (r1-F2).
+  check("and bc16's",
+    "bc16-archons" in fixture and "bc16-horde" in fixture and
+    "bc16-econ" in fixture and "bc16-units" in fixture and
+    "bc16-doctrines-body" in fixture)
+  check("with the faction label laid out in the strip at every width",
+    "'<span class=\"horde\">THE HORDE</span>'" in fixture)
+  check("with both bc16 seats at the full cap, the envelope badge, the " &
+    "motto and the submitted sheet",
+    "'<br>' + BC16_WORDS[m16].join(' \\u00b7 ') +" in fixture and
+    "'<br><i>' + notes + '</i>' +" in fixture and
+    "what the cog actually sent: ' +\n      notes.slice(0, 120)" in fixture)
+  ## bc16 is IN the FILLED map, so the "hides its own content" rule runs over
+  ## its five readouts rather than over nothing.
+  check("and bc16's readouts are measured for hidden content",
+    "bc16: '#scorebug .plate, #scorebug .plate *, #bc16-archons, '" in
+      fixture)
   ## The fixture's "the notes were shortened before they were measured"
   ## check reads `#<year>-doctrines .dline i`, so a year whose doctrine rows
   ## carry any other class name passes that check VACUOUSLY -- bc25 shipped
@@ -436,6 +456,10 @@ block:
     "<div class=\"dline\"><span class=\"dname\">' + esc(seat.alias)" in page and
     "#bc25-doctrines .dline {" in page and
     "#bc25-doctrines .dname {" in page)
+  ## Same rule, same reason, for bc16: a bare text node where every sibling
+  ## year wraps `notes` in `<i>` would make that check vacuous for bc16 too.
+  check("and bc16 wraps its notes in the <i> the fixture selects",
+    "if (d.notes) html += '<br><i>' + esc(d.notes) + '</i>';" in page)
 
 ## Transport rules from the design note.
 check("relayout sets --hudscale", "--hudscale" in page)
@@ -487,8 +511,18 @@ check("dismissEndcard takes it down with the same class",
 check("and nothing toggles the endcard with a class that has no rule",
   "$('endcard').classList.add('show')" notin page and
   "$('endcard').classList.remove('show')" notin page)
-check("there is no #endcard.show rule to justify one",
-  "#endcard.show {" notin page)
+## `#endcard.show {` was the wrong shape for this assertion: bc16 shipped a
+## rule reading `#endcard.show ~ #bc16-archons`, which the `{` form let
+## through, and it was dead for the whole run (r1-F1). The honest form reads
+## the page's whole <style> block and refuses the substring in ANY selector
+## shape. (The page's own prose comment in renderEndcard names the class to
+## say it does not exist, which is why this reads the CSS, not the file.)
+block:
+  let cssOpen = page.find("<style>")
+  let cssClose = page.find("</style>", cssOpen)
+  let css = page[cssOpen + len("<style>") ..< cssClose]
+  check("there is no #endcard.show rule to justify one, in any shape",
+    "#endcard.show" notin css)
 
 ## N1: the same rule for the hash-mismatch banner. `#mmwarn.on` is the only
 ## rule that displays it, so raising it with any other class leaves the
@@ -1359,6 +1393,58 @@ block:
     "and never inside it",
     "bottom: calc(var(--band, 0px) + 148px);" in page)
 
+  ## 4b. THE THIRD PARTY IS NAMED ON SCREEN, and the strip really is taken
+  ##     over. Coordinator ruling 4 made "THE HORDE" this year's flavour
+  ##     carrier and the design note says the zombie team is drawn and
+  ##     labelled THE HORDE spectator-side — but `renderHorde` never drew the
+  ##     faction name and `#bc16-horde.struck` was a rule NOTHING ACTIVATED
+  ##     (r1-F9). Both halves are asserted here in the same triad shape the
+  ##     endcard's `.on` uses: the rule exists, the page adds that exact
+  ##     class, and the page takes it off again.
+  check("the faction name is DRAWN, first in the strip",
+    "'<span class=\"horde\">THE HORDE</span>'" in page)
+  check("with a rule of its own",
+    "#bc16-horde .horde {" in page)
+  check("and it survives the 360 px media query — only the mini-timeline " &
+    "is dropped",
+    "#bc16-horde .tl { display: none; }" in page and
+    "#bc16-horde .horde { display: none;" notin page)
+  check("the strip takeover ADDS the class its CSS rule uses",
+    "box.classList.add('struck');" in page)
+  check("and takes it off again, so the readouts come back",
+    "box.classList.remove('struck');" in page and
+    "if (box) box.classList.remove('struck');" in page)
+  check("there is a rule for `struck` to activate",
+    "#bc16-horde.struck {" in page)
+  check("it is driven by a WAVE round or a `turned` event, for two seconds, " &
+    "in the beat's own plain words",
+    "if (b.k !== 'wave' && b.k !== 'turned') return;" in page and
+    "struckUntil = Date.now() + 2000;" in page and
+    "'<span class=\"tell\">' + esc(struckText) +" in page)
+  ## AND THE KINDS IT KEYS ON ARE KINDS THE COMMITTED ARTEFACT REALLY EMITS,
+  ## with labels — otherwise the takeover is as dead as the CSS rule was.
+  ## `tests/test_bc16_beats.nim` asserts the same fixture carries all
+  ## thirteen kinds; this closes the loop between the fixture and the page.
+  block:
+    let fixture = parseReplay(readFile("tests" / "fixtures" /
+      "replay-bc16.json"))
+    var gameStart: seq[int]
+    var total = 0
+    for g in fixture.games:
+      gameStart.add(total)
+      total += g.rounds
+    proc frameOf(g, r: int): int =
+      if g < 0 or g >= gameStart.len: 0 else: gameStart[g] + max(0, r - 1)
+    var struckKinds: seq[string]
+    for b in beatsFor(fixture, frameOf):
+      let k = b["k"].getStr()
+      if k notin ["wave", "turned"]: continue
+      if b["label"].getStr().len == 0: continue
+      if k notin struckKinds: struckKinds.add(k)
+    check("the committed fixture emits a labelled `wave` beat, so the " &
+      "takeover fires", "wave" in struckKinds)
+    check("and a labelled `turned` beat", "turned" in struckKinds)
+
   ## 5. EVERY #bc16-* CSS RULE IS SCOPED TO THE YEAR, one way or the other.
   ##    The whole <style> block, not a line scan (r1-F24).
   let cssOpen = page.find("<style>")
@@ -1422,10 +1508,42 @@ block:
     "if (kind === 'tenths') return (n / 10).toFixed(1);" in page)
   check("a blank bc16 motto renders NOTHING",
     "if (d.motto) html += '<br>\\u201c'" in page)
+  ## NO HUD BLEED-THROUGH. The static half below is a grep and a grep is NOT
+  ## coverage: this repo shipped `#endcard.show ~ #bc16-archons`, which named
+  ## a class the page never sets AND the wrong sibling direction, and a grep
+  ## for exactly that string was GREEN while the rule matched nothing (r1-F1).
+  ## The gate is a computed style in `tools/ci/renderer_fixture.html`, which
+  ## raises `#endcard` and reads `visibility` on all five boxes; this static
+  ## pair only pins the shape so a future edit cannot quietly drop it.
   check("and the bc16 boxes are hidden while the endcard shows (no HUD " &
     "bleed-through)",
-    "html[data-year=\"bc16\"] #endcard.show ~ #bc16-archons" in page and
+    "html[data-year=\"bc16\"] #chrome:has(#endcard.on) #bc16-archons" in
+      page and
     "visibility: hidden;" in page)
+  check("keyed on the class the page ACTUALLY toggles, parent-scoped rather " &
+    "than sibling-scoped",
+    "#endcard.show ~ #bc16-archons" notin page and
+    "#endcard.on ~ #bc16-archons" notin page)
+  for id in ["bc16-archons", "bc16-horde", "bc16-econ", "bc16-units",
+             "bc16-doctrines"]:
+    check("every bc16 box is named in the suppression rule: " & id,
+      "html[data-year=\"bc16\"] #chrome:has(#endcard.on) #" & id in page)
+  block:
+    let fixture = readFile("tools/ci/renderer_fixture.html")
+    check("and the FIXTURE proves it by computed style, not by grep",
+      "SUPPRESSED_BY_ENDCARD" in fixture and
+      "card.classList.add('on');" in fixture and
+      "getComputedStyle(document.getElementById(id)).visibility !==" in
+        fixture and
+      "the HUD bleeds through a score screen that is not opaque" in fixture)
+    check("on all five boxes",
+      "bc16: ['bc16-archons', 'bc16-horde', 'bc16-econ', 'bc16-units'," in
+        fixture and "'bc16-doctrines']" in fixture)
+    check("with #endcard a CHILD OF #chrome, which the rule keys on",
+      "'<div id=\"endcard\"></div>' +\n    '</div></div></div>';" in fixture)
+    check("and it takes the card down again so the boxes come back",
+      "card.classList.remove('on');" in fixture and
+      "stayed hidden after the endcard " in fixture)
   ## The tiebreak ledger — all four rungs and which one decided it.
   check("the war panel draws the whole tiebreak ledger",
     "decided it" in page and "g.ladder" in page)

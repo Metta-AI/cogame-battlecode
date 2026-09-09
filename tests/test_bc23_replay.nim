@@ -59,8 +59,11 @@ block:
 proc recordAndDerive(mapName: string, rounds: int,
                      sheetsIn: array[2, Sheet],
                      chassis: array[2, ScriptedChassis],
-                     perGame = 0): (string, int, string) =
-  ## Returns (end_reason, mismatch round, the replay text).
+                     perGame = 0): (string, EpisodeReason, int, string) =
+  ## Returns (the GAME's end_reason, the EPISODE's reason, mismatch round,
+  ## the replay text). The episode reason is returned so the wall-clock block
+  ## can assert it in bc22's tolerant `in [epDeadline, epComplete]` shape at
+  ## the ENUM level, not only as the string the document carries (r1-F11).
   var config = defaultGameConfig()
   config.year = "bc23"
   config.pool = "small"
@@ -95,7 +98,7 @@ proc recordAndDerive(mapName: string, rounds: int,
   while deriver.advance(): discard
   let endReason =
     if games.len > 0: games[0].endReason else: "abandoned"
-  (endReason, deriver.mismatchRound, text)
+  (endReason, reason, deriver.mismatchRound, text)
 
 block:
   ## `conquest` and the ladder rungs, whichever the map produces — and every
@@ -103,8 +106,8 @@ block:
   var seen: seq[string]
   for (mapName, rounds) in [("Quiet", 2000), ("Spin", 400),
                             ("Barcode", 600), ("Sneaky", 300)]:
-    let (reason, mismatch, text) = recordAndDerive(mapName, rounds, sheets(),
-      Chassis)
+    let (reason, _, mismatch, text) = recordAndDerive(mapName, rounds,
+      sheets(), Chassis)
     if reason notin seen: seen.add(reason)
     checkEq(mapName & " re-derives with no mismatch", mismatch, -1)
     ## A STRICT UTF-8 parse of the written bytes.
@@ -149,14 +152,20 @@ block:
   ## document must re-derive to the same round — that is the assertion the
   ## particle-worlds scar is actually about — and if the deadline DID fire,
   ## `plan.abandon_after` must carry the round it fired on.
-  let (reason, mismatch, text) = recordAndDerive("Spiderweb", 2000, sheets(),
-    Chassis, perGame = 1)
+  let (reason, episodeReason, mismatch, text) =
+    recordAndDerive("Spiderweb", 2000, sheets(), Chassis, perGame = 1)
   checkEq("the timed game re-derives to the SAME round", mismatch, -1)
+  ## bc22's shape, at the ENUM level and applied to the value `playMatch`
+  ## actually returned (r1-F11). The document-level string check below is the
+  ## same statement about the WRITTEN bytes; this one is about the episode.
+  check("a one-second budget on the largest map either abandons or " &
+    "completes, and nothing else (got `" & $episodeReason & "`)",
+    episodeReason in [epDeadline, epComplete])
   let doc = parseJson(text)
   let stopped = doc["result"]["reason"].getStr()
-  check("a one-second budget on the largest map either abandons or " &
-    "completes, and nothing else (got `" & stopped & "`)",
-    stopped in ["deadline", "complete"])
+  check("and the WRITTEN document says the same thing (got `" & stopped &
+    "`)", stopped in ["deadline", "complete"])
+  checkEq("the two agree", stopped, $episodeReason)
   if stopped == "deadline":
     check("and `plan.abandon_after` carries the load-bearing record",
       doc["plan"]["abandon_after"][0].getInt() >= 0)

@@ -3704,12 +3704,21 @@ html:not([data-year="bc16"]) #bc16-siege { display: none !important; }
    composition and how many rounds away, the outbreak level and multiplier,
    dens standing and the tiebreak countdown. It sits IMMEDIATELY ABOVE
    var(--band), never inside it, and it KEEPS its wave composition, its
-   multiplier and its countdown at EVERY width including 360 px. */
+   multiplier and its countdown at EVERY width including 360 px.
+   IT WRAPS, and that is what makes the last sentence true (r1-F2). On one
+   nowrap line the six readouts measure ~570 px, so at 360 px (max-width 92 %
+   = 331 px) and at 720 px the tail of the strip ran past the box and
+   `overflow: hidden` ATE IT: `DENS`, the mini-timeline and the countdown were
+   drawn outside the frame and clipped to nothing, exactly the class of defect
+   `tools/ci/renderer_fixture.html` exists to catch. `flex-wrap: wrap` keeps
+   every field on screen at every width instead; `white-space: nowrap` stays,
+   so a field wraps as a whole and never mid-number. */
 #bc16-horde {
   position: absolute; left: 50%; transform: translateX(-50%);
   bottom: calc(var(--band, 0px) + 148px);
-  display: flex; gap: 8px; align-items: center;
-  font: 600 11px/1 var(--mono); color: #cdbfa6;
+  display: flex; gap: 8px 8px; align-items: center;
+  flex-wrap: wrap; justify-content: center;
+  font: 600 11px/1.35 var(--mono); color: #cdbfa6;
   background: rgba(10, 12, 18, .82); border: 1px solid #2a3342;
   border-radius: 8px; padding: 4px 10px; z-index: 7; white-space: nowrap;
   max-width: 92%; overflow: hidden;
@@ -3721,7 +3730,30 @@ html:not([data-year="bc16"]) #bc16-siege { display: none !important; }
 #bc16-horde .togo { color: #8b8375; }
 #bc16-horde .tl { letter-spacing: .12em; color: #6f6558; }
 #bc16-horde .tl b { color: #f2e8d8; }
-#bc16-horde.struck { color: #f2e8d8; border-color: #6a5a3a; }
+/* THE THIRD PARTY, NAMED ON SCREEN. The zombie team is drawn and labelled
+   THE HORDE spectator-side (design note: "the zombie team is drawn and
+   labelled THE HORDE, is never a seat, never scores"); until r1-F9 the words
+   appeared only in the agent-facing brief and in a CSS comment. It is the
+   first field in the strip at EVERY width -- it is the shortest field and the
+   one that says what the strip is. */
+#bc16-horde .horde {
+  color: #f2e8d8; font-weight: 800; letter-spacing: .1em;
+}
+/* THE STRIP TAKEOVER. On a wave round or a `turned` event the strip carries
+   what happened in plain words for two seconds (design note: `WAVE — 34
+   zombies from 4 dens at ×1.7`, `CLAN ASH'S ARCHON TURNS — a BIGZOMBIE at
+   34,19`) and `.struck` is the class that dresses it. `.struck` was a rule
+   nothing ever activated (r1-F9); `renderHorde` adds and removes it now, the
+   same add/remove shape `renderArchons` uses for the archon pill's `flash`. */
+#bc16-horde .tell { color: #ffd9a0; font-weight: 700; }
+#bc16-horde.struck {
+  color: #f2e8d8; border-color: #6a5a3a;
+  /* While struck the strip carries ONE SENTENCE, so it wraps: the readouts'
+     `white-space: nowrap` is there to stop a field breaking mid-number, and
+     applied to a sentence inside an `overflow: hidden` box it clips the
+     sentence instead (measured at 360 px). */
+  white-space: normal;
+}
 
 #bc16-econ, #bc16-units {
   position: absolute; left: 8px;
@@ -3732,8 +3764,15 @@ html:not([data-year="bc16"]) #bc16-siege { display: none !important; }
 }
 #bc16-units { bottom: calc(var(--band, 0px) + 76px); }
 #bc16-econ { bottom: calc(var(--band, 0px) + 8px); }
+/* The two rail boxes WRAP their rows (r1-F2). `width: max-content` capped by
+   `max-width` bounds the BOX, but a nowrap flex row inside it keeps laying
+   its fields out past that cap: at 360 px a real econ row measures ~640 px
+   against a 344 px box, so `rubble +x / -y` was drawn OFF THE FRAME. Wrapping
+   the row keeps every field on screen at every width; the fields themselves
+   still never break mid-number. */
 #bc16-econ .row, #bc16-units .row {
-  display: flex; gap: 7px; align-items: baseline; white-space: nowrap;
+  display: flex; gap: 3px 7px; align-items: baseline; white-space: nowrap;
+  flex-wrap: wrap;
 }
 #bc16-econ .who, #bc16-units .who {
   min-width: 4.2em; color: #8b8375; font-weight: 700;
@@ -3789,12 +3828,25 @@ html:not([data-year="bc16"]) #bc16-siege { display: none !important; }
 #bc16-siege .ladder { color: #b6a892; }
 #bc16-siege .ladder .won { color: #f2e8d8; font-weight: 700; }
 
-/* THE HUD MAY NOT BLEED THROUGH THE ENDCARD (the bc23 finding). */
-html[data-year="bc16"] #endcard.show ~ #bc16-archons,
-html[data-year="bc16"] #endcard.show ~ #bc16-horde,
-html[data-year="bc16"] #endcard.show ~ #bc16-econ,
-html[data-year="bc16"] #endcard.show ~ #bc16-units,
-html[data-year="bc16"] #endcard.show ~ #bc16-doctrines {
+/* THE HUD MAY NOT BLEED THROUGH THE ENDCARD (the bc23 finding).
+   PARENT-SCOPED, and both halves of that matter (r1-F1). The rule shipped
+   keyed on a `.show` class and a general-sibling combinator, and it was dead
+   twice over: the class the page actually toggles is `.on`
+   (`#endcard.on { display: flex; }` above, `$('endcard').classList.add('on')`
+   in renderEndcard), never `.show`; and `~` selects only FOLLOWING siblings
+   while the `#bc16-*` boxes are emitted BEFORE `#endcard` inside `#chrome`,
+   so no sibling combinator could ever have matched whatever class it named.
+   `#chrome:has(#endcard.on)` is direction-free and keys on the class that
+   exists.
+   The gate for this is a COMPUTED STYLE, not a text grep:
+   `tools/ci/renderer_fixture.html` raises `#endcard` and reads
+   `getComputedStyle(...).visibility` on all five boxes, so a rule that cannot
+   match is RED. A grep could not see the two defects above and did not. */
+html[data-year="bc16"] #chrome:has(#endcard.on) #bc16-archons,
+html[data-year="bc16"] #chrome:has(#endcard.on) #bc16-horde,
+html[data-year="bc16"] #chrome:has(#endcard.on) #bc16-econ,
+html[data-year="bc16"] #chrome:has(#endcard.on) #bc16-units,
+html[data-year="bc16"] #chrome:has(#endcard.on) #bc16-doctrines {
   visibility: hidden;
 }
 
@@ -5644,6 +5696,7 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
   var pinned = false;                // the viewer opened it themselves
   var lastFrame = -1;
   var lastArchons = [-1, -1];
+  var lastState = null;              // the frame the strip re-renders from
   var feedShown = {};
 
   function $(id) { return document.getElementById(id); }
@@ -5779,10 +5832,57 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
   }
 
   // ---- the horde clock: the year's signature readout --------------------
+  // THE STRIP TAKEOVER (r1-F9). On a wave round or a `turned` event the strip
+  // carries what happened in plain words for two seconds, and `.struck`
+  // dresses it -- the design note's `WAVE — 34 zombies from 4 dens at ×1.7`
+  // and `CLAN ASH'S ARCHON TURNS — a BIGZOMBIE at 34,19`. The words are the
+  // BEAT'S OWN LABEL, so the strip, the killfeed and the scrubber button all
+  // say the same sentence and there is no second string to keep in step.
+  // `.struck` is a static rule rather than an animation, so it takes a timer
+  // where the archon pill's `flash` takes an animation; the add/remove shape
+  // is renderArchons's.
+  var struckUntil = 0;
+  var struckText = '';
+  var struckTimer = null;
+  var struckAt = -1;
+
+  function hordeStrike(s, prevFrame) {
+    if (!s.beats || prevFrame < 0 || s.t <= prevFrame) return;
+    var hit = null;
+    s.beats.forEach(function (b) {
+      if (b.k !== 'wave' && b.k !== 'turned') return;
+      if (b.t <= prevFrame || b.t > s.t || !b.label) return;
+      hit = b;                       // the last one inside this step wins
+    });
+    if (!hit || hit.t === struckAt) return;
+    struckAt = hit.t;
+    struckText = hit.label;
+    struckUntil = Date.now() + 2000;
+    if (struckTimer) clearTimeout(struckTimer);
+    struckTimer = setTimeout(function () {
+      struckTimer = null;
+      struckUntil = 0;
+      var box = $('bc16-horde');
+      if (box) box.classList.remove('struck');
+      if (lastState) renderHorde(lastState);
+    }, 2000);
+  }
+
   function renderHorde(s) {
     var box = $('bc16-horde');
     var h = s.bc16_horde;
     if (!box || !h) return;
+    // THE THIRD PARTY IS NAMED ON SCREEN, at every width and in every state:
+    // the zombie team is drawn and labelled THE HORDE, is never a seat and
+    // never scores.
+    var who = '<span class="horde">THE HORDE</span>';
+    if (struckUntil > Date.now()) {
+      box.classList.add('struck');
+      box.innerHTML = who + '<span class="tell">' + esc(struckText) +
+        '</span>';
+      return;
+    }
+    box.classList.remove('struck');
     var alive = h.alive || {};
     var live = '\u25c6' + stat(alive.standardzombie, 'int') +
       ' \u27a4' + stat(alive.rangedzombie, 'int') +
@@ -5802,7 +5902,7 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
     var tl = (h.schedule || []).map(function (row) {
       return row.past ? '<b>\u00b7</b>' : '\u00b7';
     }).join('');
-    box.innerHTML =
+    box.innerHTML = who +
       '<span class="alive">' + live + '</span>' +
       '<span class="wave">' + esc(wave) + '</span>' +
       '<span class="ob">OUTBREAK ' + stat(h.outbreak_level, 'int') +
@@ -5885,7 +5985,14 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
       }
       html += '<br>' + esc((d.words || []).join(' \u00b7 '));
       if (d.motto) html += '<br>\u201c' + esc(d.motto) + '\u201d';
-      if (d.notes) html += '<br>' + esc(d.notes);
+      // `<i>` is not decoration: it is the element every other year's
+      // doctrine row wraps its `notes` in, and it is what
+      // `tools/ci/renderer_fixture.html`'s "the notes on seat N were
+      // shortened before they were measured" check selects
+      // (`#<year>-doctrines .dline i`). bc25 shipped its own class names
+      // first and that check found nothing to measure; a bare text node
+      // here would do the same to bc16 (r1-F2).
+      if (d.notes) html += '<br><i>' + esc(d.notes) + '</i>';
       if (d.submitted) {
         html += '<br><span class="dsub">what the cog actually sent: ' +
           esc(d.submitted) + '</span>';
@@ -5985,6 +6092,10 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
       if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {
         setDoctrinesOpen(false);
       }
+      // The strip takeover reads the frame the playhead came FROM, so it has
+      // to be decided before `lastFrame` moves.
+      lastState = s;
+      hordeStrike(s, lastFrame);
       lastFrame = s.t;
       renderArchons(s);
       renderHorde(s);

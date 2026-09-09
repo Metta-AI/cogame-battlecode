@@ -368,13 +368,60 @@ Every place this port deliberately differs from the engine, with its reason.
     killed across the six maps, a median-round floor, and **the whole gate
     coming back RED under `-d:bc16BrokenChassis`**. Both measured tables —
     healthy and broken — are inline in `tests/test_bc16_survival.nim`'s header
-    and repeated here:
+    and repeated here.
 
-    | | not `archons_destroyed` | dens killed | median rounds | guards (min) |
+    **Provenance, so a future staleness is detectable (r1-F4):** these numbers
+    were regenerated from the build that shipped and agree with `ci.yml` run
+    **34322655506** (`main` @ `fbc7d345`, `test` job 102372608026), whose own
+    log line reads `HEALTHY games=6 notDestroyed=3 dens=14 median=2015
+    rounds=@[3000, 695, 3000, 707, 3000, 1030]`, and `median=873` for the
+    control. The rows previously printed here were measured before the
+    den-breaking chassis iteration landed and were stale by 20 vs 14 dens,
+    2147 vs 2015 median rounds and 1029 vs 873 on the control.
+
+    | | not `archons_destroyed` | dens killed | median rounds | guards (min) | units (min) | damage (min) |
+    |---|---|---|---|---|---|---|
+    | healthy, after the den-breaking iteration | **3 of 6** | **14** | **2015** | 5 | 58 | 3608 |
+    | healthy, before it | 1 of 6 | 6 | 936 | 4 | — | — |
+    | broken (`-d:bc16BrokenChassis`) | **0 of 6** | **0** | **873** | **0** | 55 | 3333 |
+
+    Every committed floor still holds on the regenerated numbers:
+    `MinNotDestroyed` 2 ≤ 3, `MinUnitsBuilt` 25 ≤ 58, `MinDamageDealt`
+    1500 ≤ 3608, `MinGuardsBuilt` 2 ≤ 5, `MinDensKilled` 4 ≤ 14,
+    `MinMedianRounds` 1000 ≤ 2015, parts income 1 ≤ 11 724 tenths, and
+    `swamp`'s pair-parts clause 1 ≤ 1 200 tenths. **No floor was moved.**
+
+    **Which clauses carry the discrimination, and which are anti-degeneracy
+    floors the broken control also clears (r1-F3).** Stated plainly, because a
+    floor set below what the named control already achieves does not
+    discriminate, and reading the clause list as if every clause did is the
+    mistake. The floors are **not fitted to the control**: raising the damage
+    floor past the control's 3333 would put it above the *healthy* weak seat's
+    3608, which is fitting a floor to noise and would redden healthy runs.
+
+    | clause | floor | healthy (worst) | broken control | discriminates? |
     |---|---|---|---|---|
-    | healthy, after the den-breaking iteration | **3 of 6** | **20** | **2147** | 5 |
-    | healthy, before it | 1 of 6 | 6 | 936 | 4 |
-    | broken (`-d:bc16BrokenChassis`) | **0 of 6** | **0** | 1029 | **0** |
+    | ratio, not `archons_destroyed` | 2 of 6 | 3 of 6 | **0 of 6** | **yes** |
+    | guards built, per seat per game | 2 | 5 | **0** | **yes** |
+    | dens killed across the six maps | 4 | 14 | **0** | **yes** |
+    | `swamp` parts collected across the pair | 1 tenth | 1 200 | **0** | **yes** |
+    | units built, per seat per game | 25 | 58 | 55 | no — anti-degeneracy only |
+    | damage dealt, per seat per game | 1 500 | 3 608 | 3 333 | no — anti-degeneracy only |
+    | parts income, per seat per game | 1 tenth | 11 724 | 10 621 | no — anti-degeneracy only |
+    | median rounds | 1 000 | 2 015 | 873 | inside the control's noise band |
+
+    The four `yes` clauses are a **hard zero** on the control and carry all of
+    the gate's discriminating power. The three `no` clauses stay asserted
+    because what they catch is a chassis that stops acting *at all* — the
+    do-nothing sheet that wins because the opponent starved (the 2026-09-03
+    finding) — not this particular control. **The median floor sits inside the
+    control's own noise band**: the previous session recorded 1 029, *above*
+    the 1 000 floor, and the shipped build measures 873, *below* it, so it is
+    counted with the anti-degeneracy floors even though it does fire today.
+    Run 34322655506's control failed on sixteen clauses and the eight it
+    printed are all `guards built 0 < 2` plus `swamp: parts collected across
+    the pair (tenths) 0 < 1` — not one printed failure is a units-built,
+    damage-dealt, income or median failure.
 
 17. **The chassis reads the den roster from the map** rather than
     rediscovering it by sighting. The whole-map zombie schedule is **public**
