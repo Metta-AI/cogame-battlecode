@@ -1344,6 +1344,23 @@ block:
   check("and when the headline is stranded above the scrollport",
     "above the card\\u2019s scrollport and cannot be scrolled to" in fixture)
 
+  ## r2-E3: A DOCTRINE PANEL IS A SENTENCE, NOT A LABEL. The 52 % cap on
+  ## `.ec-teams` is sized for the BR field list; on the two-panel doctrine
+  ## variant it hid more than half of each team's doctrine, cut mid-word, with
+  ## no ellipsis and no dismiss control. Item 15: if a remark is being cut the
+  ## box is too small. The panels are laid out whole, up to 430u wide, and the
+  ## card's own scroll is the one place endcard content may overflow to.
+  check("the doctrine panels are not capped inside the card",
+    "#endcard .ec-teams:not(.br) { max-height: none; }" in page)
+  check("and they take the width the card has to spare",
+    "#endcard .ec-teams:not(.br) .ec-team {" in page and
+    "max-width: calc(430 * var(--u));" in page)
+  check("the BR field list keeps its own cap", "max-height: 62%;" in page)
+  check("and the fixture fails when a doctrine panel is cut off",
+    "the endcard doctrine panels are cut off: " in fixture)
+  check("with both seats' endcard text at full length before it measures",
+    "the endcard motto on seat " in fixture)
+
   ## FIX 3: no raw unrounded floats.
   check("there is exactly ONE formatter", page.count("window.fmtStat =") == 1)
   check("and the endcard's own numbers go through it",

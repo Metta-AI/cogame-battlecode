@@ -825,6 +825,27 @@
         Math.round(cardBox.top - head.getBoundingClientRect().top) +
         'px above the card\u2019s scrollport and cannot be scrolled to';
     }
+    // AND THE DOCTRINE PANELS ARE SENTENCES, NOT LABELS (r2-E3). A capped,
+    // scrolling box inside the card cuts a remark mid-word with no ellipsis
+    // and no dismiss control; the card's own scroll is the one place endcard
+    // content may go. Both seats at their full text is the case that hurts.
+    var ecTeams = document.getElementById('ec-teams');
+    var ecMottos = document.querySelectorAll('#ec-teams .ec-team i');
+    if (!endcardFault && ecTeams.scrollHeight > ecTeams.clientHeight + 1) {
+      endcardFault = 'the endcard doctrine panels are cut off: ' +
+        (ecTeams.scrollHeight - ecTeams.clientHeight) + 'px of ' +
+        ecTeams.scrollHeight + 'px hidden inside a box on the card';
+    } else if (!endcardFault && ecMottos.length !== 2) {
+      endcardFault = 'the fixture drew ' + ecMottos.length +
+        ' endcard mottos, not 2';
+    } else if (!endcardFault) {
+      for (var em = 0; em < ecMottos.length; em++) {
+        if (runes(ecMottos[em].textContent).length !== MAX_MOTTO_RUNES + 2) {
+          endcardFault = 'the endcard motto on seat ' + em +
+            ' was shortened before it was measured';
+        }
+      }
+    }
     raised.classList.remove('on');
     if (endcardFault) return endcardFault;
     var frame = document.documentElement.getBoundingClientRect();
