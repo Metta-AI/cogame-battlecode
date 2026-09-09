@@ -6829,13 +6829,20 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
     bc20: { unit: 'HQ', units: 'HQs', res: 'soup' },
     bc21: { unit: 'Enlightenment Center', units: 'Enlightenment Centers',
             res: 'influence' },
-    bc22: { unit: 'archon', units: 'archons', res: 'lead' },
+    // `limit` is HOW THIS YEAR'S GAME RUNS OUT, for the end reasons a year
+    // SHARES with another one. bc22's is its anomaly schedule's last beat,
+    // the Singularity at round 2000 (docs/RULES-BC22.md).
+    bc22: { unit: 'archon', units: 'archons', res: 'lead',
+            limit: 'the Singularity came' },
     bc23: { unit: 'headquarters', units: 'headquarters', res: 'adamantium' },
     bc24: { unit: 'duck', units: 'ducks', res: 'crumbs' },
     bc25: { unit: 'tower', units: 'towers', res: 'chips' },
     // bc16's own nouns (endcard fix 1): the archon and its parts, so no
-    // other year's unit or resource word can reach a bc16 card.
-    bc16: { unit: 'archon', units: 'archons', res: 'parts' }
+    // other year's unit or resource word can reach a bc16 card. bc16 has NO
+    // Singularity: its games run to a 3000-round limit and are then decided
+    // on the four-rung tiebreak ladder (docs/RULES-BC16.md).
+    bc16: { unit: 'archon', units: 'archons', res: 'parts',
+            limit: 'the round limit ran out' }
   };
 
   function endcardNouns(year) {
@@ -6845,6 +6852,16 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
   // The win condition in PLAIN WORDS, per year, from the game's own
   // `end_reason`. bc26's three reasons are one branch among seven, not the
   // default every year falls into.
+  //
+  // A SHARED END REASON SPEAKS FOR EVERY YEAR THAT LANDS ON IT (r2-E1).
+  // `more_archons` is bc22's PWNED and bc16 REUSES it
+  // (src/battlecode/results.nim says so in as many words), so its branch
+  // shipped hard-coded to bc22's Singularity and a live bc16 endcard read
+  // "THE SINGULARITY CAME AT ROUND 3000 AND CLAN BASIL HAD MORE ARCHONS
+  // LEFT" — a mechanic bc16 does not have. The clause that names HOW THE
+  // GAME RAN OUT now comes from the year's own row in ENDCARD_NOUNS, and
+  // `tests/test_viewer.nim` fails on any year-specific word inside a branch
+  // for a reason more than one year emits.
   function endcardWinCondition(s, last, games) {
     if (!last) return '';
     var nouns = endcardNouns(s.year);
@@ -6858,8 +6875,9 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
       case 'annihilated':
         return alias + ' destroyed the last enemy ' + nouns.unit + tail;
       case 'more_archons':
-        return 'the Singularity came at round ' + last.rounds_played +
-          ' and ' + alias + ' had more archons left';
+        // Shared rung: bc22's and bc16's. `limit` is the year's own row.
+        return (nouns.limit || 'the round limit ran out') + ' at round ' +
+          last.rounds_played + ' and ' + alias + ' had more archons left';
       case 'more_gold_net_worth':
         return 'archons were level, and ' + alias + ' won on gold net worth';
       case 'more_lead_net_worth':

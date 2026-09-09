@@ -1274,6 +1274,45 @@ block:
   check("the bc26 branch is guarded rather than being the default",
     "if (s.year === 'bc26' || !s.year) {" in page)
 
+  ## r2-E1: A SHARED END REASON MAY NOT CARRY ONE YEAR'S LORE. `more_archons`
+  ## is bc22's PWNED and bc16 REUSES it (`src/battlecode/results.nim`'s own
+  ## note on `EndReasons`), and that branch shipped hard-coded to bc22's
+  ## Singularity — so the endcard of a live bc16 ladder match read "THE
+  ## SINGULARITY CAME AT ROUND 3000 AND CLAN BASIL HAD MORE ARCHONS LEFT",
+  ## naming a mechanic bc16 does not have. Nothing here asserted the wording
+  ## of a SHARED reason PER YEAR, which is why it shipped green.
+  let winStart = page.find("function endcardWinCondition(")
+  let winEnd = page.find("\n  }\n", winStart)
+  check("the win-condition function reads whole",
+    winStart >= 0 and winEnd > winStart)
+  let winFn = page[winStart .. winEnd]
+  check("the year's row supplies the clause for the shared rung",
+    "(nouns.limit || " in winFn)
+  check("bc22 keeps its Singularity, in its own row",
+    "limit: 'the Singularity came'" in nounTable)
+  check("and bc16 gets its own round limit, in its own row",
+    "limit: 'the round limit ran out'" in nounTable)
+  ## The END REASONS MORE THAN ONE YEAR EMITS. `results.nim`: bc16 reuses
+  ## bc22's `more_archons`, bc20's `highest_id` and our `abandoned`;
+  ## `annihilated` is bc21's and bc22's; `coin_flip` is bc22's rung and
+  ## bc25's WON_BY_DUBIOUS_REASONS. A branch for one of these speaks to every
+  ## year that lands on it, so it may only use words every one of them has.
+  for reason in ["more_archons", "annihilated", "coin_flip", "abandoned",
+                 "highest_id"]:
+    let caseAt = winFn.find("case '" & reason & "':")
+    if caseAt < 0: continue  ## no branch of its own: the default is neutral
+    var branchEnd = winFn.find("case '", caseAt + 6)
+    if branchEnd < 0: branchEnd = winFn.find("default:", caseAt)
+    check("the " & reason & " branch has an end", branchEnd > caseAt)
+    let branch = winFn[caseAt ..< branchEnd]
+    ## Words that belong to exactly ONE year's rule set.
+    for lore in ["Singularity", "rat king", "cheese", "cats", "soup", "dirt",
+                 "influence", "Enlightenment", "crumb", "duck", "chip",
+                 "paint", "adamantium", "mana", "elixir", "anchor", "zombie",
+                 "horde", "rubble", "gold", "lead"]:
+      check("the shared `" & reason & "` branch says nothing about " & lore &
+        ": " & branch.strip(), lore notin branch)
+
   ## FIX 2: no clipping or overflow at 1280x800.
   check("#endcard's content scrolls rather than running off the bottom",
     "overscroll-behavior: contain;" in page)
