@@ -391,6 +391,38 @@ Every place this port deliberately differs from the engine, with its reason.
     `MinMedianRounds` 1000 ≤ 2015, parts income 1 ≤ 11 724 tenths, and
     `swamp`'s pair-parts clause 1 ≤ 1 200 tenths. **No floor was moved.**
 
+    **Which clauses carry the discrimination, and which are anti-degeneracy
+    floors the broken control also clears (r1-F3).** Stated plainly, because a
+    floor set below what the named control already achieves does not
+    discriminate, and reading the clause list as if every clause did is the
+    mistake. The floors are **not fitted to the control**: raising the damage
+    floor past the control's 3333 would put it above the *healthy* weak seat's
+    3608, which is fitting a floor to noise and would redden healthy runs.
+
+    | clause | floor | healthy (worst) | broken control | discriminates? |
+    |---|---|---|---|---|
+    | ratio, not `archons_destroyed` | 2 of 6 | 3 of 6 | **0 of 6** | **yes** |
+    | guards built, per seat per game | 2 | 5 | **0** | **yes** |
+    | dens killed across the six maps | 4 | 14 | **0** | **yes** |
+    | `swamp` parts collected across the pair | 1 tenth | 1 200 | **0** | **yes** |
+    | units built, per seat per game | 25 | 58 | 55 | no — anti-degeneracy only |
+    | damage dealt, per seat per game | 1 500 | 3 608 | 3 333 | no — anti-degeneracy only |
+    | parts income, per seat per game | 1 tenth | 11 724 | 10 621 | no — anti-degeneracy only |
+    | median rounds | 1 000 | 2 015 | 873 | inside the control's noise band |
+
+    The four `yes` clauses are a **hard zero** on the control and carry all of
+    the gate's discriminating power. The three `no` clauses stay asserted
+    because what they catch is a chassis that stops acting *at all* — the
+    do-nothing sheet that wins because the opponent starved (the 2026-09-03
+    finding) — not this particular control. **The median floor sits inside the
+    control's own noise band**: the previous session recorded 1 029, *above*
+    the 1 000 floor, and the shipped build measures 873, *below* it, so it is
+    counted with the anti-degeneracy floors even though it does fire today.
+    Run 34322655506's control failed on sixteen clauses and the eight it
+    printed are all `guards built 0 < 2` plus `swamp: parts collected across
+    the pair (tenths) 0 < 1` — not one printed failure is a units-built,
+    damage-dealt, income or median failure.
+
 17. **The chassis reads the den roster from the map** rather than
     rediscovering it by sighting. The whole-map zombie schedule is **public**
     in the real game (`getZombieSpawnSchedule()` is free to every robot) and

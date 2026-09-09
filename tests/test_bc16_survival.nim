@@ -76,6 +76,54 @@
 ## that true.
 ##
 ## ============================================================================
+##  WHICH CLAUSES DISCRIMINATE, AND WHICH ARE ANTI-DEGENERACY FLOORS (r1-F3)
+## ============================================================================
+##
+## **Said plainly, because a floor set below what the named broken control
+## already achieves does not discriminate, and reading the clause list as if
+## every clause did is the mistake.** The floors are NOT fitted to the
+## control: raising `MinDamageDealt` above the broken column's 3333 would put
+## it above the HEALTHY weak seat's 3608, which is fitting a floor to noise
+## and would redden healthy runs. So no floor moves and no clause is dropped —
+## the LABELLING is corrected instead.
+##
+##   | clause | floor | healthy (worst) | broken control | discriminates? |
+##   |---|---|---|---|---|
+##   | ratio, not `archons_destroyed` | 2 of 6 | 3 of 6  | **0 of 6** | **YES** |
+##   | guards built, seat/game          | 2      | 5       | **0**      | **YES** |
+##   | dens killed, six maps            | 4      | 14      | **0**      | **YES** |
+##   | `swamp` parts, across the pair   | 1 tenth| 1200    | **0**      | **YES** |
+##   | units built, seat/game           | 25     | 58      | 55         | no      |
+##   | damage dealt, seat/game          | 1500   | 3608    | 3333       | no      |
+##   | parts income, seat/game          | 1 tenth| 11724   | 10621      | no      |
+##   | median rounds                    | 1000   | 2015    | 873        | NOISE   |
+##
+## **The four YES clauses carry all of this gate's discriminating power**, and
+## each is a HARD ZERO on the control: the broken chassis never builds a
+## guard, never breaks a den, never ends a game other than
+## `archons_destroyed`, and never walks an archon onto `swamp`'s far deposits.
+##
+## **The three `no` clauses are PURE ANTI-DEGENERACY FLOORS that the named
+## broken control clears** — 55 units against a floor of 25, 3333 damage
+## against 1500, 10 621 tenths of income against 1. They stay asserted,
+## because what they catch is a chassis that stops acting AT ALL (the
+## do-nothing sheet that wins because the opponent starved, the 2026-09-03
+## finding), not this particular control. Calling them discriminating would be
+## false.
+##
+## **The median floor sits INSIDE the control's own noise band, and that is
+## stated rather than banked as coverage.** The previous session recorded the
+## control's median as 1029, ABOVE the 1000 floor; the shipped build measures
+## 873, BELOW it. A clause that lands on either side of its floor between two
+## measurements of the same control is not discriminating, so it is counted
+## here with the anti-degeneracy floors even though it does fire today.
+##
+## CI's own run says the same thing. Run 34322655506's control failed on
+## SIXTEEN clauses; the eight it printed are all `guards built 0 < 2` plus
+## `swamp: parts collected across the pair (tenths) 0 < 1`. **Not one printed
+## failure is a units-built, damage-dealt, income or median failure.**
+##
+## ============================================================================
 ##  WHY THE RATIO IS 2 OF 6 AND NOT THE NOTE'S 5 OF 6
 ## ============================================================================
 ##
@@ -95,7 +143,9 @@
 ## degenerate matches: a champion once sheet-picked a do-nothing chassis and
 ## won because the opponent starved. All five clauses below are asserted, and
 ## **the whole gate comes back RED under `-d:bc16BrokenChassis`**, which is the
-## part that keeps it honest.
+## part that keeps it honest. Which of them carry the discrimination and which
+## are anti-degeneracy floors the control also clears is set out above — do
+## not read the list as if every clause did both jobs (r1-F3).
 
 import std/[algorithm, os, osproc, strutils]
 import harness
@@ -103,20 +153,29 @@ import bc16_fixture
 
 const
   ## Clause 1 — the MEASURED ratio, `max(1, 3 - 1)`.
+  ## DISCRIMINATES: the broken control is 0 of 6.
   MinNotDestroyed = 2
   ## Clause 2 — substance, per seat, in EVERY game. Roughly half the weak
   ## seat's measured value, the bc23 r1-F21/F22 rule.
-  MinUnitsBuilt = 25          ## measured weak seat 58 (broken 55)
-  MinDamageDealt = 1500       ## measured weak seat 3608 (broken 3333)
-  MinGuardsBuilt = 2          ## measured weak seat 5, and BROKEN IS ZERO
+  ##
+  ## Two of these three are ANTI-DEGENERACY FLOORS ONLY: the named broken
+  ## control clears both, and they are not lowered or raised for it (see the
+  ## header's "which clauses discriminate" table — raising the damage floor
+  ## past the control's 3333 would put it above the healthy weak seat's 3608).
+  MinUnitsBuilt = 25          ## anti-degeneracy: healthy 58, BROKEN 55 (passes)
+  MinDamageDealt = 1500       ## anti-degeneracy: healthy 3608, BROKEN 3333 (passes)
+  MinGuardsBuilt = 2          ## DISCRIMINATES: healthy 5, and BROKEN IS ZERO
   ## Clause 3 — den-breaking demonstrated, the axis `den_clear_round` exists
   ## for. The ruling's floor is 1; the measured healthy total is 14 and the
   ## broken control is ZERO, so 4 is three and a half times inside the
   ## measurement and still four times above the floor.
+  ## DISCRIMINATES.
   MinDensKilled = 4
-  ## Clause 4 — the measured median floor. Healthy 2015, broken 873; 1000 is
-  ## a pure anti-degeneracy floor with 2.0x headroom, and clauses 1-3 are what
-  ## discriminate.
+  ## Clause 4 — the measured median floor. Healthy 2015; the control measured
+  ## 873 on the shipped build and 1029 on the previous session's, i.e. **this
+  ## floor sits INSIDE the control's own noise band** and is counted as an
+  ## anti-degeneracy floor, not as discrimination. Clauses 1 and 3, the guard
+  ## clause and `swamp`'s pair-parts clause are what discriminate.
   MinMedianRounds = 1000
 
 type GateResult = object
