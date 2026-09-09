@@ -448,15 +448,34 @@ def main() -> int:
             f"{pair[0]}/{pair[1]}: the ledger has an entry for a pair this run "
             f"did not compare. Remove it or restore the pair.")
 
-    lines = ["| bot | map | tier A/A' | peak bytecode | note |",
+    # The column names ONLY THE TIERS THIS SCRIPT ACTUALLY RUNS (r1-F5).
+    # It read `tier A/A'` before, and Tier A' -- the four scenario bots --
+    # WAS NEVER BUILT on the Java side and is not run by the job. A CI step
+    # summary that names it claims coverage that never executed.
+    lines = ["| bot | map | tier A / A\u2033 | peak bytecode | note |",
              "|---|---|---|---|---|"]
     for bot, map_name, verdict, pct, note in rows:
         lines.append(
             f"| `{bot}` | `{map_name}` | {verdict} | {pct} % | {note} |")
     lines.append("")
+    # NAME ONLY WHAT RAN (r1-F5). The tiers this job executes are A, A", B
+    # (the whole-domain byte-diff, in the workflow's own step) and C. TIER A'
+    # -- the four scenario bots that force the rare end-ladder rungs -- WAS
+    # NOT BUILT, is not run anywhere, and is disclosed as NOT IMPLEMENTED in
+    # docs/PARITY.md. Printing it in the exit condition told a reader of the
+    # step summary alone that it had passed.
     lines.append(f"Ledger: {len(entries)} accepted divergence(s). "
-                 f"The phase-30 exit condition is Tiers A, A' and B passing "
-                 f"with an EMPTY ledger (see docs/PARITY.md section bc16).")
+                 f"The tiers that RAN here are A, A\u2033 and C; Tier B is "
+                 f"the whole-domain byte-diff in the job's own step. The "
+                 f"phase-30 exit condition is Tiers A, A\u2033, B and C "
+                 f"passing with an EMPTY ledger.")
+    lines.append("")
+    lines.append("**Tier A\u2032 (the four scenario bots) was NOT BUILT and "
+                 "did NOT run.** Nothing above is evidence for it. See "
+                 "docs/PARITY.md section bc16, \"Tier A\u2032 -- NOT "
+                 "IMPLEMENTED\", for what that leaves uncovered: the rungs "
+                 "below DESTROYED (`more_archon_health`, "
+                 "`more_parts_net_worth`) have no Java-side evidence.")
     table = "\n".join(lines)
     print(table)
     if args.summary:
