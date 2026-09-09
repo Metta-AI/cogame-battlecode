@@ -9,7 +9,7 @@
   "episode_timeout_minutes": 20,
   "game": {
     "name": "battlecode",
-    "description": "Battlecode, played by doctrine. Two cogs each write one sealed JSON strategy sheet and a deterministic Nim port of an official Battlecode rule set plays the whole match from those two sheets. Variant `bc26` is 2026 \"Uneasy Alliances\" — rat clans allied against NPC cats until one of them betrays. Variant `bc20` is 2020 \"Soup\" — the water rises every round, and a team either terraforms its way above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt. Variant `bc21` is 2021 \"Campaign\" — Enlightenment Centers bid influence for votes and spend it on politicians, slanderers and muckrakers, and the election is decided at round 1500. Variant `bc24` is 2024 \"Breadwars\" — 50 identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off. Variant `bc25` is 2025 “Chromatic Conflict” — paint robots colour a grid, build money, paint and defense towers by painting exact patterns onto ruins, and win by owning 70 % of the map. Variant `bc23` is 2023 “Tempest” — carriers mine adamantium and mana from sky wells, launchers fight the only real war, and a faction wins by ferrying reality anchors onto 75 % of the sky islands. Variant `bc22` is 2022 “Mutation” — miners dig lead out of a map that only regenerates the squares you do not empty, laboratories turn lead into gold at a price that rises with company, and anomalies strike every two hundred rounds until the Singularity takes the weaker side at round 2000.",
+    "description": "Battlecode, played by doctrine. Two cogs each write one sealed JSON strategy sheet and a deterministic Nim port of an official Battlecode rule set plays the whole match from those two sheets. Variant `bc26` is 2026 \"Uneasy Alliances\" — rat clans allied against NPC cats until one of them betrays. Variant `bc20` is 2020 \"Soup\" — the water rises every round, and a team either terraforms its way above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt. Variant `bc21` is 2021 \"Campaign\" — Enlightenment Centers bid influence for votes and spend it on politicians, slanderers and muckrakers, and the election is decided at round 1500. Variant `bc24` is 2024 \"Breadwars\" — 50 identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off. Variant `bc25` is 2025 “Chromatic Conflict” — paint robots colour a grid, build money, paint and defense towers by painting exact patterns onto ruins, and win by owning 70 % of the map. Variant `bc23` is 2023 “Tempest” — carriers mine adamantium and mana from sky wells, launchers fight the only real war, and a faction wins by ferrying reality anchors onto 75 % of the sky islands. Variant `bc22` is 2022 “Mutation” — miners dig lead out of a map that only regenerates the squares you do not empty, laboratories turn lead into gold at a price that rises with company, and anomalies strike every two hundred rounds until the Singularity takes the weaker side at round 2000. Variant `bc16` is 2016 \"Zombie Invasion\" — archons build soldiers, guards, vipers, turrets and scouts and collect parts while zombie dens spawn escalating waves on a public schedule, every kill by a zombie stands the victim back up on the horde's side, and every uninfected corpse becomes a wall; win by destroying the enemy's last archon, or by having more of them at round 2999.",
     "owner": "daveey@gmail.com",
     "replay_viewer": {
       "bundle": "static-replay-viewer"
@@ -87,6 +87,14 @@
           }
         },
         {
+          "id": "rules-bc16.md",
+          "title": "Battlecode 2016 \"Zombie Invasion\": rules, knobs and divergences",
+          "content": {
+            "type": "uri",
+            "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/RULES-BC16.md"
+          }
+        },
+        {
           "id": "replay.md",
           "title": "Replay format",
           "content": {
@@ -131,7 +139,8 @@
             "bc24",
             "bc25",
             "bc23",
-            "bc22"
+            "bc22",
+            "bc16"
           ]
         },
         "pool": {
@@ -154,7 +163,7 @@
         "maxRounds": {
           "type": "integer",
           "minimum": 50,
-          "maximum": 2000
+          "maximum": 3000
         },
         "num_agents": {
           "type": "integer",
@@ -350,7 +359,10 @@
                   "more_adamantium_net_worth",
                   "more_archons",
                   "more_gold_net_worth",
-                  "more_lead_net_worth"
+                  "more_lead_net_worth",
+                  "archons_destroyed",
+                  "more_archon_health",
+                  "more_parts_net_worth"
                 ]
               },
               "cooperation_at_end": {
@@ -2004,6 +2016,288 @@
               },
               "singularity_round": {
                 "type": "integer"
+              },
+              "archon_health_end_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "parts_end_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "parts_worth_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "parts_collected_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "parts_income_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "parts_spent_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "scouts_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "guards_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "vipers_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "turrets_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "turret_packs": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "robots_turned": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "neutrals_activated": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "neutral_archons_activated": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "dens_destroyed": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "den_damage_dealt": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "zombie_damage_dealt": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "zombie_damage_taken": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "enemy_damage_dealt": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "enemy_damage_taken": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "infections_suffered": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "infections_inflicted": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "viper_infection_damage": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "rubble_cleared_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "rubble_created_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "squares_opened": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "basic_signals": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "message_signals": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "archon_parts_walks": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "archons_alive_at_2000": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "dens_per_side": {
+                "type": "integer"
+              },
+              "dens_on_map": {
+                "type": "integer"
+              },
+              "parts_on_map_start": {
+                "type": "integer"
+              },
+              "parts_squares_start": {
+                "type": "integer"
+              },
+              "rubble_mean_tenths": {
+                "type": "integer"
+              },
+              "impassable_squares_start": {
+                "type": "integer"
+              },
+              "impassable_squares_end": {
+                "type": "integer"
+              },
+              "neutrals_on_map_start": {
+                "type": "integer"
+              },
+              "zombies_spawned": {
+                "type": "integer"
+              },
+              "zombies_alive_end": {
+                "type": "integer"
+              },
+              "zombies_killed": {
+                "type": "integer"
+              },
+              "outbreak_level_end": {
+                "type": "integer"
+              },
+              "schedule_rounds": {
+                "type": "integer"
+              },
+              "tiebreak_round": {
+                "type": "integer"
               }
             }
           }
@@ -2103,7 +2397,7 @@
       "id": "awu",
       "name": "awu",
       "type": "player",
-      "description": "the strong published baseline of whichever year the variant selects — distilled-awubot on bc26, Bowl of Chowder on bc20, California Roll on bc21, Gone Sharkin' on bc24, SPAARK on bc25, lemonade on bc23, wololo on bc22",
+      "description": "the strong published baseline of whichever year the variant selects — distilled-awubot on bc26, Bowl of Chowder on bc20, California Roll on bc21, Gone Sharkin' on bc24, SPAARK on bc25, lemonade on bc23, wololo on bc22, bulwark on bc16",
       "image": "{{PLAYER_IMAGE}}",
       "run": [
         "/bin/battlecode-player"
@@ -2126,7 +2420,7 @@
       "id": "scaffold",
       "name": "scaffold",
       "type": "player",
-      "description": "the weak scaffold baseline of whichever year the variant selects — the ported example bot (examplefuncsplayer on bc20, examplefuncsplayer21 on bc21), examplefuncsplayer24 on bc24, examplefuncsplayer25 on bc25, examplefuncsplayer23 on bc23, examplefuncsplayer22 on bc22",
+      "description": "the weak scaffold baseline of whichever year the variant selects — the ported example bot (examplefuncsplayer on bc20, examplefuncsplayer21 on bc21), examplefuncsplayer24 on bc24, examplefuncsplayer25 on bc25, examplefuncsplayer23 on bc23, examplefuncsplayer22 on bc22, greenhorn on bc16",
       "image": "{{PLAYER_IMAGE}}",
       "run": [
         "/bin/battlecode-player"
@@ -2325,6 +2619,33 @@
         "doctrineBudgetMs": 45000,
         "perGameBudgetSeconds": 110,
         "matchBudgetSeconds": 340,
+        "connectTimeoutMs": 25000,
+        "players": [
+          {
+            "name": "Clan Ash"
+          },
+          {
+            "name": "Clan Basil"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc16",
+      "name": "Battlecode 2016 — Zombie Invasion (2 seats)",
+      "description": "Best of three on the mixed pool, three thousand rounds each. Archons are the only thing that matters: lose your last one and you lose on the spot. They build soldiers, guards, vipers, turrets and scouts out of parts they collect by walking over them, and they repair one wounded robot a turn for free. Zombie dens spawn escalating waves on a schedule both sides can read from round zero, and every three hundred rounds the zombies get stronger. Anything a zombie or a viper bites is infected, and anything that dies while infected stands back up on the horde's side — so a soldier you lose in their half is a zombie hunting them. Anything that dies uninfected leaves a wall of rubble where it fell. At round 2999 the side with more archons wins.",
+      "game_config": {
+        "year": "bc16",
+        "pool": "mixed",
+        "gamesPerMatch": 3,
+        "seed": 0,
+        "maxRounds": 3000,
+        "num_agents": 2,
+        "attempt1Ms": 20000,
+        "retryMs": 12000,
+        "doctrineBudgetMs": 45000,
+        "perGameBudgetSeconds": 120,
+        "matchBudgetSeconds": 360,
         "connectTimeoutMs": 25000,
         "players": [
           {

@@ -257,5 +257,42 @@
       "PLAYER_SCRIPTED": "examplefuncsplayer22",
       "PLAYER_POLICY_LABEL": "examplefuncsplayer22"
     }
+  },
+  {
+    "name": "battlecode-bc16-bulwark",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a faction in Battlecode 2016 'Zombie Invasion'. Two things kill you: the enemy and the horde, and the horde escalates. Zombie dens spawn on a public schedule that you can read from round 0, and every 300 rounds every new zombie gets stronger — x1.0, x1.1, x1.2, x1.3, x1.5, x1.7, x2.0, x2.3, x2.6, x3.0 — so a round-2700 BIGZOMBIE has 5000 health and 250 damage. Your doctrine: build a wall the horde breaks itself on and win on archons at round 3000. A GUARD costs 30 parts, has 145 health against a soldier's 60, deals DOUBLE damage to zombies, and blocks 4 damage off any hit above 10 — which is exactly a BIGZOMBIE's 25. A TURRET costs 130 parts and 25 turns of a frozen archon, cannot shoot anything closer than range-squared 6, and deals 13 out to range-squared 40. Set opening \"turtle\", turret_count 4-8, guard_ratio high (55-85), zombie_kiting \"never\" or \"ranged_only\", archon_spread \"huddle\" or \"spread\", rubble_clear \"aggressive\" so your home ground is full speed and your ring is closed, retreat_hp 40-70 so wounded units reach an archon's free 1-health-a-turn repair, and parts_priority \"turrets\" or \"units\". Set den_clear_round deliberately and say why: a den is 2000 health and pays 200 parts, and every den you kill deletes its share of every future wave. Set infection_policy \"quarantine\" at least: an infected unit that dies becomes an enemy zombie where it fell, and you do not want that inside your own ring. In notes, say which den you kill first and what you do if their soldiers arrive before round 400.",
+      "PLAYER_POLICY_LABEL": "bulwark"
+    }
+  },
+  {
+    "name": "battlecode-bc16-pullers",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a faction in Battlecode 2016 'Zombie Invasion'. Everyone in 2016 fought the horde. The horde has exactly one targeting rule: every zombie, every turn, walks at the NEAREST PLAYER-CONTROLLED ROBOT on the map, of either team — and a SCOUT costs 25 parts, has 80 health, sees range-squared 53, IGNORES RUBBLE ENTIRELY, and cannot attack. So the cheapest weapon in this game is a scout standing on the far side of a den. Second thing nobody spent: infection. A VIPER hit infects for 20 turns at 2 damage a turn, and ANY robot that dies while infected leaves no rubble and stands back up as a zombie of its own type on the zombie team — a soldier becomes a STANDARDZOMBIE, a scout a FASTZOMBIE, an archon a BIGZOMBIE — and it then hunts whoever is nearest, which can be them. Your doctrine: set opening \"scout_zombie_pull\" or \"soldier_viper_aggro\", parts_priority \"vipers\", turret_count low (0-3) because a turret cannot chase, guard_ratio low-to-middling (10-40), zombie_kiting \"always\" or \"ranged_only\" — a soldier pays movement delay 2 and a STANDARDZOMBIE 3, so you can outrun it and shoot it from range-squared 13, but a FASTZOMBIE pays 1.4 and ignores rubble, so say what you do about those. Set archon_spread \"split\" and neutral_activation \"hunt\": neutral robots activate for FREE within range-squared 2 of an archon, some maps place neutral ARCHONS, and an extra archon is the first tiebreak at round 3000. Set infection_policy \"suicide_squad\", rubble_clear \"paths\", den_clear_round late (1500-2800), retreat_hp 20-50. In notes, say where your first two scouts stand and which of their archons you intend to be standing next to when one of your units turns.",
+      "PLAYER_POLICY_LABEL": "pullers"
+    },
+    "player": "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d"
+  },
+  {
+    "name": "battlecode-bulwark",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "bulwark",
+      "PLAYER_POLICY_LABEL": "bulwark"
+    }
+  },
+  {
+    "name": "battlecode-greenhorn",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "greenhorn",
+      "PLAYER_POLICY_LABEL": "greenhorn"
+    }
   }
 ]

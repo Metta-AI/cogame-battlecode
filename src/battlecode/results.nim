@@ -212,6 +212,36 @@ const Bc22GameKeys* = [
   ## integer), `anomalies_scheduled`, `vortexes_scheduled` and
   ## `singularity_round` are the eight scalars.
 
+const Bc16GameKeys* = [
+  "archon_health_end_tenths", "parts_end_tenths", "parts_worth_end",
+  "parts_collected_tenths", "parts_income_tenths", "parts_spent_tenths",
+  "scouts_built", "guards_built", "vipers_built", "turrets_built",
+  "turret_packs", "robots_turned", "neutrals_activated",
+  "neutral_archons_activated", "dens_destroyed", "den_damage_dealt",
+  "zombie_damage_dealt", "zombie_damage_taken", "enemy_damage_dealt",
+  "enemy_damage_taken", "infections_suffered", "infections_inflicted",
+  "viper_infection_damage", "rubble_cleared_tenths", "rubble_created_tenths",
+  "squares_opened", "basic_signals", "message_signals", "archon_parts_walks",
+  "archons_alive_at_2000",
+  "dens_per_side", "dens_on_map", "parts_on_map_start", "parts_squares_start",
+  "rubble_mean_tenths", "impassable_squares_start", "impassable_squares_end",
+  "neutrals_on_map_start", "zombies_spawned", "zombies_alive_end",
+  "zombies_killed", "outbreak_level_end", "schedule_rounds", "tiebreak_round"
+]
+  ## bc16's own optional siblings. It REUSES TEN keys that already exist with
+  ## the same meaning and the same type rather than duplicating them, and those
+  ## ten are deliberately NOT in this list: `units_built`, `damage_dealt`,
+  ## `robots_alive` and `robots_lost` (bc20/bc23/bc24/bc25), and
+  ## `archons_start`, `archons_end`, `archons_lost`, `archons_per_side`,
+  ## `soldiers_built`, `repairs` and `hp_repaired` (bc22 -- 2016 and 2022 are
+  ## the two archon years and mean exactly the same thing by all of them).
+  ## `dens_per_side`, `dens_on_map`, `parts_on_map_start`,
+  ## `parts_squares_start`, `rubble_mean_tenths` (IN TENTHS, so the document
+  ## carries an integer), `impassable_squares_start`, `impassable_squares_end`,
+  ## `neutrals_on_map_start`, `zombies_spawned`, `zombies_alive_end`,
+  ## `zombies_killed`, `outbreak_level_end`, `schedule_rounds` and
+  ## `tiebreak_round` are the fourteen scalars.
+
 const EndReasons* = [
   "kings_destroyed", "cats_cleared", "round_limit", "abandoned",
   "hq_destroyed", "quantity", "quality", "broadcasts", "highest_id",
@@ -223,7 +253,8 @@ const EndReasons* = [
   "conquest", "more_sky_islands", "more_reality_anchors",
   "more_elixir_net_worth", "more_mana_net_worth",
   "more_adamantium_net_worth",
-  "more_archons", "more_gold_net_worth", "more_lead_net_worth"
+  "more_archons", "more_gold_net_worth", "more_lead_net_worth",
+  "archons_destroyed", "more_archon_health", "more_parts_net_worth"
 ]
   ## The union of all SIX years' `DominationFactor` renderings plus our own
   ## wall-clock `abandoned`. bc24's `MORE_FLAGS_PICKED` and `RESIGNATION` are
@@ -237,6 +268,16 @@ const EndReasons* = [
   ## JSON doctrine) and bc23 contributes no `destroy_all_units`, because THERE
   ## IS NO ELIMINATION CONDITION in the 2023 rule set at all
   ## (docs/RULES-BC23.md section Divergences item 7).
+  ##
+  ## bc16 adds EXACTLY THREE -- `archons_destroyed` (`DESTROYED`),
+  ## `more_archon_health` (`OWNED`) and `more_parts_net_worth`
+  ## (`BARELY_BEAT`) -- and REUSES `more_archons` (bc22's `PWNED`, the same
+  ## words), `highest_id` (bc20's `WON_BY_DUBIOUS_REASONS`) and `abandoned`.
+  ## `annihilated` is deliberately NOT reused for `DESTROYED` even though the
+  ## semantics match bc21's and bc22's, because docs/RULES-BC2x.md already
+  ## documents `annihilated` as THOSE years' factor and a bc16 replay must
+  ## trace to `DESTROYED`. `zombified` and `cleansed` are NOT added: both are
+  ## reachable only on armageddon maps, which are out of scope (bc16 V4).
 
 const ResultsKeys* = [
   "names", "aliases", "scores", "wins", "points", "games", "seed", "year",
