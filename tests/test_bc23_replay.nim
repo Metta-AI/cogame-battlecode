@@ -131,17 +131,65 @@ block:
 
 block:
   ## The WALL-CLOCK stop, applied by the SAME proc on record and on playback
-  ## (the particle-worlds scar). A one-second per-game budget on the largest
-  ## converted map abandons the game.
+  ## (the particle-worlds scar), in TWO halves — because the stop is a RACE
+  ## AGAINST A REAL CLOCK and half of it therefore cannot be asserted on a
+  ## shared runner.
+  ##
+  ## `playMatch` clamps the per-game budget to a whole number of seconds with
+  ## a floor of ONE, so the smallest budget this shard can ask for is a second
+  ## — and whether a 2000-round `Spiderweb` game fits inside a second is a
+  ## property of the machine, not of the code. Measured on two consecutive CI
+  ## runs of the same commit range: the debug build always overruns, and the
+  ## RELEASE build overran on one runner and finished on the next, which is
+  ## `got complete want deadline` on a shard that had been green for weeks.
+  ## bc20's, bc21's and bc22's equivalents already avoid the race; this one
+  ## did not.
+  ##
+  ## Half one: the TIMED run. Whichever way the race goes, the recorded
+  ## document must re-derive to the same round — that is the assertion the
+  ## particle-worlds scar is actually about — and if the deadline DID fire,
+  ## `plan.abandon_after` must carry the round it fired on.
   let (reason, mismatch, text) = recordAndDerive("Spiderweb", 2000, sheets(),
     Chassis, perGame = 1)
-  checkEq("the abandoned game re-derives to the SAME round", mismatch, -1)
+  checkEq("the timed game re-derives to the SAME round", mismatch, -1)
   let doc = parseJson(text)
-  checkEq("and the episode reason is `deadline`",
-    doc["result"]["reason"].getStr(), "deadline")
-  check("`plan.abandon_after` carries the load-bearing record",
-    doc["plan"]["abandon_after"][0].getInt() >= 0)
+  let stopped = doc["result"]["reason"].getStr()
+  check("a one-second budget on the largest map either abandons or " &
+    "completes, and nothing else (got `" & stopped & "`)",
+    stopped in ["deadline", "complete"])
+  if stopped == "deadline":
+    check("and `plan.abandon_after` carries the load-bearing record",
+      doc["plan"]["abandon_after"][0].getInt() >= 0)
   discard reason
+
+  ## Half two: the RECORD ITSELF, built synthetically so no clock is involved
+  ## — bc20's and bc21's shape. This is what proves the deadline path writes
+  ## what the viewer needs, on every machine, every time.
+  const stopAt = 137
+  var plan = buildPlan(defaultGameConfig(), sheets(), 9)
+  plan.chassis = Chassis
+  plan.maps = @["Spiderweb"]
+  plan.sideAslots = @[0]
+  plan.abandonAfter = @[stopAt]
+  var events: seq[MatchEvent]
+  events.add(ev("game_abandoned", game = 0, round = stopAt,
+    fields = %*{"map": plan.maps[0]}))
+  var seats: array[2, SeatReport]
+  for slot in 0 .. 1:
+    seats[slot] = SeatReport(name: "s" & $slot, alias: aliasFor(slot),
+      policyKind: "scripted", sheet: sheets()[slot],
+      chassis: $Chassis[slot])
+  var abandoned = ReplayDoc(gameVersion: GameVersion, year: "bc23",
+    config: %*{"year": "bc23"}, seed: 9, seats: seats, events: events,
+    result: resultsJson(seats, @[], plan, epDeadline, 0.0, 0.0), plan: plan)
+  for slot in 0 .. 1: abandoned.names[slot] = "s" & $slot
+  let writtenAbandoned = parseJson($abandoned.toJson())
+  checkEq("an abandoned episode is recorded as a deadline",
+    writtenAbandoned["result"]["reason"].getStr(), "deadline")
+  checkEq("an abandoned game is DISCARDED, never scored half-played",
+    writtenAbandoned["result"]["games"].len, 0)
+  checkEq("and the stop round is the one load-bearing record",
+    writtenAbandoned["plan"]["abandon_after"][0].getInt(), stopAt)
 
 # --- the clinch: three maps drawn, two played ----------------------------
 block:
