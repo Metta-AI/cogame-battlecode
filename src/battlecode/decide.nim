@@ -60,7 +60,7 @@ proc chassisForSeat*(year: string, seat: SeatPolicy): ScriptedChassis =
 
 proc chassisNameFor*(year: string, seat: SeatPolicy, sheet: Sheet): string =
   case yearIdOf(year)
-  of yBc20, yBc21, yBc22, yBc24, yBc25, yBc23, yBc16:
+  of yBc20, yBc21, yBc22, yBc24, yBc25, yBc23, yBc16, yBc19:
     (if seat.isLlm: $strongChassisFor(year)
      else: baselineName(baselineForSeat(year, seat)))
   of yBc26: $sheet.doctrine.chassis
@@ -713,6 +713,53 @@ YOUR ARMY: a faction with one archon and nothing else plays on to round 2999
 earning 2 parts a round.
 """
 
+const Bc19Preamble* = """
+You command a religious order in Battlecode 2019, "Crusade": a two-order grid
+war on a SQUARE, MIRROR-SYMMETRIC map between 32x32 and 64x64, 1000 rounds a
+game, best of three.
+
+You do not move a single robot. Before the war you write ONE DOCTRINE -- a
+JSON sheet of eleven named knobs -- and a deterministic simulation then plays
+the whole match from it while you watch.
+
+THE BOARD IS A MIRROR AND THE MIRROR IS THE MAP. Every robot is handed the
+WHOLE terrain map, the WHOLE karbonite map and the WHOLE fuel map on its
+FIRST turn, so their castles are exactly the mirror image of yours and you
+know where they are from round 1. There is no scouting problem and no fog
+over terrain -- only over units.
+
+CASTLES ARE THE ONLY THING THAT DECIDES THE GAME. Lose your last one and you
+lose on the spot. At round 1000 the side with more castles wins, then the
+side with greater TOTAL HEALTH OF ALL ITS LIVE UNITS, then a coin flip.
+
+KARBONITE BUILDS UNITS AND FUEL RUNS THEM. The ONLY free income in the game
+is a FLAT 25 fuel per team per round -- it does not scale with castles or
+churches -- and karbonite has NO passive income at all. A PILGRIM standing
+on a depot mines +2 karbonite (cap 20) or +10 fuel (cap 100) a turn for 1
+fuel, and the load is UNREFINED and UNSPENDABLE until a robot GIVEs it to an
+adjacent CASTLE or CHURCH. Every move costs r-squared times the unit's fuel
+rate, every attack costs 10 to 25, and every broadcast costs ceil(sqrt(r2)).
+
+FOUR THINGS MAKE THIS YEAR ITS OWN GAME:
+  1. THE PREACHER HITS YOU TOO. Its attack puts 20 damage on EVERY OCCUPIED
+     SQUARE within range-squared 3 of the target -- nine squares -- WITH NO
+     TEAM CHECK, and its minimum range is 1, so firing at anything adjacent
+     damages ITSELF and every friendly beside it.
+  2. A KILL PAYS. When you kill a non-structure you collect
+     floor((its carried karbonite + its build karbonite / 2) / r2) karbonite
+     and floor(its carried fuel / r2) fuel, capped at your own capacity. A
+     loaded pilgrim is the most valuable target on the board.
+  3. A CHURCH is a second SPAWN point AND a second DEPOSIT point, costs 50
+     karbonite and 200 fuel, and can only be built by a PILGRIM.
+  4. THE TWO ORDERS CAN TRADE WITH EACH OTHER. A CASTLE may propose a
+     karbonite-for-fuel swap; when both standing offers match element-wise
+     the swap executes and both offers clear.
+
+A PROPHET CANNOT HIT WHAT IS NEXT TO IT: its range is 16 to 64 SQUARED and it
+is blind inside 16. A CRUSADER moves range-squared 9 a turn, twice as far as
+anything else in the game.
+"""
+
 proc preambleFor*(year: string): string =
   case yearIdOf(year)
   of yBc20: Bc20Preamble
@@ -722,6 +769,7 @@ proc preambleFor*(year: string): string =
   of yBc23: Bc23Preamble
   of yBc22: Bc22Preamble
   of yBc16: Bc16Preamble
+  of yBc19: Bc19Preamble
   of yBc26: SystemPreamble
 
 proc briefFor*(
@@ -1233,6 +1281,106 @@ proc briefFor*(
       "note": "shares are float32; points truncate to an integer; the " &
               "league ranks by ELO on match wins and results.scores is " &
               "dominated by the win bonus"
+    }
+  of yBc19:
+    payload["economy"] = %*{
+      "start_per_team": {"karbonite": 100, "fuel": 500},
+      "passive_income_per_team_per_round": {
+        "fuel": 25, "karbonite": 0,
+        "note": "the ONLY free income in the game, and FLAT -- it does NOT " &
+                "scale with castles or churches"},
+      "mining": {"karbonite_per_turn": 2, "fuel_per_turn": 10,
+                 "fuel_cost_per_mine": 1, "pilgrim_karbonite_capacity": 20,
+                 "pilgrim_fuel_capacity": 100,
+                 "note": "mining at capacity STILL COSTS THE FUEL and " &
+                         "yields nothing"},
+      "reclaim": "when you kill a non-structure you gain floor((its " &
+        "carried karbonite + its build karbonite / 2) / r2_between_you_and_" &
+        "it) karbonite and floor(its carried fuel / r2) fuel, capped at " &
+        "your own capacity. STRUCTURES GAIN NOTHING.",
+      "trade": "a CASTLE may propose a karbonite-for-fuel swap to the " &
+        "ENEMY's castles; when both sides' standing offers match " &
+        "element-wise the swap executes and both offers clear. Positive " &
+        "means the resource moves from RED to BLUE. |offer| < 1024."
+    }
+    payload["units"] = %*{
+      "castle": {"build": "cannot be built", "hp": 200, "vision_r2": 100,
+        "damage": 10, "attack_r2": [1, 64], "attack_fuel": 10, "speed_r2": 0,
+        "does": "builds PILGRIM/CRUSADER/PROPHET/PREACHER in an adjacent " &
+                "square; reads the free 8-bit castle-talk channel of every " &
+                "friendly unit at ANY range; barters with the enemy's " &
+                "castles; cannot move. LOSE YOUR LAST CASTLE AND YOU LOSE " &
+                "ON THE SPOT"},
+      "church": {"build": {"karbonite": 50, "fuel": 200},
+        "built_by": "a PILGRIM only", "hp": 100, "vision_r2": 100,
+        "damage": 0, "speed_r2": 0,
+        "does": "a second spawn point AND a second deposit point; cannot " &
+                "move, cannot read castle talk, has no attack"},
+      "pilgrim": {"build": {"karbonite": 10, "fuel": 50}, "hp": 10,
+        "vision_r2": 100, "speed_r2": 4, "fuel_per_r2": 1,
+        "karbonite_capacity": 20, "fuel_capacity": 100,
+        "does": "the ONLY unit that can mine and the ONLY unit that can " &
+                "build a CHURCH; cannot attack at all"},
+      "crusader": {"build": {"karbonite": 15, "fuel": 50}, "hp": 40,
+        "vision_r2": 49, "speed_r2": 9, "fuel_per_r2": 1, "damage": 10,
+        "attack_r2": [1, 16], "attack_fuel": 10,
+        "does": "the only FAST unit -- range-squared 9 a turn, twice as " &
+                "far as anything else"},
+      "prophet": {"build": {"karbonite": 25, "fuel": 50}, "hp": 20,
+        "vision_r2": 64, "speed_r2": 4, "fuel_per_r2": 2, "damage": 10,
+        "attack_r2": [16, 64], "attack_fuel": 25,
+        "does": "the longest reach in the game, and BLIND INSIDE " &
+                "range-squared 16 -- it cannot hit anything closer"},
+      "preacher": {"build": {"karbonite": 30, "fuel": 50}, "hp": 60,
+        "vision_r2": 16, "speed_r2": 4, "fuel_per_r2": 3, "damage": 20,
+        "attack_r2": [1, 16], "attack_fuel": 15, "damage_spread_r2": 3,
+        "does": "20 damage to EVERY OCCUPIED SQUARE within range-squared 3 " &
+                "of the target -- nine squares -- WITH NO TEAM CHECK. Its " &
+                "minimum range is 1, so firing at an adjacent enemy " &
+                "damages ITSELF and every friendly beside it"}
+    }
+    payload["combat"] = %*{
+      "no_vision_needed": "an attack needs no line of sight and no vision " &
+        "-- only the range check",
+      "no_team_check": "an attack may legally land on your own units; the " &
+        "chassis never does it",
+      "no_path_check": "a move goes to any square within its speed even if " &
+        "the route is blocked; one unit per square, and a move onto an " &
+        "occupied or impassable square is refused"
+    }
+    payload["comms"] = %*{
+      "radio": {"bits": 16, "max_r2": 7938,
+        "fuel_cost": "ceil(sqrt(r2)), charged ONCE per turn",
+        "note": "every unit of BOTH teams inside the radius reads the " &
+                "value, the sender's id and position, but NOT its team. " &
+                "Audible from the end of your turn until the end of your " &
+                "next."},
+      "castle_talk": {"bits": 8, "fuel_cost": 0, "range": "unlimited",
+        "note": "readable ONLY by CASTLES of your own team, one value per " &
+                "unit per turn"}
+    }
+    payload["win"] = %*{
+      "instant": "destroy the enemy's LAST CASTLE -- the game stops " &
+        "immediately, before the next robot acts",
+      "at_round_1000": ["more castles alive",
+                        "greater TOTAL HEALTH of all your live units (not " &
+                        "just castles)",
+                        "a coin flip"],
+      "both_castleless": "a coin flip",
+      "note": "round 1000 consists of exactly ONE robot turn: the " &
+              "game-over check runs before every turn, and the round " &
+              "counter reaches 1000 on the first turn of that round"
+    }
+    payload["sheet_schema"] = bc19SheetSchema()
+    payload["scoring"] = %*{
+      "weights": {"castles_share": 64, "unit_health_share": 24,
+                  "net_worth_share": 12},
+      "win_bonus_per_game": 200,
+      "games": plan.maps.len,
+      "note": "shares are float32; points truncate to an integer; net " &
+              "worth is karbonite + fuel/5 + the build cost of every live " &
+              "unit; the league ranks by ELO on match wins and " &
+              "results.scores is dominated by the win bonus"
     }
   of yBc26:
     payload["scoring"] = %*{
