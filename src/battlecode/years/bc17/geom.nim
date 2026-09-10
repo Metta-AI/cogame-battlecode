@@ -206,9 +206,16 @@ func onTheMap*(m: MapRect, l: Loc): bool =
 
 func onTheMap*(m: MapRect, l: Loc, radius: float32): bool =
   ## `LiveMap.onTheMap(MapLocation, float)` (`:175-180`) -- it tests **ONLY
-  ## THE FOUR CARDINAL EXTREME POINTS** of the circle, so a circle that
-  ## overlaps a corner of the rectangle is accepted. That is the engine's own
-  ## behaviour and `tests/test_bc17_geom.nim` pins it with a named vector
+  ## THE FOUR CARDINAL EXTREME POINTS** of the circle, each one built by
+  ## `MapLocation.translate`, i.e. **a float32 add**.
+  ##
+  ## Against an axis-aligned rectangle those four points are the disc's
+  ## extremes in x and y, so the test is exact containment *in exact
+  ## arithmetic* -- but it is NOT performed in exact arithmetic. `x - radius`
+  ## and `x + radius` round to float32 first, so a circle whose radius is
+  ## below half an ulp of its centre coordinate is judged to be ON the map
+  ## even when it sits exactly on an edge. That is the engine's own
+  ## behaviour, and `tests/test_bc17_geom.nim` pins it with a named vector
   ## rather than letting a "fix" creep in.
   m.onTheMap(l.translate(-radius, 0'f32)) and
     m.onTheMap(l.translate(radius, 0'f32)) and
