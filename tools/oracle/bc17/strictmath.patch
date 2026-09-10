@@ -1,0 +1,88 @@
+diff --git a/battlecode/common/Direction.java b/battlecode/common/Direction.java
+index d5fafdf..988e24e 100644
+--- a/battlecode/common/Direction.java
++++ b/battlecode/common/Direction.java
+@@ -83,7 +83,7 @@ public final strictfp class Direction {
+         if (dx == 0 && dy == 0) {
+             dy = 1;
+         }
+-        this.radians = reduce((float)Math.atan2(dy, dx));
++        this.radians = reduce((float)StrictMath.atan2(dy, dx));
+     }
+ 
+     /**
+@@ -147,7 +147,7 @@ public final strictfp class Direction {
+      * @battlecode.doc.costlymethod
+      */
+     public float getDeltaX(float travelDist) {
+-        return (float) (travelDist * Math.cos(this.radians));
++        return (float) (travelDist * StrictMath.cos(this.radians));
+     }
+ 
+     /**
+@@ -159,7 +159,7 @@ public final strictfp class Direction {
+      * @battlecode.doc.costlymethod
+      */
+     public float getDeltaY(float travelDist) {
+-        return (float) (travelDist * Math.sin(this.radians));
++        return (float) (travelDist * StrictMath.sin(this.radians));
+     }
+ 
+     /**
+diff --git a/battlecode/common/MapLocation.java b/battlecode/common/MapLocation.java
+index da392fd..77f57ec 100644
+--- a/battlecode/common/MapLocation.java
++++ b/battlecode/common/MapLocation.java
+@@ -131,7 +131,7 @@ public final strictfp class MapLocation implements Serializable, Comparable<MapL
+     public final float distanceTo(MapLocation location) {
+         float dx = this.x - location.x;
+         float dy = this.y - location.y;
+-        return (float) Math.sqrt(dx * dx + dy * dy);
++        return (float) StrictMath.sqrt(dx * dx + dy * dy);
+     }
+ 
+     /**
+@@ -237,8 +237,8 @@ public final strictfp class MapLocation implements Serializable, Comparable<MapL
+         if(direction == null) {
+             return new MapLocation(x ,y);
+         }
+-        float dx = (float)Math.cos(direction.radians);
+-        float dy = (float)Math.sin(direction.radians);
++        float dx = (float)StrictMath.cos(direction.radians);
++        float dy = (float)StrictMath.sin(direction.radians);
+         return new MapLocation(x + dx, y + dy);
+     }
+ 
+@@ -273,8 +273,8 @@ public final strictfp class MapLocation implements Serializable, Comparable<MapL
+         if(direction == null) {
+             return new MapLocation(x ,y);
+         }
+-        float dx = (float)(dist * Math.cos(direction.radians));
+-        float dy = (float)(dist * Math.sin(direction.radians));
++        float dx = (float)(dist * StrictMath.cos(direction.radians));
++        float dy = (float)(dist * StrictMath.sin(direction.radians));
+         return new MapLocation(x + dx, y + dy);
+     }
+ 
+diff --git a/battlecode/world/InternalBullet.java b/battlecode/world/InternalBullet.java
+index bdcd774..b07669a 100644
+--- a/battlecode/world/InternalBullet.java
++++ b/battlecode/world/InternalBullet.java
+@@ -180,14 +180,14 @@ public strictfp class InternalBullet implements InternalBody {
+         float radiansBetween = toFinish.radiansBetween(toTarget);
+ 
+         //Check if the target intersects with the line made between the bullet points
+-        float perpDist = (float)Math.abs(distToTarget * Math.sin(radiansBetween));
++        float perpDist = (float)Math.abs(distToTarget * StrictMath.sin(radiansBetween));
+         if(perpDist > targetRadius){
+             return -1;
+         }
+ 
+         //Calculate hitDist
+-        float halfChordDist = (float)Math.sqrt(targetRadius * targetRadius - perpDist * perpDist);
+-        float hitDist = distToTarget * (float)Math.cos(radiansBetween);
++        float halfChordDist = (float)StrictMath.sqrt(targetRadius * targetRadius - perpDist * perpDist);
++        float hitDist = distToTarget * (float)StrictMath.cos(radiansBetween);
+         if(hitDist < 0){
+             hitDist += halfChordDist;
+             hitDist = hitDist >= 0 ? 0 : hitDist;

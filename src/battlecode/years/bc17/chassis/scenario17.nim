@@ -61,23 +61,32 @@ proc scenarioArchon(w: World, r: Robot) =
     discard w.moveTo(r, addDist(r.loc, eastward(),
                                 strideRadius(r.kind) * 2'f32))
 
+const ScenarioBuildOrder = [rtSoldier, rtLumberjack, rtTank, rtScout]
+  ## One of each BUILDABLE type, in cost order. `r.step` is the cursor and it
+  ## advances ONLY ON A SUCCESSFUL BUILD, which is what makes the schedule
+  ## reach a TANK at all: a tank costs 300 bullets and a fixed round number
+  ## would simply be refused for want of funds, leaving the 20-turn dormancy,
+  ## the tank's body attack and the four-type `U` line coverage untested
+  ## while the pair still agreed bit for bit -- a tier that agrees while
+  ## nothing happens proves nothing. **The retry is deterministic**: the
+  ## cursor is a function of the game's own history, not of a clock.
+
 proc scenarioGardener(w: World, r: Robot) =
   ## Plant on its first ready round, then try to BUILD on the next one (the
   ## shared cooldown refuses it), then build one of each fighter as the
-  ## cooldown comes up.
+  ## cooldown comes up and the bullets allow.
   if r.isBuildReady():
     if r.roundsAlive == 1:
       discard w.plantTree(r, eastward())
     elif r.roundsAlive == 2:
+      ## REFUSED, and that is the point: planting and building share the
+      ## ten-turn cooldown slot.
       discard w.buildRobot(r, rtSoldier, northward())
-    elif r.roundsAlive == 12:
-      discard w.buildRobot(r, rtSoldier, northward())
-    elif r.roundsAlive == 23:
-      discard w.buildRobot(r, rtLumberjack, northward())
-    elif r.roundsAlive == 34:
-      discard w.buildRobot(r, rtTank, northward())
-    elif r.roundsAlive == 45:
-      discard w.buildRobot(r, rtScout, northward())
+    elif r.roundsAlive >= 12:
+      if r.step < 0: r.step = 0
+      if r.step < ScenarioBuildOrder.len:
+        if w.buildRobot(r, ScenarioBuildOrder[r.step], northward()):
+          r.step += 1
   ## Water once the tree has decayed to 45 and again at 48, so the clamp's
   ## wasted 3 is on the trace.
   if r.waterCount == 0:
@@ -140,8 +149,13 @@ proc runScenario17*(w: World, r: Robot) =
       if w.currentRound == 2: discard w.hireGardener(r, northward())
     of rtGardener:
       if r.isBuildReady():
-        if r.roundsAlive == 1: discard w.plantTree(r, eastward())
-        elif r.roundsAlive == 120: discard w.buildRobot(r, rtTank, eastward())
+        if r.roundsAlive == 1:
+          discard w.plantTree(r, eastward())
+        elif r.roundsAlive >= 120 and r.step < 0:
+          ## Once the tree is long past its 81-round growth: a TANK costs 300
+          ## bullets, so this RETRIES until the side can afford one rather
+          ## than firing once at a round number and silently never happening.
+          if w.buildRobot(r, rtTank, eastward()): r.step = 1
     of rtTank:
       discard w.move(r, dirDeltas(-1'f32, 0'f32))
     else: discard

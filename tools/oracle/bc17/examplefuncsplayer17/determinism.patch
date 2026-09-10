@@ -1,0 +1,76 @@
+diff --git a/examplefuncsplayer17/RobotPlayer.java b/examplefuncsplayer17/RobotPlayer.java
+index 66bf4b9..c8f7bdb 100644
+--- a/examplefuncsplayer17/RobotPlayer.java
++++ b/examplefuncsplayer17/RobotPlayer.java
+@@ -1,9 +1,32 @@
+-package examplefuncsplayer;
++package examplefuncsplayer17;
+ import battlecode.common.*;
+ 
+ public strictfp class RobotPlayer {
+     static RobotController rc;
+ 
++    /**
++     * THE ONE COMMITTED HUNK'S POINT (tools/oracle/bc17/
++     * examplefuncsplayer17/determinism.patch). The stock bot draws from the
++     * wall-clock-seeded global draw of java.lang.Math, so it is not
++     * reproducible even against ITSELF and no bit-exact parity is possible with it. A
++     * static field is PER ROBOT under the instrumenter, so seeding it from
++     * the robot's own id gives every robot a private, reproducible stream --
++     * which is exactly what src/battlecode/years/bc17/chassis/
++     * examplefuncsplayer17.nim reproduces through src/battlecode/rng.nim, so
++     * Tier A" is also a test of that module. NOTHING ELSE CHANGES, including
++     * the System.out.println calls: removing them would change the bytecode
++     * budget and therefore the bot.
++     *
++     * THE DRAW ORDER IS LOAD-BEARING AND IS PRESERVED EXACTLY, because `&&`
++     * SHORT-CIRCUITS: an archon draws for randomDirection() and draws a
++     * SECOND time only when canHireGardener(dir) is true; a gardener draws
++     * for randomDirection(), then for the SOLDIER gate only when
++     * canBuildRobot(SOLDIER, dir) is true, and a THIRD time only when that
++     * gate failed AND canBuildRobot(LUMBERJACK, dir) is true; and every
++     * tryMove(randomDirection()) draws once more.
++     */
++    static java.util.Random RNG;
++
+     /**
+      * run() is the method that is called when a robot is instantiated in the Battlecode world.
+      * If this method returns, the robot dies!
+@@ -14,6 +37,7 @@ public strictfp class RobotPlayer {
+         // This is the RobotController object. You use it to perform actions from this robot,
+         // and to get information on its current status.
+         RobotPlayer.rc = rc;
++        RNG = new java.util.Random(rc.getID());
+ 
+         // Here, we've separated the controls into a different method for each RobotType.
+         // You can add the missing ones or rewrite this into your own control structure.
+@@ -46,7 +70,7 @@ public strictfp class RobotPlayer {
+                 Direction dir = randomDirection();
+ 
+                 // Randomly attempt to build a gardener in this direction
+-                if (rc.canHireGardener(dir) && Math.random() < .01) {
++                if (rc.canHireGardener(dir) && RNG.nextDouble() < .01) {
+                     rc.hireGardener(dir);
+                 }
+ 
+@@ -86,9 +110,9 @@ public strictfp class RobotPlayer {
+                 Direction dir = randomDirection();
+ 
+                 // Randomly attempt to build a soldier or lumberjack in this direction
+-                if (rc.canBuildRobot(RobotType.SOLDIER, dir) && Math.random() < .01) {
++                if (rc.canBuildRobot(RobotType.SOLDIER, dir) && RNG.nextDouble() < .01) {
+                     rc.buildRobot(RobotType.SOLDIER, dir);
+-                } else if (rc.canBuildRobot(RobotType.LUMBERJACK, dir) && Math.random() < .01 && rc.isBuildReady()) {
++                } else if (rc.canBuildRobot(RobotType.LUMBERJACK, dir) && RNG.nextDouble() < .01 && rc.isBuildReady()) {
+                     rc.buildRobot(RobotType.LUMBERJACK, dir);
+                 }
+ 
+@@ -189,7 +213,7 @@ public strictfp class RobotPlayer {
+      * @return a random Direction
+      */
+     static Direction randomDirection() {
+-        return new Direction((float)Math.random() * 2 * (float)Math.PI);
++        return new Direction((float)RNG.nextDouble() * 2 * (float)Math.PI);
+     }
+ 
+     /**
