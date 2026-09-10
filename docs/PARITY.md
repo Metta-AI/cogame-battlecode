@@ -1951,3 +1951,139 @@ comparator or the driver needs to change.
   Deliberately not ported (V4, V5, V8). The Tier B step **names each one it
   skipped** in its log rather than silently passing over it.
 * **`rc.resign()`.** A real engine method that no doctrine sheet can call.
+
+---
+
+# bc19 — Battlecode 2019 "Crusade"
+
+**The oracle is JavaScript, and it is the first year in this repository whose
+engine is not Java.** `battlecode/battlecode19` at commit
+`80cf1cc535ec5a30559274aa1b49807ad4859925` is `coldbrew/`, a handful of
+CommonJS files. There is **no jar, no JVM and no JDK** anywhere in this year.
+
+## The pins, and why each is a pin rather than a preference
+
+| pin | value | why |
+|---|---|---|
+| engine commit | `80cf1cc535ec5a30559274aa1b49807ad4859925` | `HEAD` of `master`, 2019-08-09; root `LICENSE` GPL-3.0 and the ONLY licence file in the tree |
+| **Node** | **22.22.0**, asserted exactly | `coldbrew/game.js:153` passes `regions.sort` a **one-argument, sign-constant comparator**, so the map generator's output is **V8-implementation-defined**. Measured under this version the sort is a plain reversal in **42 of 42** multi-region cases and the region kept passable is **not the largest in 40** of them. A different V8 would generate **different boards from the same seeds**. |
+| npm | `mersenne-twister@1.1.0`, integrity `sha1-+RZhjuQ9cXnvz2Qb7EUx65Zwl4o=` | the ONE dependency the trace driver needs |
+| everything else | **not installed** | the engine's own `package.json` pulls **404** packages, including `vm2` (deprecated, known sandbox-escape CVEs), `rollup`, `esm` and `update-notifier`, which makes a **network call** on every `cli/run.js` invocation (`cli/run.js:13-16`). Whole 1000-round games were run in this sandbox on `game.js` + `action_record.js` + `specs.json` + `mersenne-twister` and nothing else. |
+
+**IF A FUTURE NODE BUMP MAKES THE MAP REGENERATION BYTE-DIFF FAIL, THE
+COMMITTED MAPS ARE THE RULES AND THE OLD NODE IS THE PIN.** Regenerating
+instead is a rules change and bumps `GameVersion`. That sentence is also in
+`tools/oracle/bc19/engine.lock`'s own header.
+
+## The two places the oracle is NOT the published engine
+
+Both are committed patches, applied in CI only, and each is asserted to apply
+with the expected hunk count.
+
+1. **`tools/oracle/bc19/visible_order.patch` (V2).**
+   `getGameStateDump` shuffles the `visible` array in place with a
+   Fisher–Yates pass driven by the **global, unseeded `Math.random()`** —
+   not `this.random()` (`coldbrew/game.js:717-722`). Measured in this
+   sandbox: **five distinct orders in six identical runs of seed 1.** There is
+   nothing to be faithful to, so the port orders by ascending `id` and the
+   patch puts the **same** order on the **engine** side. The normalisation is
+   therefore symmetric; neither trace is massaged alone.
+2. **`tools/oracle/bc19/examplefuncsplayer19/determinism.patch`**, two hunks.
+   Hunk 1 replaces `Math.floor(Math.random()*choices.length)` with a
+   `java.util.Random` seeded from the robot's own id, created once per robot:
+   the stock line draws from the wall-clock-seeded global RNG, so the stock
+   bot is not reproducible even against itself. A `java.util.Random` is
+   chosen rather than a second Mersenne Twister so the port can reuse
+   `src/battlecode/rng.nim` unchanged — and Tier A″ is then also a test of
+   that module against a **second, independent** generator running alongside
+   the engine's own MT19937. Hunk 2 removes the `this.me.team == 1` guard on
+   the castle's build: without it **RED never builds anything at all**, and a
+   baseline that is completely inert on one of the two sides cannot be scored,
+   cannot fill a league and makes the survival gate meaningless.
+
+## The one thing the driver does not take from upstream
+
+`tools/oracle/bc19/bc19_trace.js` reimplements `coldbrew/runtime.js`'s
+twenty-line `gameLoop`/`emptyQueue` rather than calling it, because
+`runtime.js` drives the game through `setInterval` — which cannot be run
+synchronously to completion — and `cli/run.js` additionally requires the
+rollup compiler, `vm2` and a network update check. Everything else, `Game`
+and `ActionRecord`, is `require`d from the pinned checkout unmodified beyond
+the two patches above.
+
+## Why bit-exactness is realistic in this year
+
+* **The arithmetic is INTEGER end to end.** Health, karbonite, fuel, damage,
+  capacities, radii, yields and costs are all integers. Exactly **two**
+  non-integer operations exist on any gameplay path —
+  `Math.ceil(Math.sqrt(r²))` over the finite domain 0…7938, and
+  `Math.floor(a/b)` in the reclaim over a finite domain — and **both are
+  tabled at build time** in `data/bc19/tables.json`. There is no `sqrt`, no
+  `pow`, no `exp` and no float64 accumulation at run time, so there is **no
+  float allowlist in the comparator because there are no floats**.
+* **There is no hash-ordered or sorted collection in the round loop.**
+  `this.robots` is a plain array, `robin` an index into it, `createItem`
+  appends and `_deleteRobot` splices; `isOver`, `getItem` and
+  `getGameStateDump` all read that one array.
+* **The RNG surface is ONE generator with ONE live draw site.** MT19937,
+  seeded with the map seed, and after the build-time map generation (V3) its
+  only live call site in the round loop is `createItem`'s id rejection loop
+  (plus at most one coin flip per game in `isOver`). **That is why the trace's
+  `G` line carries an FNV-1a fold of the whole 624-word MT state and `mti`
+  every round**: a single missed or extra id draw surfaces on the round it
+  happens instead of as a mystery three hundred rounds later, and it is by
+  far the most likely way this port can desynchronise.
+
+## What is NOT compared, and why
+
+* **The freeze branch of `processAction` (V1) is the one behaviour this
+  oracle cannot compare.** The engine's chess clock is driven by
+  `wallClock()`, so it is not reproducible between two runs of the engine
+  itself; the port replaces it with a `DecisionOps` clock whose per-turn
+  charge is the exact constant `TurnChargeOps = ChessExtraOps`, which makes
+  `chessOps` invariant and the freeze branch unreachable. Tier B′ proves both
+  halves of that separately: **(a)** the driver asserts, after every turn of
+  every compared game, that every live robot's `robot.time >= CHESS_INITIAL`
+  and exits **6** otherwise, so the engine's own freeze branch provably never
+  fired in any game this job compares; and **(b)** a **separate,
+  non-compared** run with `bc19slowbot`, whose `turn()` busy-loops for a
+  calibrated ~40 ms, asserts that the engine **does** freeze it at the turn
+  the formula `time_{n+1} = time_n + 20 − elapsed` predicts. Step (b)
+  compares nothing against the Nim side and exists so the port's *reading* of
+  the rule is proved rather than asserted.
+* **`robot.time` itself** is in neither the observation nor the trace (V7).
+* **The `visible` array's order** is normalised on BOTH sides by the engine
+  patch above (V2), so it is compared — but it is compared against a patched
+  engine, which is why the patch is named here.
+* **The `.bc19` byte replay, `coldbrew/vis.js`, `vm2`, `coldbrew/compiler.js`
+  and the Python/Java transpilers** (V5). No counterpart in the port.
+* **Tier A is deliberately SMALL in this year, and that is the single most
+  important difference between bc19 parity and bc16 parity.** In bc16 the
+  zombies are engine-side, so an idle player still exercises half the game.
+  **In bc19 nothing at all happens without a player action** — no NPCs, no
+  terrain change, no passive spawning. Tier A with `bc19idle` proves the
+  queue and `robin`, the round counter, the flat fuel trickle, the initial
+  castles' id draws off the committed MT state, the `isOver` evaluation
+  points and the round-1000 ladder; **the load-bearing tiers are A′ and A″.**
+
+## Status
+
+**NOT YET RUN.** `tools/oracle/bc19/engine.lock`, `visible_order.patch` and
+`examplefuncsplayer19/determinism.patch` are committed; `bc19_trace.js`, the
+seven oracle bots, `tools/parity_trace_bc19.nim`,
+`tools/ci/parity_tiers_bc19.py`, `tools/ci/parity_ledger_bc19.json` and the
+`parity-oracle-bc19` job itself are the remaining work, tracked in
+`runs/2026-09-10-battlecode-2019/build-report.md` §M4. The Nim halves of both
+differential bots already exist and are written to be mirrorable:
+`src/battlecode/years/bc19/chassis/scenario19.nim` makes every scenario
+decision a pure function of `me.unit`, `me.turn` and the squares immediately
+around the robot, with the adjacent-square scan order fixed in its
+`AdjacentScan` constant, and
+`src/battlecode/years/bc19/chassis/examplefuncsplayer19.nim` is the patched
+example bot statement for statement.
+
+**The ledger `tools/ci/parity_ledger_bc19.json` ships EMPTY, and the
+phase-30 exit condition is that Tiers A, A′, A″, B and B′ pass with it still
+empty.** Root-cause-or-fail is the standing rule: an unexplained Tier C
+divergence is a FAIL, not a ledger line, and a cause of "unknown" is not a
+cause.

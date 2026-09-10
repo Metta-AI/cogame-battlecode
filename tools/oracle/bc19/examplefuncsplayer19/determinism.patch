@@ -1,0 +1,64 @@
+--- a/coldbrew/bots/example_js/robot.js
++++ b/coldbrew/bots/example_js/robot.js
+@@ -1,14 +1,40 @@
+ import {BCAbstractRobot, SPECS} from 'battlecode';
+ 
+ var step = -1;
++
++// HUNK 1 (docs/PARITY.md #bc19). The stock line below drew its direction
++// from `Math.random()`, which is seeded from the wall clock -- so the stock
++// bot is NOT REPRODUCIBLE EVEN AGAINST ITSELF and no bit-exact parity is
++// possible with it. It is replaced by a `java.util.Random` SEEDED FROM THE
++// ROBOT'S OWN ID, created once per robot on its first draw. A
++// java.util.Random is chosen rather than a second Mersenne Twister so the
++// Nim port can reuse `src/battlecode/rng.nim` UNCHANGED -- and Tier A" is
++// then also a test of that module against a SECOND, INDEPENDENT stream
++// running alongside the engine's own MT19937.
++function JavaRandom(seed) {
++    // (seed ^ 0x5DEECE66D) & ((1 << 48) - 1), in BigInt because the state
++    // does not fit a float64 mantissa.
++    this.seed = (BigInt(seed) ^ 0x5DEECE66Dn) & ((1n << 48n) - 1n);
++}
++JavaRandom.prototype.next = function (bits) {
++    this.seed = (this.seed * 0x5DEECE66Dn + 0xBn) & ((1n << 48n) - 1n);
++    return Number(BigInt.asIntN(32, this.seed >> BigInt(48 - bits)));
++};
++JavaRandom.prototype.nextDouble = function () {
++    var hi = this.next(26);
++    var lo = this.next(27);
++    return (hi * 134217728 + lo) / 9007199254740992;
++};
++var rngs = {};
++function rngFor(id) {
++    if (!rngs[id]) rngs[id] = new JavaRandom(id);
++    return rngs[id];
++}
+ 
+ class MyRobot extends BCAbstractRobot {
+     turn() {
+         step++;
+ 
+         if (this.me.unit === SPECS.CRUSADER) {
+             // this.log("Crusader health: " + this.me.health);
+             this.log("CRUSADER");
+             const choices = [[0,-1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]];
+-            const choice = choices[Math.floor(Math.random()*choices.length)];
++            const choice = choices[Math.floor(rngFor(this.me.id).nextDouble()*choices.length)];
+             return this.move(...choice);
+         }
+ 
+@@ -16,7 +42,11 @@
+         else if (this.me.unit === SPECS.CASTLE) {
+             this.log("CASTLE");
+             if (step % 10 === 0) {
+                 //this.log("Building a crusader at " + (this.me.x+1) + ", " + (this.me.y+1));
+-                if (this.me.team == 1) return this.buildUnit(SPECS.CRUSADER, 1, 1);
++                // HUNK 2 (docs/PARITY.md #bc19). The stock guard made RED
++                // build NOTHING AT ALL for the whole game. A baseline that
++                // is completely inert on one of the two sides cannot be
++                // scored, cannot fill a league and makes the survival gate
++                // meaningless.
++                return this.buildUnit(SPECS.CRUSADER, 1, 1);
+             } else {
+                 return // this.log("Castle health: " + this.me.health);
+             }

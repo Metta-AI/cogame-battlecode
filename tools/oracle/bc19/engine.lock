@@ -1,0 +1,31 @@
+# The bc19 parity oracle's pins. `parity-oracle-bc19` reads every line of
+# this file and HARD-FAILS on a mismatch; nothing here is advisory.
+#
+# THE NODE VERSION IS A RULES PIN, NOT A PREFERENCE. `coldbrew/game.js:153`
+# passes `regions.sort` a ONE-ARGUMENT, SIGN-CONSTANT COMPARATOR, so the map
+# generator's output is V8-IMPLEMENTATION-DEFINED. Measured under this
+# version the sort is a plain reversal in 42 of 42 multi-region cases and the
+# region it keeps passable is NOT the largest in 40 of them. A V8 whose
+# insertion sort behaves differently would generate DIFFERENT BOARDS FROM THE
+# SAME SEEDS.
+#
+# IF A FUTURE NODE BUMP MAKES THE REGENERATION BYTE-DIFF FAIL, THE COMMITTED
+# MAPS ARE THE RULES AND THE OLD NODE IS THE PIN. Regenerating instead is a
+# RULES CHANGE and bumps `GameVersion` (docs/PARITY.md #bc19).
+engine_repo=https://github.com/battlecode/battlecode19
+engine_commit=80cf1cc535ec5a30559274aa1b49807ad4859925
+node_version=22.22.0
+# The ONLY npm dependency. The engine's own package.json pulls 404, including
+# `vm2` (deprecated, known sandbox-escape CVEs), `rollup`, `esm` and
+# `update-notifier` (which makes a network call on every `cli/run.js`
+# invocation, cli/run.js:13-16). The trace driver requires `coldbrew/game.js`,
+# `coldbrew/action_record.js` and `coldbrew/specs.json` and drives `Game`
+# directly, so it needs none of them -- proved by running whole 1000-round
+# games on exactly this set.
+npm_package=mersenne-twister
+npm_version=1.1.0
+npm_integrity=sha1-+RZhjuQ9cXnvz2Qb7EUx65Zwl4o=
+# The two places -- and the ONLY two places -- the oracle is not the
+# published engine. Both are recorded in docs/PARITY.md section bc19.
+patch=visible_order.patch
+patch=examplefuncsplayer19/determinism.patch

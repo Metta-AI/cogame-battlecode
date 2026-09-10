@@ -871,9 +871,9 @@ block:
     "window.Bc25Block = {" in page)
   check("and the shared onText calls it",
     "if (window.Bc25Block) window.Bc25Block.onFrame(s);" in page)
-  check("and the bc26 branch is guarded off for bc25, bc23, bc22 and now " &
-    "bc16 too, so the discriminator is EIGHT-way",
-    "if (!isBc16 && !isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 &&" in
+  check("and the bc26 branch is guarded off for bc25, bc23, bc22, bc16 and " &
+    "now bc19 too, so the discriminator is NINE-way",
+    "if (!isBc16 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && !isBc23 &&" in
       page)
 
 block:
@@ -1164,9 +1164,9 @@ block:
     "if (window.Bc22Block) window.Bc22Block.onFrame(s);" in page)
   check("and the inherited block attaches the transport to it",
     "window.Bc22Block.attach({" in page)
-  check("the bc26 branch is guarded off for bc22 and bc16 too, so the " &
-    "discriminator is EIGHT-way",
-    "if (!isBc16 && !isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 &&" in
+  check("the bc26 branch is guarded off for bc22, bc16 and bc19 too, so " &
+    "the discriminator is NINE-way",
+    "if (!isBc16 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && !isBc23 &&" in
       page)
   for alias in ["window.Bc20Block = {", "window.Bc21Block = {",
                 "window.Bc23Block = {", "window.Bc24Block = {",
@@ -1463,7 +1463,7 @@ block:
   check("#bc16-econ too",
     "#bc16-econ { bottom: calc(var(--band, 0px) + 8px); }" in page)
   check("and relayout() MEASURES both of them into --statrail",
-    "'bc16-econ', 'bc16-units']" in page)
+    "'bc16-econ', 'bc16-units'" in page)
   check("while #killfeed is still lifted above the rail",
     "calc(var(--band, 0px) + var(--statrail, 0px) + 8px)" in page)
   check("#bc16-archons is the headline pill, in the top band",
@@ -1551,6 +1551,13 @@ block:
         if one.startsWith("#bc16-") or
            one.startsWith("html[data-year=\"bc16\"] ") or
            one.startsWith("html:not([data-year=\"bc16\"]) "):
+          continue
+        ## A LATER YEAR'S BLOCK LEGITIMATELY NAMES THIS YEAR'S IDS under its
+        ## OWN `data-year`, to hide them: `html[data-year="bc19"] #bc16-econ`
+        ## is year-scoped, just to a different year. Anything of that shape
+        ## is scoped; anything else is not. (bc22 already carries exactly
+        ## this carve-out for the same reason.)
+        if one.startsWith("html[data-year=\"bc") and "] #bc16-" in one:
           continue
         unscoped16.add(one)
     sel16 = ""

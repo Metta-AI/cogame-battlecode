@@ -151,6 +151,26 @@ block:
     check("and bc16 reuses the existing per-game key " & reused,
       reused in gameProps and reused notin Bc16GameKeys)
 
+  for key in Bc19GameKeys:
+    check("the schema declares bc19's optional game key " & key,
+      key in gameProps)
+  for key in Bc19GameKeys:
+    ## bc19 REUSES SEVEN keys deliberately -- `units_built`, `units_alive`,
+    ## `attacks`, `damage_dealt`, `kills` and `robots_lost` from
+    ## bc20/bc22/bc23/bc24/bc25, and `tiebreak_round` from bc16 (the round
+    ## the end ladder was evaluated on, the same meaning in both years) --
+    ## and those seven are NOT in `Bc19GameKeys` at all, so everything here
+    ## must be its own.
+    check("bc19's key " & key & " collides with no other year",
+      key notin Bc26GameKeys and key notin Bc20GameKeys and
+      key notin Bc21GameKeys and key notin Bc24GameKeys and
+      key notin Bc25GameKeys and key notin Bc23GameKeys and
+      key notin Bc22GameKeys and key notin Bc16GameKeys)
+  for reused in ["units_built", "units_alive", "attacks", "damage_dealt",
+                 "kills", "robots_lost", "tiebreak_round"]:
+    check("and bc19 reuses the existing per-game key " & reused,
+      reused in gameProps and reused notin Bc19GameKeys)
+
   var endReasons: seq[string]
   for v in game["results_schema"]["properties"]["games"]["items"]["properties"]["end_reason"]["enum"]:
     endReasons.add(v.getStr())
@@ -175,6 +195,16 @@ block:
   for reason in ["zombified", "cleansed"]:
     check("bc16's armageddon-only " & reason & " is absent (V4)",
       reason notin endReasons)
+  ## bc19 adds EXACTLY THREE and reuses two; win conditions 3 and 4 are
+  ## UNREACHABLE in this port (V6), so their two reasons stay out.
+  for reason in ["castles_destroyed", "more_castles", "more_unit_health"]:
+    check("end_reason carries bc19's " & reason, reason in endReasons)
+  for reason in ["coin_flip", "abandoned"]:
+    check("and bc19 reuses the existing " & reason, reason in endReasons)
+  for reason in ["opponent_failed_to_initialize",
+                 "both_failed_to_initialize"]:
+    check("bc19's unreachable " & reason & " is absent (V6)",
+      reason notin endReasons)
   check("and bc24's two DEAD RUNGS are absent: `checkEndOfMatch` never calls " &
     "MORE_FLAGS_PICKED and no action a doctrine can reach produces " &
     "RESIGNATION",
@@ -183,11 +213,12 @@ block:
   var yearEnum: seq[string]
   for v in game["config_schema"]["properties"]["year"]["enum"]:
     yearEnum.add(v.getStr())
-  checkEq("config_schema.year.enum names all eight years", yearEnum,
-    @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22", "bc16"])
-  check("bc16 is APPENDED, so no existing index moved",
-    yearEnum[^1] == "bc16" and yearEnum[0 ..< 7] ==
-      @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22"])
+  checkEq("config_schema.year.enum names all nine years", yearEnum,
+    @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22", "bc16",
+      "bc19"])
+  check("bc19 is APPENDED, so no existing index moved",
+    yearEnum[^1] == "bc19" and yearEnum[0 ..< 8] ==
+      @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22", "bc16"])
   ## bc24 plays to 2000 rounds, which was EXACTLY the old ceiling; bc16 plays
   ## 3000, so this is the ONE schema bound this year widens -- and this is the
   ## assertion that says so. A widened maximum accepts everything it accepted
@@ -201,12 +232,31 @@ block:
     check(variant["id"].getStr() & "'s maxRounds is inside the widened bound",
       mr >= rounds["minimum"].getInt() and mr <= rounds["maximum"].getInt())
   for variant in variants:
-    if variant["id"].getStr() != "bc16":
+    if variant["id"].getStr() notin ["bc16", "bc19"]:
       check("no shipped variant's maxRounds moved: " &
         variant["id"].getStr(),
         variant["game_config"]["maxRounds"].getInt() <= 2000)
   checkEq("and bc16 is the 3000-round year",
     variants[7]["game_config"]["maxRounds"].getInt(), 3000)
+  ## THE ONE ASSERTION THAT PROVES THIS RUN MOVED NO BOUND. bc19 plays 1000,
+  ## which is inside the bound bc16 already widened, so EVERY EDIT bc19 MAKES
+  ## TO THE MANIFEST IS ADDITIVE -- a first for a year module in this
+  ## repository.
+  checkEq("bc19 is the 1000-round year",
+    variants[8]["game_config"]["maxRounds"].getInt(), 1000)
+  let bc19 = variants[8]["game_config"]
+  checkEq("bc19's gamesPerMatch is inside the unchanged maximum 3",
+    bc19["gamesPerMatch"].getInt(), 3)
+  check("bc19's perGameBudgetSeconds is inside the unchanged maximum 300",
+    bc19["perGameBudgetSeconds"].getInt() <=
+      game["config_schema"]["properties"]["perGameBudgetSeconds"]["maximum"].getInt())
+  check("bc19's matchBudgetSeconds is inside the unchanged maximum 600",
+    bc19["matchBudgetSeconds"].getInt() <=
+      game["config_schema"]["properties"]["matchBudgetSeconds"]["maximum"].getInt())
+  checkEq("bc19's perGameBudgetSeconds is the note's 60",
+    bc19["perGameBudgetSeconds"].getInt(), 60)
+  checkEq("bc19's matchBudgetSeconds is the note's 200",
+    bc19["matchBudgetSeconds"].getInt(), 200)
 
 block:
   ## The third leg: what docker_smoke.sh actually asserts.
@@ -219,11 +269,12 @@ block:
 # --- num_agents -------------------------------------------------------------
 block:
   ## ONE VARIANT PER BATTLECODE YEAR.
-  checkEq("one variant per registered year", variants.len, 8)
+  checkEq("one variant per registered year", variants.len, 9)
   var variantIds: seq[string]
   for variant in variants: variantIds.add(variant["id"].getStr())
   checkEq("and they are the registered years", variantIds,
-    @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22", "bc16"])
+    @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22", "bc16",
+      "bc19"])
   for variant in variants:
     check("variant " & variant["id"].getStr() & " is a registered year",
       isRegisteredYear(variant["game_config"]["year"].getStr()))
@@ -355,8 +406,8 @@ block:
   checkEq("docs.readme is an object", docs["readme"].kind, JObject)
   check("docs.readme has type and value",
     docs["readme"].hasKey("type") and docs["readme"].hasKey("value"))
-  checkEq("ten doc pages ship — one rules page per year",
-    docs["pages"].len, 10)
+  checkEq("eleven doc pages ship — one rules page per year",
+    docs["pages"].len, 11)
   var ids: seq[string]
   for page in docs["pages"]:
     ids.add(page["id"].getStr())
@@ -372,7 +423,7 @@ block:
   checkEq("the pages are the ones the design note names", ids,
     @["rules.md", "rules-bc20.md", "rules-bc21.md", "rules-bc24.md",
       "rules-bc25.md", "rules-bc23.md", "rules-bc22.md", "rules-bc16.md",
-      "replay.md", "parity.md"])
+      "rules-bc19.md", "replay.md", "parity.md"])
 
 # --- the rest of the shape --------------------------------------------------
 block:
@@ -418,7 +469,7 @@ block:
 block:
   let policies = parseJson(readFile("tools/ci/policies.json"))
   ## Four per year: two `PLAYER_PROMPT` champions and two scripted fillers.
-  checkEq("thirty-two policies ship — four per year", policies.len, 32)
+  checkEq("thirty-six policies ship — four per year", policies.len, 36)
   var prompts = 0
   var scripted = 0
   var owned = 0
@@ -441,9 +492,9 @@ block:
         p["env"]["PLAYER_PROMPT"].getStr().len > 200)
     if p["env"].hasKey("PLAYER_SCRIPTED"): inc scripted
     if p.hasKey("player"): inc owned
-  checkEq("two LLM champions per year", prompts, 16)
-  checkEq("two scripted baselines per year", scripted, 16)
-  checkEq("each year's champion #2 carries its owning player", owned, 8)
+  checkEq("two LLM champions per year", prompts, 18)
+  checkEq("two scripted baselines per year", scripted, 18)
+  checkEq("each year's champion #2 carries its owning player", owned, 9)
   checkEq("bc26 champion #2 is the second prompt policy",
     policies[1]["player"].getStr(),
     "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
@@ -585,6 +636,32 @@ block:
     "bulwark,greenhorn")
   check("and neither bc16 filler is a champion",
     not policies[30].hasKey("player") and not policies[31].hasKey("player"))
+  ## bc19's four are APPENDED, likewise.
+  checkEq("bc19 champion #1 is the economy / church-expansion doctrine",
+    policies[32]["name"].getStr(), "battlecode-bc19-saber")
+  checkEq("bc19 champion #2 is the preacher-rush / barter doctrine",
+    policies[33]["name"].getStr(), "battlecode-bc19-preachers")
+  checkEq("and bc19 champion #2 carries its owning player",
+    policies[33]["player"].getStr(),
+    "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
+  check("the two bc19 champion prompts differ",
+    policies[32]["env"]["PLAYER_PROMPT"].getStr() !=
+    policies[33]["env"]["PLAYER_PROMPT"].getStr())
+  check("bc19 champion #1 is the pilgrim-economy pole",
+    policies[32]["env"]["PLAYER_PROMPT"].getStr().contains(
+      "\"pilgrim_eco\"") and
+    policies[32]["env"]["PLAYER_PROMPT"].getStr().contains(
+      "church_expansion"))
+  check("and champion #2 the preacher / barter pole",
+    policies[33]["env"]["PLAYER_PROMPT"].getStr().contains(
+      "\"preacher_rush\"") and
+    policies[33]["env"]["PLAYER_PROMPT"].getStr().contains("BARTER"))
+  checkEq("the bc19 fillers name the two published chassis",
+    policies[34]["env"]["PLAYER_SCRIPTED"].getStr() & "," &
+    policies[35]["env"]["PLAYER_SCRIPTED"].getStr(),
+    "saber,examplefuncsplayer19")
+  check("and neither bc19 filler is a champion",
+    not policies[34].hasKey("player") and not policies[35].hasKey("player"))
 
 # --- compose.yaml service names are load-bearing ----------------------------
 block:
