@@ -138,6 +138,16 @@ type
     kills*: array[2, int]
     moves*: array[2, int]
     moveFuelSpent*: array[2, int]
+    militaryMoves*: array[2, int]
+    militaryMoveDistance*: array[2, int]
+      ## The same pair over MILITARY units only. `unit_mix` is asserted on
+      ## mean speed per moving turn, and the board-wide mean is dominated by
+      ## PILGRIMS — which the knob does not touch — so the board-wide
+      ## number moves 10 % where the military number moves 60 %.
+    moveDistance*: array[2, int]
+      ## The sum of `r^2` over every move, so `moveDistance div moves` is the
+      ## MEAN SPEED PER MOVING TURN. `moveFuelSpent` cannot answer that: it
+      ## is `r^2 x FUEL_PER_MOVE` and the multiplier differs by unit type.
     radioMessages*: array[2, int]
     radioFuelSpent*: array[2, int]
     castleTalks*: array[2, int]
@@ -151,9 +161,17 @@ type
     decisionOpsPeak*: array[2, int]
     zeroStoreStreak*: array[2, int]
     zeroStoreWorst*: array[2, int]
-    depotsWorked*: array[2, int]
-    pilgrimWalk*: array[2, int]
-    pilgrimWalkSteps*: array[2, int]
+    roundsAtZeroFuel*: array[2, int]
+      ## Rounds ENDED with the fuel store at 0 -- distinct from
+      ## `zeroStoreStreak`, which needs BOTH stores empty. Fuel alone is the
+      ## one `fuel_reserve` is asserted against, because fuel is what every
+      ## action in this year is priced in.
+    pilgrimMoveSteps*: array[2, int]
+    pilgrimTrips*: array[2, int]
+      ## Steps taken by pilgrims and round trips completed (one `give` into
+      ## an own structure ends a trip), so `steps div trips` is the MEAN WALK
+      ## LENGTH the `symmetry_wall` knob is asserted against: a wall that
+      ## closes the midline lengthens your own miners' journeys too.
     militaryDistance*: array[2, int]
     militaryDistanceSamples*: array[2, int]
     duplicateBuilds*: array[2, int]
@@ -206,6 +224,11 @@ type
     lastBuildUnit*: int
     lastGiveK*, lastGiveF*: int
     lastTradeK*, lastTradeF*: int
+    defendRadius*: array[2, int]
+      ## Each side's `defend_radius` knob, copied here once a round by
+      ## `beginRound` so `enactAttack` -- which knows nothing about
+      ## doctrines -- can attribute a kill to the defence of a structure.
+      ## TELEMETRY ONLY: no rule reads it.
     brokenChassis*: bool
       ## Set by `-d:bc19BrokenChassis`: the NEGATIVE CONTROL for the
       ## economic-survival gate. Pilgrims mine but never `give`, castles
@@ -238,6 +261,13 @@ const
     ## `tests/test_bc19_replay.nim` asserts every one of them against a real
     ## match, so a pathological game cannot produce a 20 MB replay. The whole
     ## worst case is `3 x 156 = 468` in-match entries plus eleven pre-match.
+
+  CastlePressureRadius* = 100
+    ## The r^2 inside which an enemy unit counts as pressing one of our
+    ## castles. TELEMETRY ONLY -- it is the `symmetry_wall` knob's asserted
+    ## statistic, not a rule -- and it is 100 because that is a castle's own
+    ## vision radius, i.e. exactly the ring inside which a castle can see
+    ## what is coming.
 
   Bc19RungNone* = 0
   Bc19RungCastlesDestroyed* = 1

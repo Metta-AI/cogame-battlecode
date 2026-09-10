@@ -2020,7 +2020,11 @@ the two patches above.
   `Math.floor(a/b)` in the reclaim over a finite domain — and **both are
   tabled at build time** in `data/bc19/tables.json`. There is no `sqrt`, no
   `pow`, no `exp` and no float64 accumulation at run time, so there is **no
-  float allowlist in the comparator because there are no floats**.
+  float allowlist in the comparator because there are no floats**. (The two
+  one-decimal numbers in the *results* document,
+  `castle_separation_min`/`_max`, are Euclidean distances between two
+  squares — derived board descriptions computed after the game, read back
+  by nothing, and carried by no trace line.)
 * **There is no hash-ordered or sorted collection in the round loop.**
   `this.robots` is a plain array, `robin` an index into it, `createItem`
   appends and `_deleteRobot` splices; `isOver`, `getItem` and
@@ -2055,6 +2059,26 @@ the two patches above.
 * **The `visible` array's order** is normalised on BOTH sides by the engine
   patch above (V2), so it is compared — but it is compared against a patched
   engine, which is why the patch is named here.
+* **Three named per-pair LIVENESS waivers**, each of which relaxes only the
+  driver's own "this game did something" sanity check and **never** the
+  trace comparison. Every compared pair is still compared line for line.
+  1. `--allow-inert` on `examplefuncsplayer19` / **`seed-0017`** only.
+     `examplefuncsplayer19` builds a CRUSADER at the fixed offset `(1,1)`
+     and nothing else; on `seed-0017` **both** castles' `(x+1,y+1)` is
+     impassable, so the bot's only action is refused on every one of its
+     turns and the game is legitimately inert for a thousand rounds. The
+     driver would otherwise refuse to accept a game in which nothing
+     happened, which is the right default and the wrong answer here.
+     `seed-0017` stays in the pair set because it is the `castles_destroyed`
+     board and the other five bots exercise it.
+  2. `--allow-no-build` on `bc19scenariotrade`, whose whole script is the
+     barter: it proposes offers from its castles and never builds, so the
+     driver's "somebody built something" check does not apply.
+  3. `--expect-freeze` on `bc19slowbot`, which is the Tier B′(b) run above
+     and is asserted to freeze rather than to finish.
+  All three flags are passed **explicitly, per bot and per map**, in the
+  `parity-oracle-bc19` job, so a waiver cannot silently spread to a pair it
+  was not measured on.
 * **The `.bc19` byte replay, `coldbrew/vis.js`, `vm2`, `coldbrew/compiler.js`
   and the Python/Java transpilers** (V5). No counterpart in the port.
 * **Tier A is deliberately SMALL in this year, and that is the single most

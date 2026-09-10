@@ -290,7 +290,13 @@ proc enactMove(w: World, r: Robot, rec: ActionRecord) =
   let cost = r2 * fuelPerMoveOf(r.unit)
   w.spendFuel(r.team, cost)
   w.stats.moveFuelSpent[ord(r.team)] += cost
+  w.stats.moveDistance[ord(r.team)] += r2
   w.stats.moves[ord(r.team)] += 1
+  if r.unit == ukPilgrim:
+    w.stats.pilgrimMoveSteps[ord(r.team)] += 1
+  else:
+    w.stats.militaryMoves[ord(r.team)] += 1
+    w.stats.militaryMoveDistance[ord(r.team)] += r2
   w.setShadow(r.x + rec.dx, r.y + rec.dy, r.id)
   w.setShadow(r.x, r.y, 0)
   r.y = r.y + rec.dy
@@ -337,6 +343,8 @@ proc enactAttack(w: World, r: Robot, rec: ActionRecord) =
         w.stats.friendlyFireDamage[t] += damage
       else:
         w.stats.damageDealt[t] += damage
+        if target.unit.isStructure:
+          w.stats.enemyStructureDamage[t] += damage
       if target.health <= 0:
         if target.unit == ukCastle:
           w.noteCastleLoss(target, unitName(r.unit))
@@ -350,6 +358,14 @@ proc enactAttack(w: World, r: Robot, rec: ActionRecord) =
         else:
           inc enemyKilled
           w.stats.kills[t] += 1
+          ## A kill counts as a DEFENSIVE kill when the victim fell inside
+          ## our own `defend_radius` of one of our own structures, which is
+          ## exactly what the knob buys.
+          for own in w.robots:
+            if own.team == r.team and own.unit.isStructure and
+                distSq(own.x, own.y, x, y) <= w.defendRadius[t]:
+              w.stats.killsInsideDefendRadius[t] += 1
+              break
           if r.unit == ukPreacher: w.stats.splashKills[t] += 1
           if target.unit == ukPilgrim:
             w.stats.ownPilgrimsKilled[ord(target.team)] += 1

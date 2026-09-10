@@ -439,8 +439,23 @@ proc runRound*(w: World, sides: array[2, Side],
           w.stats.zeroStoreWorst[t] = w.stats.zeroStoreStreak[t]
       else:
         w.stats.zeroStoreStreak[t] = 0
+      if w.fuel[t] <= 0: inc w.stats.roundsAtZeroFuel[t]
       if w.round == 500: w.stats.aliveAt500[t] = w.robotsOf(Team(t))
       if w.round == 700: w.stats.castlesAt700[t] = w.castlesAlive(Team(t))
+    ## One sample per enemy unit that ended the round within r^2 100 of one
+    ## of our castles -- the pressure `symmetry_wall` is asserted to relieve.
+    ## Castles are collected first because there are at most six of them and
+    ## up to a few hundred units, and this runs every round of every game.
+    var castleAt: array[2, seq[Loc]]
+    for r in w.robots:
+      if r.unit == ukCastle: castleAt[ord(r.team)].add(Loc(x: r.x, y: r.y))
+    for r in w.robots:
+      if r.unit.isStructure: continue
+      let foe = 1 - ord(r.team)
+      for c in castleAt[foe]:
+        if distSq(c.x, c.y, r.x, r.y) <= CastlePressureRadius:
+          inc w.stats.enemyNearCastle[foe]
+          break
     w.foldRoundHash()
 
 # ---------------------------------------------------------------------------

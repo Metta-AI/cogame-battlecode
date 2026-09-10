@@ -107,6 +107,16 @@ proc commit*(s: Side, kCost, fCost: int) =
   s.committedK += kCost
   s.committedF += fCost
 
+func alreadyQueued*(s: Side, u: UnitKind): bool =
+  ## Has another structure of ours already put `u` in this round's queue?
+  ## The answer arrives over CASTLE TALK: the census digit (`castle_talk_use`
+  ## `census` or `full`) is what lets a second structure see the queue at
+  ## all. Under `position` the channel carries no census, the structures
+  ## cannot see each other's intent, and they duplicate.
+  for _, ordinal in s.buildQueuedThisRound:
+    if ordinal == ord(u): return true
+  false
+
 const MilitaryFuelFloor* = 150
   ## Even the two-military-per-structure floor is not funded below this:
   ## an order that spends its last hundred fuel on a prophet cannot move it,

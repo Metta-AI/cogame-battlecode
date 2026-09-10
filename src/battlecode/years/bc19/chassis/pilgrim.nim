@@ -121,6 +121,7 @@ proc runPilgrim*(w: World, s: Side, r: Robot): Action =
     let adj = adjacentStructure(w, s, r)
     if adj.ok:
       r.task = TaskMine
+      w.stats.pilgrimTrips[ord(s.team)] += 1
       result.hasAction = true
       result.kind = akGive
       result.dx = adj.dx
@@ -132,7 +133,6 @@ proc runPilgrim*(w: World, s: Side, r: Robot): Action =
     if home.x >= 0:
       let step = stepToward(w, r, home.x, home.y, navEconomic)
       if step.ok:
-        w.stats.pilgrimWalk[ord(s.team)] += 1
         result.hasAction = true
         result.kind = akMove
         result.dx = step.dx

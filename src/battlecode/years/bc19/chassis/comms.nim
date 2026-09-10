@@ -60,10 +60,6 @@ func encodeCastleTalkAlert*(alert: int): int =
   ## what lets the surviving castles re-plan when one falls.
   (1 shl 6) or (alert and 63)
 
-func isCastleTalkPosition*(v: int): bool = (v shr 7) == 1
-func isCastleTalkAlert*(v: int): bool = (v shr 6) == 1
-func isCastleTalkCensus*(v: int): bool = (v shr 7) == 0 and (v shr 6) != 1
-
 proc castleTalkFor*(w: World, s: Side, r: Robot): int =
   ## `comms.nim castleTalk()`, laid out per `castle_talk_use`. It is FREE and
   ## it accompanies any action, so every unit sends one every turn.
@@ -101,6 +97,29 @@ proc castleTalkFor*(w: World, s: Side, r: Robot): int =
                                       of ukPreacher: s.preachers
                                       else: s.castles + s.churches)))
 
+func turnFuelReserve*(u: UnitKind): int =
+  ## The most fuel ONE TURN of this unit can need for its ACTION.
+  ##
+  ## **`temp_fuel` IS HANDED FROM THE SIGNAL STEP TO EVERY LATER
+  ## AFFORDABILITY TEST IN THE TURN** (`game.js:831-843`, rule 4.4), so a
+  ## broadcast that leaves less than this behind turns a legal action into a
+  ## REFUSED one — and a refused action is a defect, not a tactic
+  ## (`tests/test_bc19_baselines.nim`, `tests/test_bc19_perf.nim`). Measured
+  ## in phase 20 without this reserve, at `fuel_reserve: 0` on `seed-0045`:
+  ## **284 refused actions in one game**, every one of them a move, a mine or
+  ## an attack the team could have paid for before the radio bill.
+  ##
+  ## The reserve is the WORST case rather than the turn's actual cost because
+  ## the chassis decides its broadcast before it decides its action, and the
+  ## radio bill is at most 90 fuel while the reserve costs nothing but a few
+  ## skipped broadcasts.
+  result = MineFuelCost
+  result = max(result, attackFuelOf(u))
+  result = max(result, speedOf(u) * fuelPerMoveOf(u))
+  if canBuildAtAll(u):
+    for b in [ukPilgrim, ukCrusader, ukProphet, ukPreacher, ukChurch]:
+      if buildPairLegal(u, b): result = max(result, buildFuelOf(b))
+
 proc radioFor*(w: World, s: Side, r: Robot): tuple[value, radius: int] =
   ## At most one radio message per unit per five turns, and the radius is the
   ## smallest that reaches the intended listener — because every enemy unit
@@ -114,7 +133,8 @@ proc radioFor*(w: World, s: Side, r: Robot): tuple[value, radius: int] =
   if home.x < 0: return
   let radius = min(MaxSignalRadius, distSq(r.x, r.y, home.x, home.y))
   let cost = signalCost(radius)
-  if w.fuel[ord(s.team)] - s.fuelGate() < cost: return
+  if w.fuel[ord(s.team)] - s.fuelGate() - turnFuelReserve(r.unit) < cost:
+    return
   r.lastRadio = r.turn
   result = (value: encodeRadio(RadioScoutReport, near.x, near.y, 1),
             radius: radius)

@@ -12,15 +12,15 @@
 ## WORST value over all twelve seat-games:
 ##
 ##   6 of 6 games reached the round limit      (floor: >= 5 of 6)
-##   140 units built                           (floor: >= 12)
-##   114 pilgrims, 26 military                 (floor: >= 4 and >= 4)
-##   3 614 karbonite and 16 560 fuel mined     (floor: >= 150 and >= 300)
-##   98.3 % of what was mined was deposited    (floor: >= 80 %)
-##   both stores at 0 for at most 3 rounds     (floor: <= 20)
-##   1 500 damage dealt                        (floor: >= 200)
-##   13 units alive at the end                 (floor: >= 6)
+##   132 units built                           (floor: >= 12)
+##   112 pilgrims, 16 military                 (floor: >= 4 and >= 4)
+##   3 134 karbonite and 16 580 fuel mined     (floor: >= 150 and >= 300)
+##   98 % of what was mined was deposited      (floor: >= 80 %)
+##   both stores at 0 for at most 1 round      (floor: <= 20)
+##   1 190 damage dealt                        (floor: >= 200)
+##   10 units alive at the end                 (floor: >= 6)
 ##   2 castles still held at round 700         (floor: >= 1)
-##   24 churches across the six games          (floor: >= 1)
+##   27 churches across the six games          (floor: >= 1)
 ##   0.0 % friendly fire                       (floor: < 15 %)
 ##   refused_actions == 0 on every seat        (the legality gate)
 ##

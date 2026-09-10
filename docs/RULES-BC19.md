@@ -116,12 +116,24 @@ against 36 available below — which is why the win bonus is 200 and not 100.
 
 ## The doctrine sheet — eleven knobs, and NO `chassis` key
 
-`opening`, `pilgrim_curve`, `church_expansion`, `fuel_reserve`, `unit_mix`,
-`preacher_share`, `church_saber_round`, `symmetry_wall`, `castle_talk_use`,
-`defend_radius`, `trade_policy`. Their types, ranges, defaults and notes are
-generated from `src/battlecode/years/bc19/knobs.nim` into the prompt, so a
-knob cannot exist in the sim and be missing from the brief. A submitted
-`chassis` key is recorded in `sheet_unknown_fields` and never honoured.
+Their types, ranges, defaults and notes are generated from
+`src/battlecode/years/bc19/knobs.nim` into the prompt, so a knob cannot exist
+in the sim and be missing from the brief. A submitted `chassis` key is
+recorded in `sheet_unknown_fields` and never honoured.
+
+| knob | values | default | what it actually decides |
+|---|---|---|---|
+| `opening` | `turtle` \| `preacher_rush` \| `pilgrim_eco` | `pilgrim_eco` | the first 300 rounds' budget split and posture. `pilgrim_eco` buys miners and takes the late game; `preacher_rush` buys PREACHERs before round 300 and walks them at the enemy; `turtle` buys PROPHETs and parks them on the lattice. |
+| `pilgrim_curve` | 0…24 | 9 | the pilgrim census target per structure, capped by the number of depots the order can actually reach — a target above the depot count buys miners that stand still. **0 still builds one pilgrim per structure**: the floor that keeps 0 from starving. |
+| `church_expansion` | `never` \| `mid` \| `early` | `mid` | when a PILGRIM spends 50 karbonite / 200 fuel raising a CHURCH. A church is a second build queue and a second deposit point, and it is 100 HP standing on its own in the field — the exposure is part of the price. |
+| `fuel_reserve` | 0…2000 | 300 | **the fuel floor below which the order stops making WAR, not the floor below which it stops making MONEY.** Fuel is what everything in this year is priced in and a PILGRIM is the only thing that makes it — +10 a turn for 1, against a flat 25 a round for the whole order. Gate the economy behind the reserve and the order deadlocks *at* the reserve: it cannot afford the miner that would lift it over the line, and it stands on a full karbonite bank until round 1000 (measured, literal reading, `seed-0043` and `seed-0048`: **3 280 karbonite banked, four military units, zero damage**). So the reserve gates **military builds, attacks and military movement**; `mine`, `move` and economy builds are funded whenever the order can pay. Raising it buys survival and sells aggression, which is exactly the trade the knob test asserts: **rounds at zero fuel down, attacks down.** |
+| `unit_mix` | 0…100 | 45 | the PROPHET share of the military karbonite budget. A prophet outranges everything (r² 16…64) and cannot shoot close; a crusader is the only fast unit (SPEED 9). Turning this up trades tempo for reach. |
+| `preacher_share` | 0…100 | 20 | the PREACHER share **of the remainder**, so the crusader share is `(100 − unit_mix) × (100 − preacher_share) / 100`. A preacher's blast is nine squares with **no team check and no attacker exclusion**, so this knob buys splash kills and pays for them in friendly fire. |
+| `church_saber_round` | 0…1000 | 0 | the round from which a pilgrim may raise a church **in the enemy's half**. 0 never does it. It is a raid on the enemy's depots that also hands them a 100-HP target. |
+| `symmetry_wall` | `off` \| `screen` \| `wall` | `screen` | what the order builds on the mirror line, which **both sides know from round 1**. `wall` closes the midline — and closes it against your own miners too, which is why the knob test asserts your own pilgrims' mean walk length goes **up**. |
+| `castle_talk_use` | `position` \| `census` \| `full` | `census` | what the free, 8-bit, unlimited-range, castle-only channel carries, and therefore **whether two structures can avoid making the same decision twice in one round**. `position` sends the two opening coordinate bytes and then nothing: the structures are blind to each other and both queue the same unit. `census` adds the rotating `0b0 \| unit:3 \| bucket:4` digit, so a structure counts this round's queue as already built and takes a *different* job — measured on `seed-0043`, duplicate builds **177 → 6** across the sweep. `full` adds `0b01 \| alert:6` under-attack flags on the turns they fire. **The unconditional economy floor is never divided**: three castles that all need a miner on round 1 all build one, whatever this knob says (measured with the floor divided: one side built **eight units and mined forty karbonite in a thousand rounds**). |
+| `defend_radius` | 1…400 | 100 | the r² inside which an own structure's neighbourhood is answered. Low sends the army out and gets your pilgrims farmed for reclaim; high keeps it home and lets the enemy mine in peace. |
+| `trade_policy` | `never` \| `mirror` \| `offer_fuel` \| `offer_karbonite` | `mirror` | this year's largest unexploited mechanic. A CASTLE may propose `(karbonite, fuel)`; when both orders' standing offers match element-wise the swap executes and both offers clear. **A matching pair that is not payable clears both offers and then throws**, so a policy that offers what it cannot pay burns its own standing offer for nothing. |
 
 **The anti-inert rule.** No setting of any knob, and no combination of
 settings, may produce an inert or self-starving order. `saber` always keeps at
@@ -240,7 +252,24 @@ structure**.
     non-integer numbers bc19 reports.** They are Euclidean distances between
     two squares and there is no integer reading of them, so they are printed
     to one decimal. Every other bc19 statistic is an exact integer, because
-    the 2019 rule set has no float state at all.
+    the 2019 rule set has no float state at all — and the two exceptions
+    are **derived board descriptions, not simulation state**: nothing reads
+    them back, no rule branches on them and no parity trace line carries
+    them, which is why the comparator still needs no float allowlist.
+17. **CASTLE TALK IS EMIT-ONLY IN THIS PORT.** Every unit sends its byte
+    every turn and the layouts are the design note's own field widths
+    (`0b10 | x:6`, `0b11 | y:6`, `0b0 | unit:3 | bucket:4`,
+    `0b01 | alert:6`) — but the port never DECODES one, so those four
+    layouts are deliberately not a partition (a census digit whose unit
+    ordinal has bit 2 set sits in the alert tag's space). A castle's
+    knowledge of its own team comes from the per-team `Side` controller
+    instead, which is exactly what the engine's own rule makes equivalent:
+    a castle reads the castle talk of **every** own-team unit on the board
+    at **any** range (`game.js:708-710`), so anything one own-team unit
+    knows, every own-team castle knows in the same round. What the knob
+    still decides is real and measured: whether the digit is *sent*, and
+    therefore whether the structures divide their build queue (see the knob
+    table).
 
 ## Playback pacing, measured
 

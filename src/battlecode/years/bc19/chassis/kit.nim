@@ -63,6 +63,12 @@ type
     ## karbonite in one round.
     committedK*, committedF*: int
     buildQueuedThisRound*: Table[int, int]  ## structure id -> unit ordinal
+    queuedPilgrims*, queuedMilitary*: int
+      ## What this round's queue already holds. A structure can only READ
+      ## this if the doctrine puts the census digit on the castle-talk
+      ## channel (`castle_talk_use` `census` or `full`); under `position` the
+      ## structures are blind to each other and duplicate each other's
+      ## decisions, which is the knob's whole point.
     infiltrateLaunched*: bool
     infiltrateRound*: int
     latticeSlots*: seq[Loc]
@@ -142,6 +148,8 @@ proc refreshCensus*(w: World, s: Side) =
   s.committedK = 0
   s.committedF = 0
   s.buildQueuedThisRound.clear()
+  s.queuedPilgrims = 0
+  s.queuedMilitary = 0
   for r in w.robots:
     if r.team == s.team:
       case r.unit

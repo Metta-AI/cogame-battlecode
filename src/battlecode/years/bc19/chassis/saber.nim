@@ -22,6 +22,7 @@ proc beginRound*(w: World, s: Side) =
   ## The chassis's round-level bookkeeping, run before any of the side's
   ## robots act so every robot this round reads the SAME census and the same
   ## depot roster.
+  w.defendRadius[ord(s.team)] = s.doctrine.defendRadius
   refreshCensus(w, s)
   buildLatticeSlots(w, s)
   abortIfLost(w, s)

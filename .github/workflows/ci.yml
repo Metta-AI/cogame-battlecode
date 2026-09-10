@@ -4494,9 +4494,17 @@ jobs:
       # refined a load or fired a shot is not this game being played.
       #
       # Measured on this exact episode (the numbers the floors are at or
-      # below half of): units 32, karbonite mined 3382, fuel mined 15410,
-      # karbonite deposited 3322, pilgrims 10, attacks 16, damage 160, ids
-      # spent 36, queue length 32.
+      # below half of): units 39, karbonite mined 3252, fuel mined 18590,
+      # karbonite deposited 3234, pilgrims 11, attacks 20, damage 200, ids
+      # spent 43, queue length 38.
+      #
+      # `refused_actions` is NOT asserted here and must not be: this episode
+      # seats `examplefuncsplayer19`, whose whole behaviour is a CRUSADER
+      # build at the fixed offset (1,1), and on `seed-0043` that square is
+      # unavailable most turns. 323 of its orders are refused in this
+      # episode and that is the weak floor being weak, not a defect. The
+      # `refused_actions == 0` gate belongs to `saber` and lives in
+      # `tests/test_bc19_survival.nim`.
       - name: The bc19 episode really played bc19
         run: |
           set -euo pipefail
@@ -4895,7 +4903,7 @@ jobs:
       # The wasm module itself, under node: wasm32-only failures (int overflow
       # traps, address-space exhaustion) are invisible to the native tests --
       # and a brand-new year module is exactly where one would live.
-      - name: Smoke the emitted wasm module under node (all eight years)
+      - name: Smoke the emitted wasm module under node (all nine years)
         run: |
           set -euo pipefail
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
@@ -4955,6 +4963,24 @@ jobs:
             "${{ github.workspace }}/dist/smoke/replay-bc16.json"
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
             "${{ github.workspace }}/tests/fixtures/replay-bc16.json"
+          # bc19: the smoke episode this run produced, and the COMMITTED bc19
+          # fixture -- which is the one that carries ELEVEN OF THE TWELVE
+          # beat kinds (tests/test_bc19_beats.nim asserts emission, label and
+          # style against exactly these bytes, and records why `famine` is
+          # the twelfth: the strong chassis never asks for what it cannot
+          # pay). bc19 is the FIRST YEAR IN THIS REPOSITORY WHOSE ENGINE IS
+          # JAVASCRIPT, so its arithmetic came through a different reader
+          # than every other year's -- and its whole state is robot state
+          # re-derived from events, including the 624-word MT19937 generator,
+          # which is exactly the kind of thing wasm32's 32-bit `int` breaks
+          # (the bc22 `mixHashU` lesson). NOTE that this smoke steps 200
+          # FRAMES, so its `mismatch_round: -1` covers the first 200 rounds
+          # only -- the WHOLE-recording re-derivation is asserted by
+          # tests/test_bc19_replay.nim.
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/dist/smoke/replay-bc19.json"
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/tests/fixtures/replay-bc19.json"
 
       # The text the CI replay never carries. Every replay CI produces is
       # SCRIPTED, so its notes and motto are the short strings baselines.nim
