@@ -914,9 +914,19 @@ Repository: <https://github.com/battlecode/battlecode-scaffold-2017>, pinned at
 commit **`76e7b51e06088fdcce2f6a6b97aff21782ae20d0`** (2017-08-25). Root
 `LICENSE` is the GNU Affero General Public License v3.
 
+**`tools/oracle/bc17/examplefuncsplayer17/RobotPlayer.java` IS THAT
+REPOSITORY'S OWN FILE, COPIED BYTE FOR BYTE** (`src/examplefuncsplayer/
+RobotPlayer.java` at that commit, sha256
+`f728119454fea883eac270869a0203f9fb50de919624eebaf809cbfaf3ab1d45`), and
+`parity-oracle-bc17` diffs the committed copy against the upstream tarball on
+every run. It is AGPL-3.0 and is used at CI time only, with
+`tools/oracle/bc17/examplefuncsplayer17/determinism.patch` — the deterministic
+per-robot `java.util.Random(rc.getID())` — applied by
+`tools/oracle/bc17/build_oracle.sh`.
+
 `src/battlecode/years/bc17/chassis/examplefuncsplayer17.nim` is a
-**statement-for-statement port** of `src/examplefuncsplayer/RobotPlayer.java`
-with one hunk applied (a deterministic per-robot `java.util.Random(rc.getID())`
+**statement-for-statement port** of the same file
+with the same hunk applied (a deterministic per-robot `java.util.Random(rc.getID())`
 in place of `Math.random()`, whose draw ORDER — including Java's `&&`
 short-circuit — is preserved exactly). It is the parity oracle's other side, so
 it **may not gain behaviour**. Two of its helpers are also the behaviour source
