@@ -148,9 +148,13 @@ block:
   checkEq("so the inner one is an unknown field", nested.unknownFields, @["sheet"])
 
 block:
-  ## Rune-boundary truncation, INCLUDING astral-plane characters, and the
-  ## 16 384-BYTE reply cap.
-  let long = repeat("\u1F3F0", 400)          ## a castle emoji, 4 bytes each
+  ## Rune-boundary truncation with MULTI-BYTE input AT THE CAP, and the
+  ## 16 384-BYTE reply cap. Nim's `\u` escape takes EXACTLY FOUR hex digits,
+  ## so the literal below is U+1F3F -- a 3-BYTE rune -- followed by the
+  ## ASCII character `0`, not the 4-byte castle emoji U+1F3F0: still four
+  ## bytes and two runes a repetition, so the caps below are still fed
+  ## multi-byte text whose rune boundaries do not line up with the byte cut.
+  let long = repeat("\u1F3F0", 400)          ## 3-byte rune, then `0`
   let s = parse("""{"sheet":{},"notes":"""" & long & """","motto":"""" &
     long & """"}""")
   check("notes is capped at 280 RUNES", s.notes.runeLen <= MaxNoteRunes)
