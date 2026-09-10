@@ -59,7 +59,7 @@ proc randomDirection(r: Robot): Dir =
   ## `new Direction((float)Math.random() * 2 * (float)Math.PI)` with the
   ## patched draw. The multiply is `(float)draw * 2 * (float)PI` in Java: a
   ## float32 product of a float32-narrowed double.
-  let draw = float32(r.weakRng.nextDouble())
+  let draw = float32(weakRng(r).nextDouble())
   dirRads(draw * 2'f32 * float32(PI))
 
 proc tryMoveWeak(w: World, r: Robot, dir: Dir): bool {.discardable.} =
@@ -82,7 +82,7 @@ proc runArchonWeak(w: World, r: Robot) =
   ## draw happens at all), a random move, and TWO BROADCASTS EVERY TURN.
   let dir = r.randomDirection()
   if w.canBuildRobot(r, rtGardener, dir) and
-      r.weakRng.nextDouble() < 0.01:
+      weakRng(r).nextDouble() < 0.01:
     discard w.hireGardener(r, dir)
   w.tryMoveWeak(r, r.randomDirection())
   discard w.broadcast(r, 0, int(r.loc.x))
@@ -97,10 +97,10 @@ proc runGardenerWeak(w: World, r: Robot) =
   discard w.readBroadcast(r, 0)
   discard w.readBroadcast(r, 1)
   let dir = r.randomDirection()
-  if w.canBuildRobot(r, rtSoldier, dir) and r.weakRng.nextDouble() < 0.01:
+  if w.canBuildRobot(r, rtSoldier, dir) and weakRng(r).nextDouble() < 0.01:
     discard w.buildRobot(r, rtSoldier, dir)
   elif w.canBuildRobot(r, rtLumberjack, dir) and
-      r.weakRng.nextDouble() < 0.01 and r.isBuildReady():
+      weakRng(r).nextDouble() < 0.01 and r.isBuildReady():
     discard w.buildRobot(r, rtLumberjack, dir)
   w.tryMoveWeak(r, r.randomDirection())
 
