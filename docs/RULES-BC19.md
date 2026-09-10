@@ -241,8 +241,13 @@ structure**.
     reading on `seed-0043` and `seed-0048`: **3 280 karbonite banked, four
     military units, zero damage, for a thousand rounds.** The gate therefore
     applies to **military builds, attacks and military movement**, and
-    economy builds are funded whenever the order can pay. The knob's two
-    asserted teeth are unchanged: rounds at zero fuel down, attacks down.
+    economy builds are funded whenever the order can pay. The knob's first
+    asserted tooth survives — rounds ended with the fuel store at zero down
+    (−49 %, threshold 40 %) — but the second inverts: RAW attacks go UP,
+    1 296 → 2 331, because an order at reserve 0 cannot afford to BUILD the
+    soldiers either, so what the knob test asserts is **attacks per military
+    unit built** down (−58 %, threshold 20 %). The `fuel_reserve` row of the
+    knob table above carries the reading.
 15. **The score's `fuel div 5` exchange rate** is derived from
     `KARBONITE_YIELD` and `FUEL_YIELD`, and the *winner* is decided on the
     engine's exact integer comparisons while *points* are decided on float32
