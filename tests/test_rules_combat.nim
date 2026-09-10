@@ -225,6 +225,52 @@ block:
   check("a cat patrols", moved)
   checkEq("and stays on the map", w.onTheMap(cat.loc), true)
 
+# --- re-finding a target restores the SNAPSHOT tile -------------------------
+block:
+  ## `engine.1.2.5` keeps `catTarget` (a `RobotInfo`) across an EXPLORE
+  ## phase; only `catTargetLoc` is overwritten with the waypoint. On re-find
+  ## it copies the snapshot's tile back (`InternalRobot.java:1327`). Keeping
+  ## the waypoint instead was the Tier C parity divergence on `arrows` (round
+  ## 915) and `dirtfulcat` (round 453): the BFS from a corner to the tile it
+  ## stands on is CENTER, and the cat drew a random direction the engine
+  ## never drew.
+  let w = freshWorld()
+  var cat: Robot
+  for r in w.liveRobots:
+    if r.unit == utCat: cat = r
+  for l in w.allPartLocations(cat):
+    if w.onTheMap(l): w.occupant[w.idx(l)] = nil
+  cat.loc = loc(14, 10)
+  cat.dir = dEast
+  for l in w.allPartLocations(cat):
+    if w.onTheMap(l): w.occupant[w.idx(l)] = cat
+  cat.actionCooldown = 0
+  cat.movementCooldown = 0
+  cat.turningCooldown = 0
+  let prey = w.rat(97060, 17, 10, teamA, dWest)
+  cat.catState = csAttack
+  cat.catTurns = 0
+  runCatTurn(w, cat)
+  checkEq("an ATTACK cat takes the rat in its cone", cat.catTargetId, prey.id)
+  checkEq("at the tile it stood on", cat.catTargetLoc, loc(17, 10))
+  ## EXPLORE overwrites the target tile with a waypoint and leaves the
+  ## target id alone (`InternalRobot.java:1232`); reproduce that directly.
+  cat.catTargetLoc = cat.catWaypoints[0]
+  check("the waypoint is somewhere else", cat.catTargetLoc != loc(17, 10))
+  ## The rat has since moved a tile, still inside the cone.
+  w.occupant[w.idx(prey.loc)] = nil
+  prey.loc = loc(17, 11)
+  w.occupant[w.idx(prey.loc)] = prey
+  cat.catState = csAttack
+  cat.catTurns = 0
+  cat.actionCooldown = 0
+  cat.movementCooldown = CooldownLimit
+  runCatTurn(w, cat)
+  checkEq("re-finding the same rat keeps the target", cat.catTargetId, prey.id)
+  checkEq("and restores the SNAPSHOT tile, not the waypoint",
+    cat.catTargetLoc, loc(17, 10))
+  check("and not the rat's live tile", cat.catTargetLoc != prey.loc)
+
 # --- the five backstab_policy values are five behaviours --------------------
 block:
   ## `never` and `retaliate_only` read alike while the alliance holds. They

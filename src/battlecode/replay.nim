@@ -194,12 +194,18 @@ proc parseReplay*(text: string): ReplayDoc =
     raise newException(BattlecodeError,
       "not a " & ReplayFormat & " document")
   let version = doc{"game_version"}.getStr()
-  if version notin ReplayCompatibleGameVersions:
+  let year = doc{"year"}.getStr("bc26")
+  ## The year decides which list applies: bc26 rules moved at GV14, the
+  ## other years' did not (`sim_types.Bc26ReplayCompatibleGameVersions`).
+  let compatible =
+    if year == "bc26": @Bc26ReplayCompatibleGameVersions
+    else: @ReplayCompatibleGameVersions
+  if version notin compatible:
     raise newException(BattlecodeError,
-      "replay game_version " & version & " cannot be re-derived by this " &
-      "build (" & GameVersion & ")")
+      "replay game_version " & version & " (" & year & ") cannot be " &
+      "re-derived by this build (" & GameVersion & ")")
   result.gameVersion = version
-  result.year = doc{"year"}.getStr("bc26")
+  result.year = year
   result.config = doc{"config"}
   result.seed = doc{"seed"}.getInt()
   result.promptPreamble = doc{"prompt_preamble"}.getStr()
