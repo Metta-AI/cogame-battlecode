@@ -171,6 +171,14 @@ env:
   BC17_JAR_URL: "http://battlecode-maven.s3-website-us-east-1.amazonaws.com/org/battlecode/battlecode/2017.1.6.2/battlecode-2017.1.6.2.jar"
   BC17_JAR_SHA256: "9254e89268fd6efb72cafc037e3eded006aefd1d19aa44195c945b43ceb7bff9"
   BC17_JAR_BYTES: "14576275"
+  # The 2017 SCAFFOLD, AGPL-3.0, whose `src/examplefuncsplayer/RobotPlayer.java`
+  # is committed VERBATIM at tools/oracle/bc17/examplefuncsplayer17/ and is
+  # both the league's deliberately weak filler and one side of the
+  # differential oracle. `parity-oracle-bc17` diffs the committed copy
+  # against this commit's own file, so the ONLY difference between what the
+  # scaffold shipped and what the oracle compiles is the committed
+  # determinism.patch (NOTICE records the attribution).
+  BC17_SCAFFOLD_COMMIT: "76e7b51e06088fdcce2f6a6b97aff21782ae20d0"
 
 jobs:
   # ---------------------------------------------------------------------
@@ -3340,6 +3348,414 @@ jobs:
         with:
           name: parity-bc16
           path: /tmp/oracle16/upload
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ---------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------
+  # parity-oracle-bc17: the 2017 Java engine as a CI-only oracle.
+  #
+  # THE TENTH YEAR AND THE ONLY CONTINUOUS-SPACE ONE. Coordinates, radii,
+  # strides, bullet speeds, attack powers, health and the whole tree economy
+  # are Java `float`, every gameplay class is `strictfp`, and the
+  # transcendental surface is exactly {sin, cos, atan2}.
+  #
+  # **EVERY FLOAT IN THIS TRACE IS PRINTED AS ITS RAW IEEE-754 BITS IN HEX
+  # ON BOTH SIDES**, which is bc17's one deliberate departure from every
+  # sibling year: a float32 needs nine significant decimal digits to
+  # round-trip and a formatter mismatch between Java's `%.9g` and Nim's
+  # `formatFloat` would masquerade as a divergence for a week. bc16 manages
+  # that with a `%.6f` convention plus a per-field float allowlist in the
+  # comparator; bc17 removes the problem instead, so
+  # `tools/ci/parity_tiers_bc17.py` needs NO float allowlist at all.
+  #
+  # THE ORACLE RUNS ON TEMURIN 8 AND THAT IS NOT NEGOTIABLE: the jar bundles
+  # a 2017-era ASM 5.0.4 and the whole instrumenter is built for Java 8 class
+  # files, so under a modern JDK it throws IllegalArgumentException inside
+  # ClassReader.<init> on EVERY player class load, no robot is ever built,
+  # the game ends in one round and THE JOB WOULD EXIT 0 WHILE PROVING
+  # NOTHING. The first step asserts `java -version` really is 1.8 AND that
+  # `javac --release 8` FAILS (the bc21 lesson: `--release` arrived in JDK 9
+  # and dies with "invalid flag" on a JDK-8 javac); `Bc17Trace.java` asserts
+  # it again from the other side by exiting 3 when nothing ever happened;
+  # and `tools/ci/bc17_assert_trace.py` asserts it a third time by requiring
+  # every game to have reached round 2 900 or ended DECIDED.
+  #
+  # THE JAR IS A FAT JAR and nothing else is downloaded to run it: 10 210
+  # entries, every battlecode class, `org/objectweb/asm`, `gnu/trove`,
+  # `net/sf/jsi`, `com/google/flatbuffers` and all 70
+  # `battlecode/world/resources/*.map17` resources -- so there is no Gradle,
+  # no Maven resolution, no deps.lock, no jsi shim and no `--map-dir`. The
+  # PINNED ENGINE SOURCES are fetched only because the two engine patches
+  # need four files of them; everything else is loaded out of the jar.
+  #
+  # 90 minutes: bc17's games run to 2 999 rounds with real ballistics and
+  # there are 54 compared pairs plus one uncompared metering run. MEASURED
+  # in the phase-20 sandbox: 168 seconds of JVM for all 54 games, 26 seconds
+  # for the comparator and 106 seconds for the trace assertions, so the
+  # budget is roughly twenty times the measurement (docs/PARITY.md section
+  # bc17). Tier A" is NINE pairs and was NOT reduced.
+  #
+  # There is no JDK, no JRE and no Java in ANY runtime image stage.
+  # ---------------------------------------------------------------------
+  parity-oracle-bc17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache nimby toolchain and nimcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nimby
+            ~/.cache/nim
+          key: nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-${{ hashFiles('nimby.lock') }}
+          restore-keys: |
+            nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-
+
+      - name: Install nimby and Nim
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/nimby" \
+            "https://github.com/treeform/nimby/releases/download/${NIMBY_VERSION}/nimby-Linux-X64"
+          chmod +x "$HOME/.local/bin/nimby"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/nimby" use "$NIM_VERSION"
+
+      - name: Sync Nim dependencies
+        run: nimby --global sync nimby.lock
+
+      - name: Regenerate nim.cfg from the synced package tree
+        run: |
+          set -euo pipefail
+          rm -f nim.cfg
+          for pkg in "$HOME"/.nimby/pkgs/*; do
+            [ -e "$pkg" ] || continue
+            if [ -d "$pkg/src" ]; then
+              echo "--path:\"$pkg/src\"" >> nim.cfg
+            else
+              echo "--path:\"$pkg\"" >> nim.cfg
+            fi
+          done
+          echo '--path:"src"' >> nim.cfg
+
+      # TEMURIN 8. NOT NEGOTIABLE. See the job comment.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+
+      - name: The JDK really is 8
+        run: |
+          set -euo pipefail
+          java -version 2>&1 | tee /tmp/javaver17
+          javac -version 2>&1 | tee -a /tmp/javaver17
+          grep -q '1\.8\.' /tmp/javaver17 || {
+            echo "::error::this oracle MUST run on Temurin 8: the jar bundles"
+            echo "::error::a 2017-era ASM 5.0.4 and under a newer JDK the"
+            echo "::error::instrumenter throws inside ClassReader.<init> on"
+            echo "::error::every player class load, nothing is ever built,"
+            echo "::error::the game ends in one round and this job would be"
+            echo "::error::green while proving nothing"
+            echo "::error::(docs/PARITY.md section bc17)."
+            exit 1; }
+          # And `--release` must NOT be used: it arrived in JDK 9 and dies
+          # with "invalid flag" here in seconds (the bc21 lesson). This
+          # asserts the trap rather than trusting a comment.
+          if javac --release 8 -version >/dev/null 2>&1; then
+            echo "::error::this javac accepts --release, so it is not 8"
+            exit 1
+          fi
+          echo "javac rejects --release, as a JDK-8 javac must"
+
+      - name: Fetch the published 2017 jar and the pinned engine sources
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle17 /tmp/engine17
+          curl -fsSL -o /tmp/oracle17/battlecode2017.jar "${BC17_JAR_URL}"
+          # The two ENGINE patches need four source files; everything else --
+          # every class and all 70 map resources -- is loaded out of the jar.
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode-server-2017/archive/${BC17_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/engine17
+          echo "BC17_DIR=/tmp/engine17/battlecode-server-2017-${BC17_COMMIT}" \
+            >> "$GITHUB_ENV"
+
+      # THE COMMITTED WEAK FLOOR IS UPSTREAM'S FILE, BYTE FOR BYTE. The
+      # `determinism.patch` hunks are the ONLY difference between what the
+      # 2017 scaffold shipped and what this job compiles, and this step
+      # proves it rather than trusting the patch header.
+      - name: The committed examplefuncsplayer17 is the scaffold's own file
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/scaffold17
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode-scaffold-2017/archive/${BC17_SCAFFOLD_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/scaffold17
+          up="/tmp/scaffold17/battlecode-scaffold-2017-${BC17_SCAFFOLD_COMMIT}/src/examplefuncsplayer/RobotPlayer.java"
+          diff -u "$up" tools/oracle/bc17/examplefuncsplayer17/RobotPlayer.java
+          python3 - <<'PY'
+          import json, os
+          lock = json.load(open("tools/oracle/bc17/jar.lock"))
+          assert lock["scaffold_commit"] == os.environ["BC17_SCAFFOLD_COMMIT"], \
+              lock["scaffold_commit"]
+          print("tools/oracle/bc17/jar.lock agrees with ci.yml's scaffold pin")
+          PY
+          echo "the committed bot is battlecode-scaffold-2017@${BC17_SCAFFOLD_COMMIT} verbatim (AGPL-3.0, see NOTICE)"
+
+      - name: Build the oracle (jar sha256, size AND SPEC_VERSION verified, three patches, JDK 8)
+        run: |
+          set -euo pipefail
+          ./tools/oracle/bc17/build_oracle.sh \
+            /tmp/oracle17/battlecode2017.jar "$BC17_DIR" /tmp/oracle17/build
+
+      # Tier B, part 1 (BLOCKING): EVERY `GameConstants` FIELD AND THE WHOLE
+      # SIX-ROW `RobotType` TABLE, printed from the jar's own classes by
+      # REFLECTION -- 2017's `GameConstants` is an INTERFACE, so its fields
+      # are implicitly `public static final` and reflection sees all of them
+      # -- and the generated `constants.nim` regenerated from that dump and
+      # BYTE-DIFFED. A hand-edited constant fails here.
+      - name: Tier B (BLOCKING) — the jar's own constants and RobotType table
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle17/tables
+          javac -nowarn -encoding UTF-8 \
+            -cp /tmp/oracle17/battlecode2017.jar \
+            -d /tmp/oracle17/tables tools/JavaBc17Tables.java
+          timeout 600 java -cp \
+            "/tmp/oracle17/battlecode2017.jar:/tmp/oracle17/tables" \
+            JavaBc17Tables constants > /tmp/oracle17/constants.json
+          head -3 /tmp/oracle17/constants.json
+          python3 tools/gen_year_constants.py --year bc17 \
+            --tables /tmp/oracle17/constants.json --check
+
+      # Tier B, part 2 (BLOCKING): THE fdlibm PIN. Every boundary vector
+      # value-for-value and eleven expression-shape digests over a
+      # 2 000 000-point sample of the engine's own argument domains, drawn by
+      # a recipe BOTH SIDES RUN (`java.util.Random(20170101)`), regenerated
+      # here under the pinned JDK 8 and byte-diffed against the committed
+      # file. The `"jdk"` line is PROVENANCE, not a vector: it records which
+      # Temurin 8 build wrote the file, and `actions/setup-java` moves that
+      # string every few months while `StrictMath` is required to reproduce
+      # fdlibm bit for bit on every conforming JVM. Everything else is an
+      # absolute byte-diff.
+      - name: Tier B (BLOCKING) — the fdlibm vectors, regenerated and byte-diffed
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          timeout 900 java -cp \
+            "/tmp/oracle17/battlecode2017.jar:/tmp/oracle17/tables" \
+            JavaBc17Tables fdlibm > /tmp/oracle17/fdlibm.json
+          echo "JavaBc17Tables fdlibm took $(( $(date +%s) - start ))s"
+          echo "committed: $(grep '\"jdk\"' data/bc17/fdlibm_vectors.json)"
+          echo "this run : $(grep '\"jdk\"' /tmp/oracle17/fdlibm.json)"
+          grep -v '"jdk"' data/bc17/fdlibm_vectors.json > /tmp/oracle17/fd.want
+          grep -v '"jdk"' /tmp/oracle17/fdlibm.json > /tmp/oracle17/fd.got
+          if ! diff -u /tmp/oracle17/fd.want /tmp/oracle17/fd.got | head -40; then
+            echo "::error::data/bc17/fdlibm_vectors.json is not what the"
+            echo "::error::jar's own StrictMath emits under JDK 8."
+            exit 1
+          fi
+          diff -q /tmp/oracle17/fd.want /tmp/oracle17/fd.got
+          rows="$(grep -c '"bits"' data/bc17/fdlibm_vectors.json || true)"
+          echo "Tier B: the committed fdlibm table IS the JVM's own output"
+
+      # Tier B, part 3 (BLOCKING): ALL 22 COMMITTED MAPS' `LiveMap` FIELDS --
+      # width, height, origin, seed, rounds and every initial body's id,
+      # team, type, float coordinates, radius, health, contained bullets and
+      # contained robot IN `getInitialBodies()` ORDER -- from the JVM's own
+      # loader, byte-diffed against the same dump taken from the committed
+      # JSON. This is what PROVES `tools/convert_maps_bc17.py`'s pure-Python
+      # flatbuffer walk rather than trusting it.
+      - name: Tier B (BLOCKING) — the 22 maps' LiveMap fields, from the JVM
+        run: |
+          set -euo pipefail
+          MAPS="Aligned Alone Barrier Blitzkrieg Chess Cramped CropCircles
+                DenseForest GiantForest GreenHouse HiddenTunnel HouseDivided
+                Hurdle Interference LineOfFire Maniple OMGTree Snowflake
+                TreeFarm Waves Whirligig shrine"
+          timeout 600 java -cp \
+            "/tmp/oracle17/battlecode2017.jar:/tmp/oracle17/tables" \
+            JavaBc17Tables maps ${MAPS} > /tmp/oracle17/maps.jvm
+          python3 tools/convert_maps_bc17.py \
+            --jar /tmp/oracle17/battlecode2017.jar --dump-bits \
+            --only ${MAPS} > /tmp/oracle17/maps.ours
+          wc -l /tmp/oracle17/maps.jvm /tmp/oracle17/maps.ours
+          if ! diff -u /tmp/oracle17/maps.jvm /tmp/oracle17/maps.ours \
+               | head -40; then
+            echo "::error::the committed data/maps/bc17/*.json are not what"
+            echo "::error::the JVM's own LiveMap loader reads out of the jar."
+            exit 1
+          fi
+          diff -q /tmp/oracle17/maps.jvm /tmp/oracle17/maps.ours
+          echo "Tier B: 22 maps, byte-identical to the JVM's own LiveMap"
+
+      - name: Build the six Nim trace emitters (Tiers A, A′ and A″)
+        run: |
+          set -euo pipefail
+          # One binary per bot, exactly as bc16's and bc19's are: the bot is
+          # a COMPILE-TIME define in `rules.runControllerFor`, so a bot
+          # cannot leak into another tier's build.
+          nim c --hints:off -d:release -d:bc17Idle --path:src \
+            -o:/tmp/oracle17/pt_bc17idle tools/parity_trace_bc17.nim
+          nim c --hints:off -d:release --path:src \
+            -o:/tmp/oracle17/pt_examplefuncsplayer17 tools/parity_trace_bc17.nim
+          nim c --hints:off -d:release -d:bc17Scenario --path:src \
+            -o:/tmp/oracle17/pt_bc17scenario tools/parity_trace_bc17.nim
+          nim c --hints:off -d:release -d:bc17Scenario -d:bc17ScenarioTree \
+            --path:src -o:/tmp/oracle17/pt_bc17scenariotree \
+            tools/parity_trace_bc17.nim
+          nim c --hints:off -d:release -d:bc17Scenario -d:bc17ScenarioKill \
+            --path:src -o:/tmp/oracle17/pt_bc17scenariokill \
+            tools/parity_trace_bc17.nim
+          nim c --hints:off -d:release -d:bc17Scenario -d:bc17ScenarioTie \
+            --path:src -o:/tmp/oracle17/pt_bc17scenariotie \
+            tools/parity_trace_bc17.nim
+
+      # WHOLE GAMES, round 1 to the engine's own `isRunning() == false`, on
+      # the NINE parity pairs, for all SIX compared bots -- 54 pairs. Every
+      # `java` invocation is wrapped in `timeout 900`, because the sandboxed
+      # player threads are NON-DAEMON and a driver that throws without
+      # `System.exit()` hangs for ever (measured on four sibling years).
+      - name: Run both engines on fifty-four pairs (whole games)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle17/traces
+          total=0
+          for BOT in bc17idle examplefuncsplayer17 bc17scenario \
+                     bc17scenariotree bc17scenariokill bc17scenariotie; do
+            for MAP in CropCircles GreenHouse HiddenTunnel HouseDivided \
+                       OMGTree shrine Chess Cramped Alone; do
+              start=$(date +%s)
+              timeout 900 java -Xmx2g -XX:+UseSerialGC \
+                -cp "/tmp/oracle17/build/classes:/tmp/oracle17/battlecode2017.jar" \
+                battlecode.world.Bc17Trace "$MAP" 3000 "$BOT" \
+                /tmp/oracle17/build/bots \
+                > "/tmp/oracle17/traces/${BOT}.${MAP}.java" \
+                2> "/tmp/oracle17/traces/${BOT}.${MAP}.java.log"
+              jvm=$(( $(date +%s) - start ))
+              total=$(( total + jvm ))
+              tail -1 "/tmp/oracle17/traces/${BOT}.${MAP}.java.log"
+              "/tmp/oracle17/pt_${BOT}" "$MAP" 3000 \
+                > "/tmp/oracle17/traces/${BOT}.${MAP}.nim" \
+                2> "/tmp/oracle17/traces/${BOT}.${MAP}.nim.log"
+              tail -1 "/tmp/oracle17/traces/${BOT}.${MAP}.nim.log"
+              echo "${BOT}/${MAP}: ${jvm}s JVM," \
+                   "java $(wc -l < "/tmp/oracle17/traces/${BOT}.${MAP}.java") lines," \
+                   "nim $(wc -l < "/tmp/oracle17/traces/${BOT}.${MAP}.nim") lines"
+            done
+          done
+          echo "TOTAL JVM WALL CLOCK OVER THE 54 PAIRS: ${total}s"
+          echo "bc17 parity: ${total}s of JVM over 54 whole games" \
+            >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          # THE Tier A" FALLBACK, DECIDED IN PHASE 10 AND BOUNDED: if this
+          # ever exceeds 80 minutes the tier is cut to the six `small` pairs
+          # and the cut is recorded in docs/PARITY.md with the measurement.
+          # It has not fired: the phase-20 measurement was 168 seconds.
+          test "${total}" -le 4800 || {
+            echo "::error::the 54 pairs took ${total}s of JVM, past the"
+            echo "::error::80-minute bound. docs/PARITY.md section bc17"
+            echo "::error::records the decided fallback: cut Tier A\" to the"
+            echo "::error::six \`small\` pairs and RECORD THE CUT."
+            exit 1; }
+
+      # TIER B' (b) (BLOCKING, AND NOT COMPARED AGAINST THE PORT): the bot
+      # that is MEANT to be paused. `bc17slowbot` burns ~20 000 instrumented
+      # bytecodes a turn and the engine must pause it; the port has no
+      # bytecode counter at all and meters a fixed DecisionOps budget
+      # instead (V1), so nothing here is compared -- this run exists so the
+      # port's READING of the metering rule is proved rather than asserted.
+      - name: Tier B′ (BLOCKING) — the engine really does pause a slow bot
+        run: |
+          set -euo pipefail
+          timeout 900 java -Xmx2g -XX:+UseSerialGC \
+            -cp "/tmp/oracle17/build/classes:/tmp/oracle17/battlecode2017.jar" \
+            battlecode.world.Bc17Trace shrine 60 bc17slowbot \
+            /tmp/oracle17/build/bots \
+            > /tmp/oracle17/traces/bc17slowbot.shrine.java \
+            2> /tmp/oracle17/traces/bc17slowbot.shrine.java.log
+          tail -1 /tmp/oracle17/traces/bc17slowbot.shrine.java.log
+
+      # EVERY GAME REALLY RAN, AND EVERY PATH THE TIER CLAIMS REALLY FIRED.
+      # This is the step that stops a bit-exact tier from being vacuous, and
+      # it reads the ENGINE'S OWN trace, never the port's.
+      - name: Every game really ran (the ASM trap and the anti-vacuity gate)
+        run: |
+          set -euo pipefail
+          python3 tools/ci/bc17_assert_trace.py \
+            --dir /tmp/oracle17/traces \
+            --maps CropCircles GreenHouse HiddenTunnel HouseDivided OMGTree \
+                   shrine Chess Cramped Alone \
+            --scenario-bots bc17scenario bc17scenariotree bc17scenariokill \
+                            bc17scenariotie \
+            --slowbot-trace /tmp/oracle17/traces/bc17slowbot.shrine.java
+
+      - name: Tiers A, A′, A″ and C (all BLOCKING)
+        run: |
+          set -euo pipefail
+          # The comparator's own negative control first: a `bc=` column on
+          # one side only, a trace pair that differs only in LENGTH (in both
+          # directions), a zero-padded fold that is the same fold, a
+          # zero-padded RAW-BIT float that is the same float, ONE ULP that is
+          # not, and a ledger entry whose cause is "unknown".
+          python3 tools/ci/parity_tiers_bc17.py --selftest
+          python3 tools/ci/parity_tiers_bc17.py \
+            --dir /tmp/oracle17/traces \
+            --maps CropCircles GreenHouse HiddenTunnel HouseDivided OMGTree \
+                   shrine Chess Cramped Alone \
+            --bots bc17idle examplefuncsplayer17 bc17scenario \
+                   bc17scenariotree bc17scenariokill bc17scenariotie \
+            --ledger tools/ci/parity_ledger_bc17.json \
+            --summary "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+      - name: Upload the traces (first 200 divergent lines and a digest)
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle17/upload
+          # `if: always()` means this runs after an EARLIER step failed too,
+          # in which case the traces were never produced. Reporting nothing
+          # is correct there; failing the job a second time for a missing
+          # directory only hides the real error.
+          if [ ! -d /tmp/oracle17/traces ]; then
+            echo "no traces were produced; an earlier step failed"
+            exit 0
+          fi
+          cd /tmp/oracle17/traces
+          for BOT in bc17idle examplefuncsplayer17 bc17scenario \
+                     bc17scenariotree bc17scenariokill bc17scenariotie; do
+            for MAP in CropCircles GreenHouse HiddenTunnel HouseDivided \
+                       OMGTree shrine Chess Cramped Alone; do
+              j="${BOT}.${MAP}.java"
+              n="${BOT}.${MAP}.nim"
+              [ -f "$j" ] && [ -f "$n" ] || continue
+              # A bc17 trace runs 1-300 MB a side (`Chess` is 2 804 066
+              # lines); only the first 200 divergent lines and a gzipped
+              # digest are uploaded.
+              sed -E 's/ bc=[0-9]+//' "$j" > "/tmp/j.$$"
+              diff "/tmp/j.$$" "$n" | head -200 \
+                > "/tmp/oracle17/upload/${BOT}.${MAP}.diff.txt" || true
+              head -400 "$j" | gzip -9 \
+                > "/tmp/oracle17/upload/${BOT}.${MAP}.java.head.gz"
+              head -400 "$n" | gzip -9 \
+                > "/tmp/oracle17/upload/${BOT}.${MAP}.nim.head.gz"
+              cp "${BOT}.${MAP}.java.log" "/tmp/oracle17/upload/" || true
+              rm -f "/tmp/j.$$"
+            done
+          done
+          cp bc17slowbot.shrine.java.log /tmp/oracle17/upload/ || true
+          ls -la /tmp/oracle17/upload | head -20
+
+      - name: Upload the parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-bc17
+          path: /tmp/oracle17/upload
           if-no-files-found: warn
           retention-days: 14
 
