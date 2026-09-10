@@ -148,11 +148,39 @@ proc refuse(w: World, r: Robot): bool =
   w.stats.refusedActions[ord(r.team)] += 1
   false
 
+func actRank(act: int): int =
+  ## The `A` line's PRIORITY, and it is a wire format shared with
+  ## `tools/oracle/bc17/Bc17Trace.java` -- see that file's header for why the
+  ## trace reduces a turn to one action by priority and not by sequence. In
+  ## one sentence: the engine records FIRE / STRIKE / CHOP / SHAKE / WATER /
+  ## PLANT / SPAWN_UNIT in `MatchMaker`'s action log and records a MOVE, a
+  ## BROADCAST and a DONATE NOWHERE AT ALL, so their ORDER relative to the
+  ## logged ones cannot be recovered on the Java side and "the last action of
+  ## the turn" is not a thing both emitters can compute. Within a group the
+  ## members are mutually exclusive in one turn (one attack, one build-class
+  ## action, one water, one shake), so this order is total.
+  case act
+  of ActDisintegrate: 100
+  of ActFireSingle, ActFireTriad, ActFirePentad, ActStrike, ActChop: 90
+  of ActBodyAttack: 80
+  of ActPlant, ActHire, ActBuild: 70
+  of ActWater: 60
+  of ActShake: 50
+  of ActDonate: 40
+  of ActMove: 30
+  of ActBroadcast: 20
+  else: 0
+
 proc noteAction(w: World, r: Robot, act: int, tgt = 0, x = 0'f32,
                 y = 0'f32, arg = 0'f32) =
   ## TELEMETRY ONLY, for `tools/parity_trace_bc17.nim`'s `A` line and the
-  ## `first_action` beat. No rule reads it.
-  w.lastAction[r.id] = (act: act, tgt: tgt, x: x, y: y, arg: arg)
+  ## `first_action` beat. No rule reads it. `rules.nim` resets the slot to
+  ## `ActNothing` at the start of every turn, so the maximum below is over
+  ## THIS turn's actions.
+  let prev = w.lastAction.getOrDefault(r.id,
+    (act: ActNothing, tgt: 0, x: 0'f32, y: 0'f32, arg: 0'f32))
+  if actRank(act) >= actRank(prev.act):
+    w.lastAction[r.id] = (act: act, tgt: tgt, x: x, y: y, arg: arg)
   let t = ord(r.team)
   if act != ActNothing and not w.firstActionSeen[t]:
     w.firstActionSeen[t] = true
