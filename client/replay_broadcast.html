@@ -3932,6 +3932,203 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
   #bc16-doctrines { max-width: 96%; font-size: 10px; }
 }
 
+
+/* ======================================================================
+   BC17 additions to the inherited cogame-battlecode chrome
+   ----------------------------------------------------------------------
+   Battlecode 2017 "Robotic Wildlife Fund", the tenth year block and the
+   only continuous-space one. NO STARTER ELEMENT IS REMOVED FROM THE PAGE:
+   the bc26 block's ids and the nine other year blocks' all stay exactly
+   where they are, and what bc17 removes is nothing from the page and
+   everything from the SCREEN. Every rule below is scoped to
+   `html[data-year="bc17"]`, INCLUDING EVERY BEAT-MARKER COLOUR (the bc21
+   r1-F4 fix), so none of them can restyle another year's marker of the
+   same name -- and seven of bc17's thirteen beat kinds ARE spelled the
+   same as another year's.
+   ====================================================================== */
+html[data-year="bc17"] #coopchip,
+html[data-year="bc17"] #bars,
+html[data-year="bc17"] #econ,
+html[data-year="bc17"] #doctrines,
+html[data-year="bc17"] #bc20-flood,
+html[data-year="bc17"] #bc20-soup,
+html[data-year="bc17"] #bc20-units,
+html[data-year="bc17"] #bc20-doctrines,
+html[data-year="bc17"] #bc20-doctrines-toggle,
+html[data-year="bc17"] #bc20-chain,
+html[data-year="bc17"] #bc21-votes,
+html[data-year="bc17"] #bc21-influence,
+html[data-year="bc17"] #bc21-units,
+html[data-year="bc17"] #bc21-doctrines,
+html[data-year="bc17"] #bc21-doctrines-toggle,
+html[data-year="bc17"] #bc21-bids,
+html[data-year="bc17"] #bc23-islands,
+html[data-year="bc17"] #bc23-econ,
+html[data-year="bc17"] #bc23-units,
+html[data-year="bc17"] #bc23-doctrines,
+html[data-year="bc17"] #bc23-doctrines-toggle,
+html[data-year="bc17"] #bc23-tempest,
+html[data-year="bc17"] #bc24-flags,
+html[data-year="bc17"] #bc24-crumbs,
+html[data-year="bc17"] #bc24-levels,
+html[data-year="bc17"] #bc24-doctrines,
+html[data-year="bc17"] #bc24-doctrines-toggle,
+html[data-year="bc17"] #bc24-traps,
+html[data-year="bc17"] #bc25-coverage,
+html[data-year="bc17"] #bc25-towers,
+html[data-year="bc17"] #bc25-econ,
+html[data-year="bc17"] #bc25-doctrines,
+html[data-year="bc17"] #bc25-doctrines-toggle,
+html[data-year="bc17"] #bc25-srp,
+html[data-year="bc17"] #bc22-archons,
+html[data-year="bc17"] #bc22-anomaly,
+html[data-year="bc17"] #bc22-econ,
+html[data-year="bc17"] #bc22-units,
+html[data-year="bc17"] #bc22-doctrines,
+html[data-year="bc17"] #bc22-doctrines-toggle,
+html[data-year="bc17"] #bc22-mutation,
+html[data-year="bc17"] #bc16-archons,
+html[data-year="bc17"] #bc16-horde,
+html[data-year="bc17"] #bc16-econ,
+html[data-year="bc17"] #bc16-units,
+html[data-year="bc17"] #bc16-doctrines,
+html[data-year="bc17"] #bc16-doctrines-toggle,
+html[data-year="bc17"] #bc16-siege,
+html[data-year="bc17"] #bc19-castles,
+html[data-year="bc17"] #bc19-fuel,
+html[data-year="bc17"] #bc19-econ,
+html[data-year="bc17"] #bc19-units,
+html[data-year="bc17"] #bc19-doctrines,
+html[data-year="bc17"] #bc19-doctrines-toggle,
+html[data-year="bc17"] #bc19-crusade { display: none !important; }
+
+html:not([data-year="bc17"]) #bc17-vp,
+html:not([data-year="bc17"]) #bc17-bullets,
+html:not([data-year="bc17"]) #bc17-econ,
+html:not([data-year="bc17"]) #bc17-units,
+html:not([data-year="bc17"]) #bc17-doctrines,
+html:not([data-year="bc17"]) #bc17-doctrines-toggle,
+html:not([data-year="bc17"]) #bc17-fund { display: none !important; }
+
+/* THE HEADLINE READOUT AND THE YEAR'S WHOLE STORY: the race to 1000
+   victory points, the CURRENT PRICE of a point and how many bullets each
+   side would still need at that price. It flashes on a donation and goes
+   solid gold the instant a side crosses 1000. Top-centre pill slot, ABOVE
+   the board and never inside the transport band, and it keeps both bars,
+   both numbers and the price AT EVERY WIDTH -- including 360 px -- because
+   it is the readout that makes the year make sense. */
+#bc17-vp {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(var(--topband, 0px) + 6px);
+  display: flex; gap: 10px; align-items: center;
+  padding: 5px 12px; border-radius: 12px;
+  background: rgba(8, 14, 10, .82); border: 1px solid #2f4a34;
+  font: 700 12px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #d8e8d8; z-index: 30; pointer-events: none;
+  max-width: 96vw; white-space: nowrap;
+}
+#bc17-vp .ash { color: #e8c07f; }
+#bc17-vp .basil { color: #9fd4a8; }
+#bc17-vp .price { color: #a8b8a8; font-weight: 400; }
+#bc17-vp.closed { background: rgba(90, 70, 10, .9); border-color: #d8b23c; }
+@keyframes bc17flash { from { background: rgba(120, 96, 20, .95); }
+                       to { background: rgba(8, 14, 10, .82); } }
+#bc17-vp.flash { animation: bc17flash .9s ease-out 1; }
+
+/* The year's SECOND signature readout: bullets banked, tree income this
+   round, and THE TRICKLE SHOWN SEPARATELY AND GREYED OUT WHEN IT IS ZERO,
+   WITH THE REASON IN PLAIN WORDS -- because it is zero above 200 bullets
+   and a spectator deserves to know why. */
+#bc17-bullets {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(var(--topband, 0px) + 40px);
+  display: flex; gap: 10px; align-items: center;
+  padding: 4px 10px; border-radius: 10px;
+  background: rgba(8, 14, 10, .74); border: 1px solid #24381f;
+  font: 400 11px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #cfe0cf; z-index: 29; pointer-events: none; max-width: 96vw;
+  white-space: nowrap;
+}
+#bc17-bullets .off { color: #6d7a6d; }
+
+/* The two stat boxes `relayout()` measures for `--statrail`, so the
+   killfeed can never sit on top of them. */
+#bc17-econ, #bc17-units {
+  position: absolute; right: 8px;
+  padding: 5px 8px; border-radius: 8px;
+  background: rgba(8, 14, 10, .78); border: 1px solid #24381f;
+  font: 400 10px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #cfe0cf; z-index: 26; pointer-events: none; max-width: 46vw;
+}
+#bc17-econ { bottom: calc(var(--band, 0px) + 8px); }
+#bc17-units { bottom: calc(var(--band, 0px) + 96px); }
+#bc17-econ .who, #bc17-units .who { color: #9fd4a8; min-width: 3.2em;
+  display: inline-block; }
+
+/* Both doctrines in plain words: DISMISSIBLE, capped and scrolling, above
+   the board area and never inside the transport band. */
+#bc17-doctrines {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(var(--topband, 0px) + 74px);
+  max-width: 78vw; max-height: 42vh; overflow-y: auto;
+  padding: 8px 12px; border-radius: 10px;
+  background: rgba(6, 12, 8, .92); border: 1px solid #2f4a34;
+  font: 400 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #d8e8d8; z-index: 34;
+}
+#bc17-doctrines-close {
+  position: absolute; right: 4px; top: 2px; background: none;
+  border: none; color: #9fd4a8; font-size: 14px; cursor: pointer;
+}
+#bc17-doctrines .badge { color: #e8c07f; }
+#bc17-doctrines-toggle {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(var(--topband, 0px) + 62px);
+  padding: 1px 8px; border-radius: 8px; border: 1px solid #2f4a34;
+  background: rgba(8, 14, 10, .8); color: #9fd4a8; cursor: pointer;
+  font: 400 10px/1.2 ui-monospace, monospace; z-index: 33;
+}
+
+/* The endcard's Fund panel. `#endcard` is opaque over the board and the
+   `#bc17-*` boxes are hidden while it shows (the bc23 finding). */
+#bc17-fund {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  max-height: calc(100vh - var(--band, 0px) - var(--topband, 0px) - 24px);
+  overflow-y: auto;
+  font: 400 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #d8e8d8;
+}
+html[data-year="bc17"].endcard-open #bc17-vp,
+html[data-year="bc17"].endcard-open #bc17-bullets,
+html[data-year="bc17"].endcard-open #bc17-econ,
+html[data-year="bc17"].endcard-open #bc17-units { visibility: hidden; }
+
+/* EVERY BEAT KIND THE SIM EMITS HAS A RULE, and every rule is scoped to
+   this year. Nine of the thirteen kinds are emitted by the committed
+   fixture and `tests/test_bc17_beats.nim` asserts a rule for each of THOSE
+   from the page source; the other four are wired for the games that
+   produce them. */
+html[data-year="bc17"] .beat-marker.doctrine { background: #7f7fd4; }
+html[data-year="bc17"] .beat-marker.game { background: #9fd4a8; }
+html[data-year="bc17"] .beat-marker.build { background: #7fb2e8; }
+html[data-year="bc17"] .beat-marker.tree { background: #3f9f5f; }
+html[data-year="bc17"] .beat-marker.archon { background: #dd4848; }
+html[data-year="bc17"] .beat-marker.donate { background: #e8c07f; }
+html[data-year="bc17"] .beat-marker.shake { background: #c8d84c; }
+html[data-year="bc17"] .beat-marker.strike { background: #e87f3f; }
+html[data-year="bc17"] .beat-marker.volley { background: #d46fa8; }
+html[data-year="bc17"] .beat-marker.rout { background: #a83f3f; }
+html[data-year="bc17"] .beat-marker.duel { background: #8f6fd4; }
+html[data-year="bc17"] .beat-marker.famine { background: #6d7a6d; }
+html[data-year="bc17"] .beat-marker.end { background: #e8e8d8; }
+
+@media (max-width: 640px) {
+  #bc17-vp { font-size: 11px; gap: 6px; padding: 4px 8px; }
+  #bc17-bullets .lbl { display: none; }
+  #bc17-econ .lbl, #bc17-units .lbl { display: none; }
+  #bc17-econ, #bc17-units { font-size: 9px; max-width: 52vw; }
+  #bc17-doctrines { max-width: 96%; font-size: 10px; }
+}
 /* ======================================================================
    BC19 additions to the inherited cogame-battlecode chrome
    ----------------------------------------------------------------------
@@ -4358,6 +4555,18 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
               aria-label="Dismiss doctrines" title="Dismiss doctrines (Esc)"
               >&times;</button>
       <div id="bc19-doctrines-body"></div>
+    </div>
+
+    <!-- BC17 additions to the inherited cogame-battlecode chrome -->
+    <div id="bc17-vp"></div>
+    <div id="bc17-bullets"></div>
+    <div id="bc17-units"></div>
+    <div id="bc17-econ"></div>
+    <div id="bc17-doctrines" role="region" aria-label="Doctrines">
+      <button type="button" id="bc17-doctrines-close"
+              aria-label="Dismiss doctrines" title="Dismiss doctrines (Esc)"
+              >&times;</button>
+      <div id="bc17-doctrines-body"></div>
     </div>
 
     <!-- BC22 additions to the inherited cogame-battlecode chrome -->
@@ -7314,6 +7523,12 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
   }
 
   // BC19 HOOK: the same two lines for the ninth year.
+  if (window.Bc17Block) {
+    window.Bc17Block.attach({
+      renderBeats: renderBeats,
+      applySpoilers: applyBeatSpoilers
+    });
+  }
   if (window.Bc19Block) {
     window.Bc19Block.attach({
       C: C,
@@ -7602,6 +7817,15 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
             res2: 'fuel', unit2: 'church', units2: 'churches',
             worker: 'pilgrim', fast: 'crusader', ranged: 'prophet',
             splash: 'preacher', node: 'depot', deal: 'barter',
+            limit: 'the round limit ran out' },
+    // bc17's OWN nouns: archons, bullets and victory points. No other
+    // year's unit or resource word can reach a bc17 card, because every
+    // word it prints comes from this row (docs/RULES-BC17.md, the endcard
+    // fixes 1-5).
+    bc17: { unit: 'archon', units: 'archons', res: 'bullets',
+            res2: 'victory points', unit2: 'gardener', units2: 'gardeners',
+            worker: 'gardener', fast: 'scout', ranged: 'soldier',
+            splash: 'lumberjack', node: 'bullet tree', deal: 'donation',
             limit: 'the round limit ran out' }
   };
 
@@ -7735,7 +7959,8 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
       ['econ', 'bc20-soup', 'bc20-units', 'bc21-influence', 'bc21-units',
        'bc24-crumbs', 'bc24-levels', 'bc25-towers', 'bc25-econ',
        'bc23-econ', 'bc23-units', 'bc22-econ', 'bc22-units',
-       'bc16-econ', 'bc16-units', 'bc19-econ', 'bc19-units']
+       'bc16-econ', 'bc16-units', 'bc19-econ', 'bc19-units',
+       'bc17-econ', 'bc17-units']
         .forEach(function (id) {
           var el = document.getElementById(id);
           if (!el || !el.offsetParent) return;
@@ -7870,6 +8095,7 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
     var isBc16 = !!(window.Bc16Block && window.Bc16Block.active(s));
     // BC19 HOOK (1 of 2): the NINTH year's guard.
     var isBc19 = !!(window.Bc19Block && window.Bc19Block.active(s));
+    var isBc17 = !!(window.Bc17Block && window.Bc17Block.active(s));
     if (window.Bc20Block) window.Bc20Block.onFrame(s);
     // BC21 HOOK (2 of 2).
     if (window.Bc21Block) window.Bc21Block.onFrame(s);
@@ -7884,7 +8110,8 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
     if (window.Bc16Block) window.Bc16Block.onFrame(s);
     // BC19 HOOK (2 of 2).
     if (window.Bc19Block) window.Bc19Block.onFrame(s);
-    if (!isBc16 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && !isBc23 &&
+    if (window.Bc17Block) window.Bc17Block.onFrame(s);
+    if (!isBc16 && !isBc17 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && !isBc23 &&
         !isBc24 && !isBc25) {
       buildBeatButtons(s);
       renderCoop(s);
@@ -7896,7 +8123,7 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
     renderGameChips(s);
     C.renderClock(s);
     C.renderTransport(s);
-    if (!isBc16 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && !isBc23 &&
+    if (!isBc16 && !isBc17 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && !isBc23 &&
         !isBc24 && !isBc25) {
       applyBeatSpoilers(s);
     }
@@ -7951,6 +8178,239 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
       }
     } catch (ignored) {}
   }, 120);
+})();
+</script>
+
+<script>
+/* ======================================================================
+   BC17 game block -- Battlecode 2017 "Robotic Wildlife Fund"
+   ----------------------------------------------------------------------
+   Appended to the INHERITED cogame-battlecode chrome, never spliced into
+   it: `chrome_common.js` and `broadcast_core.js` are byte-for-byte the
+   coworld-ctf copies, the transport ids are the starter's, and everything
+   below is scoped to `html[data-year="bc17"]` or namespaced `Bc17`.
+   Every function name is its own -- `buildBc17BeatButtons`, never
+   `markBeat` (the tandem 2026-08-23 hoisting collision) and never
+   colliding with another year's builder.
+   ====================================================================== */
+(function () {
+  'use strict';
+  var api = null;
+  var lastFrame = -1;
+  var lastVp = [-1, -1];
+  var pinned = false;
+  var dismissed = false;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(t) {
+    return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  /* ONE formatter for every printed number: counts and victory points as
+     integers, `*_tenths` keys divided by ten and printed with ONE decimal.
+     A `/\d\.\d{3,}/` grep of the rendered text is a test
+     (`tests/test_viewer.nim`), and nothing in the replay or the results
+     document carries a raw float32, which is what makes that enforceable. */
+  function stat(v, kind) {
+    if (v == null) return '0';
+    if (kind === 'tenths') return (Math.round(v) / 10).toFixed(1);
+    if (kind === 'pct') return Math.round(v) + ' %';
+    return String(Math.round(v));
+  }
+
+  function renderVp(s) {
+    var box = $('bc17-vp');
+    var v = s.bc17_vp;
+    if (!box || !v || !v.orders) return;
+    var html = '';
+    v.orders.forEach(function (o, i) {
+      var cls = i === 0 ? 'ash' : 'basil';
+      var bars = Math.max(0, Math.min(8, Math.round(o.vp / 125)));
+      var pips = '';
+      for (var k = 0; k < 8; k++) pips += k < bars ? '\u25ae' : '\u00b7';
+      html += '<span class="' + cls + '">' + esc(o.alias.toUpperCase()) +
+        ' ' + stat(o.vp, 'int') + ' ' + pips + '</span>';
+      if (o.vp >= (v.orders[0].to_win || 1000)) box.classList.add('closed');
+      if (lastVp[i] >= 0 && o.vp > lastVp[i]) {
+        box.classList.remove('flash');
+        void box.offsetWidth;
+        box.classList.add('flash');
+      }
+      lastVp[i] = o.vp;
+    });
+    html += '<span class="price">VP costs ' +
+      stat(v.price_tenths, 'tenths') + ' bullets</span>';
+    v.orders.forEach(function (o, i) {
+      html += '<span class="price">' + esc(o.alias.slice(5)) + ' needs ' +
+        stat(o.bullets_needed_tenths, 'tenths') + '</span>';
+    });
+    box.innerHTML = html;
+  }
+
+  function renderBullets(s) {
+    var box = $('bc17-bullets');
+    var b = s.bc17_bullets;
+    if (!box || !b || !b.orders) return;
+    var html = '';
+    b.orders.forEach(function (o) {
+      html += '<span>' + esc(o.alias.slice(5)) + ' \u25c6' +
+        stat(o.bullets_tenths, 'tenths') + '</span>' +
+        '<span>\ud83c\udf33 ' + stat(o.mature_trees, 'int') +
+        ' \u2192 +' + stat(o.tree_income_tenths, 'tenths') + '/round</span>' +
+        '<span class="' + (o.trickle_tenths > 0 ? '' : 'off') + '">' +
+        esc(o.trickle_note) + '</span>' +
+        '<span class="lbl">units ' + stat(o.spent_units_tenths, 'tenths') +
+        ' / trees ' + stat(o.spent_trees_tenths, 'tenths') +
+        ' / shots ' + stat(o.spent_shots_tenths, 'tenths') +
+        ' / donated ' + stat(o.spent_donations_tenths, 'tenths') + '</span>';
+    });
+    html += '<span>ROUND ' + stat(b.round, 'int') + ' / ' +
+      stat(b.rounds, 'int') + '</span>';
+    box.innerHTML = html;
+  }
+
+  function renderEcon(s) {
+    var box = $('bc17-econ');
+    var e = s.bc17_econ;
+    if (!box || !e || !e.orders) return;
+    var html = '';
+    e.orders.forEach(function (o) {
+      html += '<div class="row"><span class="who">' + esc(o.alias) +
+        '</span><span>trees ' + stat(o.trees_planted, 'int') + ' planted / ' +
+        stat(o.trees_standing, 'int') + ' up / ' +
+        stat(o.trees_mature, 'int') + ' mature / ' +
+        stat(o.trees_lost, 'int') + ' lost</span>' +
+        '<span class="lbl">from trees ' +
+        stat(o.from_trees_tenths, 'tenths') + ' \u00b7 shaken ' +
+        stat(o.shaken_tenths, 'tenths') + ' \u00b7 trickled ' +
+        stat(o.trickled_tenths, 'tenths') + '</span>' +
+        '<span class="lbl">water ' + stat(o.water_actions, 'int') +
+        ' \u00b7 shake ' + stat(o.shake_actions, 'int') +
+        ' \u00b7 chop ' + stat(o.chop_actions, 'int') +
+        ' \u00b7 felled ' + stat(o.neutral_trees_felled, 'int') +
+        ' \u00b7 released ' + stat(o.robots_released, 'int') +
+        '</span></div>';
+    });
+    box.innerHTML = html;
+  }
+
+  function renderUnits(s) {
+    var box = $('bc17-units');
+    var u = s.bc17_units;
+    if (!box || !u || !u.orders) return;
+    var html = '';
+    u.orders.forEach(function (o) {
+      html += '<div class="row"><span class="who">' + esc(o.alias) +
+        '</span><span><b>' + stat(o.archon, 'int') + ' archon</b> \u00b7 ' +
+        stat(o.gardener, 'int') + ' gard \u00b7 ' +
+        stat(o.soldier, 'int') + ' sol \u00b7 ' +
+        stat(o.tank, 'int') + ' tank \u00b7 ' +
+        stat(o.scout, 'int') + ' scout \u00b7 ' +
+        stat(o.lumberjack, 'int') + ' lj</span>' +
+        '<span class="lbl">dormant ' + stat(o.dormant, 'int') +
+        ' \u00b7 in flight ' + stat(o.bullets_in_flight, 'int') +
+        ' \u00b7 built ' + stat(o.built, 'int') +
+        ' \u00b7 lost ' + stat(o.lost, 'int') + '</span>' +
+        '<span class="lbl">damage ' +
+        stat(o.damage_dealt_tenths, 'tenths') + ' \u00b7 own fire ' +
+        stat(o.friendly_fire_tenths, 'tenths') + ' \u00b7 own trees ' +
+        stat(o.own_trees_damaged_tenths, 'tenths') + '</span></div>';
+    });
+    box.innerHTML = html;
+  }
+
+  function renderDoctrines(s) {
+    var body = $('bc17-doctrines-body');
+    if (!body || !s.doctrines) return;
+    var html = '';
+    s.doctrines.forEach(function (d) {
+      html += '<div><b>' + esc(d.alias) + '</b> (' + esc(d.name) + ')';
+      if (d.envelope || (d.defaults_applied && d.defaults_applied.length)) {
+        html += ' <span class="badge">envelope: ' +
+          esc(d.envelope || 'none') + ' \u00b7 ' +
+          (d.defaults_applied ? d.defaults_applied.length : 0) +
+          ' of 11 knobs defaulted</span>';
+      }
+      html += '<ul>';
+      (d.words || []).forEach(function (w) {
+        html += '<li>' + esc(w) + '</li>';
+      });
+      html += '</ul>';
+      if (d.notes) html += '<div>' + esc(d.notes) + '</div>';
+      html += '</div>';
+    });
+    body.innerHTML = html;
+  }
+
+  function setDoctrinesOpen(open) {
+    var box = $('bc17-doctrines');
+    var chip = $('bc17-doctrines-toggle');
+    if (box) box.style.display = open ? '' : 'none';
+    if (chip) chip.style.display = open ? 'none' : '';
+  }
+
+  function wireDoctrines() {
+    var close = $('bc17-doctrines-close');
+    if (close) {
+      close.addEventListener('click', function () {
+        dismissed = true;
+        pinned = false;
+        setDoctrinesOpen(false);
+      });
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { dismissed = true; setDoctrinesOpen(false); }
+    });
+    var chip = $('bc17-doctrines-toggle');
+    if (chip) {
+      chip.addEventListener('click', function () {
+        pinned = true;
+        dismissed = false;
+        setDoctrinesOpen(true);
+      });
+    }
+    window.setTimeout(function () {
+      if (!pinned) setDoctrinesOpen(false);
+    }, 6000);
+  }
+
+  /* Scrubber beats: clickable, labelled `<button>`s with an `aria-label`
+     and a `title`, built by THIS block's own function. Every beat kind the
+     sim emits has a CSS rule above. */
+  function buildBc17BeatButtons(s) {
+    if (!api || !api.renderBeats) return;
+    api.renderBeats(s.beats || [], 'bc17');
+  }
+
+  function applyBc17BeatSpoilers(s) {
+    if (!api || !api.applySpoilers) return;
+    api.applySpoilers(s, 'bc17');
+  }
+
+  window.Bc17Block = {
+    attach: function (host) {
+      api = host;
+      wireDoctrines();
+    },
+    // True while a bc17 replay is on screen; the inherited block asks
+    // before it draws its own year's readouts.
+    active: function (s) { return s && s.year === 'bc17'; },
+    onFrame: function (s) {
+      if (s.year !== 'bc17') return;
+      buildBc17BeatButtons(s);
+      if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {
+        setDoctrinesOpen(false);
+      }
+      lastFrame = s.t;
+      renderVp(s);
+      renderBullets(s);
+      renderEcon(s);
+      renderUnits(s);
+      renderDoctrines(s);
+      applyBc17BeatSpoilers(s);
+    }
+  };
 })();
 </script>
 </body>

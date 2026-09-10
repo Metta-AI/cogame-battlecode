@@ -871,10 +871,10 @@ block:
     "window.Bc25Block = {" in page)
   check("and the shared onText calls it",
     "if (window.Bc25Block) window.Bc25Block.onFrame(s);" in page)
-  check("and the bc26 branch is guarded off for bc25, bc23, bc22, bc16 and " &
-    "now bc19 too, so the discriminator is NINE-way",
-    "if (!isBc16 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && !isBc23 &&" in
-      page)
+  check("and the bc26 branch is guarded off for bc25, bc23, bc22, bc16, " &
+    "bc19 and now bc17 too, so the discriminator is TEN-way",
+    "if (!isBc16 && !isBc17 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && " &
+      "!isBc23 &&" in page)
 
 block:
   ## THE BC23 GAME BLOCK. The same five obligations every year module before
@@ -1164,10 +1164,10 @@ block:
     "if (window.Bc22Block) window.Bc22Block.onFrame(s);" in page)
   check("and the inherited block attaches the transport to it",
     "window.Bc22Block.attach({" in page)
-  check("the bc26 branch is guarded off for bc22, bc16 and bc19 too, so " &
-    "the discriminator is NINE-way",
-    "if (!isBc16 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && !isBc23 &&" in
-      page)
+  check("the bc26 branch is guarded off for bc22, bc16, bc19 and bc17 too, " &
+    "so the discriminator is TEN-way",
+    "if (!isBc16 && !isBc17 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && " &
+      "!isBc23 &&" in page)
   for alias in ["window.Bc20Block = {", "window.Bc21Block = {",
                 "window.Bc23Block = {", "window.Bc24Block = {",
                 "window.Bc25Block = {"]:
@@ -1938,5 +1938,47 @@ block:
   check("and there is no neutral palette, because this year has none",
     "\"neutral_castle\"" notin atlas and "\"horde_castle\"" notin atlas)
   check("at the 16 px tile the renderer draws", "\"tile\":16" in atlas)
+
+block:
+  ## **THE BC17 GAME BLOCK**, the tenth, held to the same five obligations
+  ## every year module before it was: its own ids, its own scoped CSS, its
+  ## own beat builder, its own block object, and the shared `onText` calling
+  ## it.
+  let page = readFile("client/replay_broadcast.html")
+  for id in ["bc17-vp", "bc17-bullets", "bc17-econ", "bc17-units",
+             "bc17-doctrines"]:
+    check("the page carries #" & id, "id=\"" & id & "\"" in page)
+  check("the doctrines panel is DISMISSIBLE",
+    "id=\"bc17-doctrines-close\"" in page and
+    "aria-label=\"Dismiss doctrines\"" in page)
+  check("every bc17 rule is scoped to the year",
+    "html[data-year=\"bc17\"] .beat-marker.donate" in page and
+    "html:not([data-year=\"bc17\"]) #bc17-vp" in page)
+  check("and the block hides EVERY other year's boxes",
+    "html[data-year=\"bc17\"] #bc19-castles" in page and
+    "html[data-year=\"bc17\"] #bc16-archons" in page and
+    "html[data-year=\"bc17\"] #coopchip" in page)
+  check("the beat builder has its OWN name",
+    "function buildBc17BeatButtons" in page)
+  checkEq("defined exactly once",
+    page.count("function buildBc17BeatButtons"), 1)
+  check("the spoiler gate too", "function applyBc17BeatSpoilers" in page)
+  check("the block registers on window.Bc17Block",
+    "window.Bc17Block = {" in page)
+  check("and the shared onText calls it",
+    "if (window.Bc17Block) window.Bc17Block.onFrame(s);" in page)
+  check("and the inherited block attaches the transport to it",
+    "window.Bc17Block.attach({" in page)
+  check("the two rail boxes are in relayout()'s --statrail set",
+    "'bc17-econ', 'bc17-units'" in page)
+  check("the endcard noun table has a bc17 row",
+    "bc17: { unit: 'archon'" in page)
+  ## **EVERY BEAT KIND THE SIM CAN EMIT HAS A SCOPED RULE.** Seven of the
+  ## thirteen names are another year's as well, which is exactly why the
+  ## scoping is mandatory.
+  for kind in ["doctrine", "game", "build", "tree", "archon", "donate",
+               "shake", "strike", "volley", "rout", "duel", "famine", "end"]:
+    check("a scoped rule for the bc17 " & kind & " beat",
+      "html[data-year=\"bc17\"] .beat-marker." & kind & " {" in page)
 
 finish("test_viewer")
