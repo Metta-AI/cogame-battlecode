@@ -450,4 +450,71 @@ check("while the other three are",
   c22.AnomalySpecs[c22.anCharge].isSageAnomaly and
   c22.AnomalySpecs[c22.anFury].isSageAnomaly)
 
+# ---------------------------------------------------------------------------
+#  bc19 — the NINTH generated constants table, and the FIRST from JSON
+# ---------------------------------------------------------------------------
+block:
+  ## §Tests item 26. `BC19_DIR` is the pinned battlecode19 checkout
+  ## `.github/workflows/ci.yml` fetches — a `curl` of the GitHub tarball at
+  ## `80cf1cc5`, no `git` and no `npm`. With it, the check is the real one:
+  ## regenerate `src/battlecode/years/bc19/constants.nim` from
+  ## `coldbrew/specs.json` and byte-diff it.
+  ##
+  ## **THE MAP AND ARITHMETIC-TABLE REGENERATION BYTE-DIFFS NEED NODE AND
+  ## THEREFORE RUN IN `parity-oracle-bc19`, NOT HERE** — said explicitly so
+  ## nobody looks in the wrong job. `data/maps/bc19/*.json` come out of
+  ## `tools/gen_maps_bc19.mjs` (the engine's own constructor under the pinned
+  ## Node) and `data/bc19/tables.json` out of `tools/JsBc19Tables.mjs`, and
+  ## the `test` job has no Node pinned to the engine's version.
+  let dir19 = getEnv("BC19_DIR")
+  if dir19.len > 0 and dirExists(dir19):
+    block:
+      let (output, code) = execCmdEx(
+        "python3 tools/gen_year_constants.py --year bc19 --engine " &
+        quoteShell(dir19) & " --check")
+      check("bc19 constants.nim is byte-identical to a fresh generation: " &
+        output.strip(), code == 0)
+    block:
+      ## bc19 is the FIRST year whose engine source is JavaScript, so the
+      ## generator reads JSON rather than parsing Java — and the file it
+      ## reads must be the one the note names.
+      check("the pinned checkout really carries coldbrew/specs.json",
+        fileExists(dir19 / "coldbrew" / "specs.json"))
+      check("and the engine's own example bot, which is the weak floor's " &
+        "source", fileExists(dir19 / "coldbrew" / "bots" / "example_js" /
+          "robot.js"))
+      check("and GPL-3.0, which is why the weak floor is LICENSED rather " &
+        "than invented", fileExists(dir19 / "LICENSE"))
+    block:
+      let (output, code) = execCmdEx(
+        "python3 tools/build_sprite_atlas_bc19.py --engine " &
+        quoteShell(dir19) & " --out data --check")
+      check("the bc19 sprite atlas is a fresh cut of the 2019 client art: " &
+        output.strip(), code == 0)
+  else:
+    echo "BC19_DIR unset; falling back to spot values from the pinned commit"
+
+import battlecode/years/bc19/constants as c19
+
+checkEq("bc19 EngineCommit", c19.EngineCommit,
+  "80cf1cc535ec5a30559274aa1b49807ad4859925")
+checkEq("MAX_ROUNDS", c19.MaxRounds, 1000)
+checkEq("TRICKLE_FUEL — the ONLY passive income in the game",
+  c19.TrickleFuel, 25)
+checkEq("INITIAL_KARBONITE", c19.InitialKarbonite, 100)
+checkEq("INITIAL_FUEL", c19.InitialFuel, 500)
+checkEq("MINE_FUEL_COST", c19.MineFuelCost, 1)
+checkEq("KARBONITE_YIELD", c19.KarboniteYield, 2)
+checkEq("FUEL_YIELD", c19.FuelYield, 10)
+checkEq("MAX_TRADE", c19.MaxTrade, 1024)
+checkEq("MAX_BOARD_SIZE", c19.MaxBoardSize, 64)
+checkEq("MAX_ID — and the docs say 4096 while the draw is 1..4095",
+  c19.MaxId, 4096)
+checkEq("COMMUNICATION_BITS", c19.CommunicationBits, 16)
+checkEq("CASTLE_TALK_BITS", c19.CastleTalkBits, 8)
+checkEq("CHESS_INITIAL, the wall-clock ms V1 replaces", c19.ChessInitial, 100)
+checkEq("CHESS_EXTRA", c19.ChessExtra, 20)
+checkEq("and MAX_SIGNAL_RADIUS is DERIVED, not tabled: 2*(64-1)^2",
+  c19.MaxSignalRadius, 7938)
+
 finish("test_constants")

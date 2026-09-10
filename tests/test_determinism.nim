@@ -16,6 +16,7 @@ from battlecode/years/bc22/maps as maps22 import nil
 from battlecode/years/bc22/anomaly as anomaly22 import nil
 from battlecode/years/bc16/maps as maps16 import nil
 from battlecode/years/bc16/world as world16 import nil
+from battlecode/years/bc19/rules as r19 import nil
 
 proc play(mapName: string, sheets: array[2, Sheet], rounds: int,
           sideAslot = 0): GameOutcome26 =
@@ -484,5 +485,135 @@ block:
   var gen26 = initIdGenerator(spec.randomSeed)
   check("while the DEFAULT first block is still the 10 000 floor, so no " &
     "other year's id stream moves", gen26.nextId() > 10000)
+
+block:
+  ## THE bc19 HALF (§Tests item 22). Same seed + same sheets => identical
+  ## hash chain, twice in one process and through `years/dispatch.nim` — the
+  ## path the wasm viewer takes — plus the chassis fallback.
+  let s19 = [baselineSheet("bc19", blSaber), baselineSheet("bc19", blSaber)]
+  let strong19 = playGameFor("bc19", "seed-0043", s19,
+    [scSaber, scSaber], 0, 0, 300, 0)[0]
+  let again19 = playGameFor("bc19", "seed-0043", s19,
+    [scSaber, scSaber], 0, 0, 300, 0)[0]
+  checkEq("bc19 is deterministic in one process", again19.hashChain,
+    strong19.hashChain)
+  checkEq("down to the per-round chain", again19.roundChains,
+    strong19.roundChains)
+  checkEq("and the same rounds", again19.roundsPlayed, strong19.roundsPlayed)
+  let foreign19 = playGameFor("bc19", "seed-0043", s19,
+    [scLemonade, scGoneSharkin], 0, 0, 300, 0)[0]
+  checkEq("a foreign chassis name on a bc19 game plays saber",
+    foreign19.hashChain, strong19.hashChain)
+  checkEq("and the bc19 chassis strings round-trip",
+    $parseScriptedChassis("examplefuncsplayer19"), "examplefuncsplayer19")
+  checkEq("as does the strong one", $parseScriptedChassis("saber"), "saber")
+  checkEq("for bc19 the strong chassis is saber",
+    $strongChassisFor("bc19"), "saber")
+  checkEq("and its default baseline is saber",
+    $defaultBaselineFor("bc19"), "saber")
+
+block:
+  ## **THE MT19937 STATE IS FOLDED INTO THE CHAIN**, which is bc19's own
+  ## decision and the cheapest possible tripwire for a MISSED OR EXTRA ID
+  ## DRAW (D1.2). The id stream is this year's only live randomness, so a
+  ## desynchronised generator is the single most likely way the port can
+  ## diverge from the engine — and it would otherwise be INVISIBLE, because
+  ## the ids themselves are never compared by the score.
+  ##
+  ## The vector: play one round, then consume ONE EXTRA ID DRAW off the
+  ## generator, then fold again. The chain MUST diverge on that round.
+  let spec = r19.loadMap("seed-0043")
+  var a = r19.newWorld(spec, 1000)
+  var b = r19.newWorld(spec, 1000)
+  checkEq("two fresh worlds start from the same chain",
+    r19.hashChainHexOf(a), r19.hashChainHexOf(b))
+  checkEq("and the same generator state", r19.saveState(a.gen),
+    r19.saveState(b.gen))
+  checkEq("and the same mti", a.gen.mti, b.gen.mti)
+  let sides = r19.newSides19([baselineSheet("bc19", blSaber),
+                              baselineSheet("bc19", blSaber)], 0)
+  let sidesB = r19.newSides19([baselineSheet("bc19", blSaber),
+                               baselineSheet("bc19", blSaber)], 0)
+  r19.runRound(a, sides, [r19.ck19Saber, r19.ck19Saber])
+  r19.runRound(b, sidesB, [r19.ck19Saber, r19.ck19Saber])
+  checkEq("one round of the same inputs gives the same chain",
+    r19.hashChainHexOf(a), r19.hashChainHexOf(b))
+  ## Now ONE extra draw off `b`'s generator, AND NOTHING ELSE. At this point
+  ## the two worlds are identical in every OTHER folded quantity — nothing
+  ## has moved, nothing has been built, nothing has died — and the only
+  ## difference in the universe is 32 bits of generator state.
+  let mtiBefore = b.gen.mti
+  discard r19.randomInt(b.gen)
+  check("the extra draw moved the generator's CURSOR", b.gen.mti != mtiBefore)
+  ## And it did NOT move the 624 state words, because MT19937 only
+  ## regenerates the block when the cursor runs off the end. That is exactly
+  ## why `foldRoundHash` mixes BOTH `stateFold()` AND `mti`: folding the
+  ## words alone would miss 623 of every 624 possible desynchronisations.
+  checkEq("but NOT the 624 state words, which is why `mti` is folded too",
+    r19.stateFold(b.gen), r19.stateFold(a.gen))
+  checkEq("while the round counters still agree", a.round, b.round)
+  checkEq("and the queue lengths", a.robots.len, b.robots.len)
+  checkEq("and the shadow, square for square",
+    r19.shadowChecksum(a), r19.shadowChecksum(b))
+  checkEq("and the queue order", r19.queueChecksum(a), r19.queueChecksum(b))
+  checkEq("and both stockpiles", (a.karbonite, a.fuel), (b.karbonite, b.fuel))
+  checkEq("and the spent id set", a.idsSpent, b.idsSpent)
+  ## So the very next fold can only differ because of the generator — and it
+  ## does. THAT is the tripwire: without the MT19937 fold, a missed or extra
+  ## id draw would be invisible until it changed a robot id, which may be
+  ## hundreds of rounds later or never.
+  r19.runRound(a, sides, [r19.ck19Saber, r19.ck19Saber])
+  r19.runRound(b, sidesB, [r19.ck19Saber, r19.ck19Saber])
+  check("and the chain DIVERGES on the very next round",
+    r19.hashChainHexOf(a) != r19.hashChainHexOf(b))
+
+block:
+  ## RECORD -> RE-DERIVE FOR EVERY bc19 END REASON, by the SAME proc on both
+  ## paths. bc19's own replay shard (`tests/test_bc19_replay.nim`) walks the
+  ## deriver; what belongs here is that the year-neutral `endReasonFor`
+  ## ladder produces each rung and that each rung round-trips through
+  ## `EndReasons`.
+  var seen19: seq[string]
+  for (mapName, rounds, slot) in [("seed-0043", 1000, 0),
+                                  ("seed-0009", 1000, 0),
+                                  ("seed-0017", 1000, 1),
+                                  ("seed-0048", 1000, 0),
+                                  ("seed-0107", 1000, 1),
+                                  ("seed-0021", 1000, 0),
+                                  ("seed-0034", 1000, 0),
+                                  ("seed-0125", 1000, 1)]:
+    let s = [baselineSheet("bc19", blSaber), baselineSheet("bc19", blSaber)]
+    let (a, _) = playGameFor("bc19", mapName, s, [scSaber, scSaber], 0, slot,
+                             rounds, 0)
+    let (b, _) = playGameFor("bc19", mapName, s, [scSaber, scSaber], 0, slot,
+                             rounds, 0)
+    checkEq(mapName & ": the recorded chain re-derives", a.hashChain,
+      b.hashChain)
+    checkEq(mapName & ": and the end reason with it", a.endReason,
+      b.endReason)
+    if a.endReason notin seen19: seen19.add(a.endReason)
+  echo "  bc19 end reasons exercised by the determinism shard: ",
+    seen19.join(", ")
+  check("at least two distinct rungs were reached", seen19.len >= 2)
+  for reason in seen19:
+    check("`" & reason & "` is a declared end reason", reason in EndReasons)
+    check("and is one of bc19's five",
+      reason in ["castles_destroyed", "more_castles", "more_unit_health",
+                 "coin_flip", "abandoned"])
+  ## The `abandoned` stop, applied by the SAME proc on both paths: the
+  ## particle-worlds scar. `playGame`'s budget is the only thing a
+  ## re-derivation cannot recompute, so it is one recorded value.
+  let s = [baselineSheet("bc19", blSaber), baselineSheet("bc19", blSaber)]
+  let (ao, _) = playGameFor("bc19", "seed-0045", s, [scSaber, scSaber], 0, 0,
+                            1000, 1)
+  check("a one-second budget either abandons or completes",
+    ao.endReason in ["abandoned", "castles_destroyed", "more_castles",
+                     "more_unit_health", "coin_flip"])
+  if ao.endReason == "abandoned":
+    check("and the abandoned game recorded the round it stopped on",
+      ao.roundsPlayed > 0)
+    checkEq("with the aborted flag set", ao.aborted, true)
+  else:
+    checkEq("or it finished and is not flagged aborted", ao.aborted, false)
 
 finish("test_determinism")
