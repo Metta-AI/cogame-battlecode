@@ -1,0 +1,12 @@
+{
+  "url": "http://battlecode-maven.s3-website-us-east-1.amazonaws.com/org/battlecode/battlecode/2017.1.6.2/battlecode-2017.1.6.2.jar",
+  "version": "2017.1.6.2",
+  "spec_version": "1.0",
+  "bytes": 14576275,
+  "sha256": "9254e89268fd6efb72cafc037e3eded006aefd1d19aa44195c945b43ceb7bff9",
+  "engine_commit": "165d8a8ef24f03e13a101bb8bc9f5b32dcb33c6c",
+  "scaffold_commit": "76e7b51e06088fdcce2f6a6b97aff21782ae20d0",
+  "client_commit": "feb3e03820ba442ab233f05d2432b0dc2833aa98",
+  "jdk": "8",
+  "note": "MEASURED IN PHASE 20, NOT COPIED: the artefact was downloaded and its sha256 and byte size recomputed (sha256sum + stat) before this file was written, and both match the design note. The published .pom carries NO <dependencies> element and the jar is a FAT jar -- 10210 entries, 116 battlecode classes, and it bundles gnu/trove (1618), net/sf/jsi (11), kotlin (~380), com/github/davidmoten flatbuffers, org/objectweb/asm (59 -- the instrumenter), org/apache/commons/{lang3,cli,io} (381), org/slf4j (45), org/java_websocket (68), com/thoughtworks/xstream (12) and the shaded junit/mockito/hamcrest test tree -- SO THIS JOB NEEDS NO GRADLE, NO MAVEN RESOLUTION, NO deps.lock AND NO SHIM. It also carries all 70 battlecode/world/resources/*.map17 resources, so no --map-dir is needed either and tools/convert_maps_bc17.py reads the maps straight out of the jar with no JVM -- VERIFIED in phase 20: the converter's pure-Python flatbuffer walk and the JVM's own GameMapIO.loadMapAsResource agree BYTE FOR BYTE on all 22 committed boards (5204 canonical raw-bits lines). Unlike 2016 there IS a GameConstants.SPEC_VERSION (\"1.0\"), so the pins are sha256 + byte size + SPEC_VERSION read by reflection. IT MUST RUN ON TEMURIN 8: the jar bundles a 2017-era ASM 5.0.4 and the whole instrumenter is built for Java 8 class files; under a modern JDK the instrumenter throws IllegalArgumentException inside ClassReader.<init> on every player class load, nothing is ever built, the game ends in one round and the job would exit 0 while proving nothing (the bc22/bc23 measurement, and 2017's ASM is the same vintage). NOTE that gnu/trove AND net/sf/jsi ARE both present and both ARE load-bearing here, unlike 2016: trove's TIntObjectHashMap iteration order is observable through GameWorld.updateTrees's float32 sum and through senseBroadcastingRobotLocations, and jsi's RTree candidate order is observable through senseNearbyRobots -- see docs/PARITY.md section bc17, D1 and D2."
+}

@@ -2132,3 +2132,94 @@ immediately around the robot, with the adjacent-square scan order fixed in its
 example bot statement for statement. An edit to either that is not mirrored on
 the other side is what Tier A′/A″ will catch, and it will catch it as a
 divergence rather than as a compile error.
+
+
+---
+
+# bc17 — Battlecode 2017 "Robotic Wildlife Fund"
+
+## The pins
+
+| what | value |
+|---|---|
+| engine | `battlecode/battlecode-server-2017` @ `165d8a8ef24f03e13a101bb8bc9f5b32dcb33c6c` (root `COPYING` = AGPL-3.0, the ONLY licence file in the tree) |
+| oracle artefact | `org.battlecode:battlecode:2017.1.6.2` |
+| sha256 | `9254e89268fd6efb72cafc037e3eded006aefd1d19aa44195c945b43ceb7bff9` — **downloaded and recomputed in phase 20**, not copied |
+| bytes | **14 576 275** — likewise measured |
+| `GameConstants.SPEC_VERSION` | `"1.0"` — a third independent pin, read by reflection (2016 had none) |
+| JDK | **Temurin 8, and that is not negotiable**: the jar bundles a 2017-era ASM 5.0.4 and the whole instrumenter is built for Java 8 class files. Under a modern JDK the instrumenter throws `IllegalArgumentException` inside `ClassReader.<init>` on every player class load, nothing is ever built, the game ends in one round and a job would exit 0 while proving nothing. |
+| scaffold | `battlecode/battlecode-scaffold-2017` @ `76e7b51e06088fdcce2f6a6b97aff21782ae20d0` (AGPL-3.0) |
+| client (sprites) | `battlecode/battlecode-client-17` @ `feb3e03820ba442ab233f05d2432b0dc2833aa98` (root `LICENSE` = AGPL-3.0; `package.json` says GPL-3.0 — the discrepancy is recorded in `NOTICE`) |
+
+**The jar is a FAT jar and needs no dependency resolution at all**: the
+published `.pom` carries no `<dependencies>` element, and the artefact bundles
+`gnu/trove`, `net/sf/jsi`, the Kotlin standard library, flatbuffers-java,
+Apache Commons, SLF4J, Java-WebSocket, ObjectWeb ASM **and all seventy
+`battlecode/world/resources/*.map17` map resources**. So there is no Gradle, no
+Maven list, no `deps.lock`, no shim and no `--map-dir` — and
+`tools/convert_maps_bc17.py` reads the maps straight out of it in pure Python
+**with no JVM**.
+
+## Status at the phase-20 exit — read this before trusting a tier
+
+**`parity-oracle-bc17` IS NOT YET A CI JOB.** Phase 20 landed the year module,
+the pins and the parity EVIDENCE it could measure locally against the real
+engine (below); the trace driver (`Bc17Trace.java`), the seven oracle bots, the
+three engine patches, `tools/parity_trace_bc17.nim`,
+`tools/ci/parity_tiers_bc17.py` and the job itself are **outstanding work**,
+and no tier is claimed as passing in CI. The ledger
+(`tools/ci/parity_ledger_bc17.json`) does not exist yet either, which means
+there is **no accepted divergence** — not that a divergence has been excused.
+
+**What WAS measured in phase 20, with the pinned jar under Temurin 8, and is
+therefore real parity evidence:**
+
+| evidence | result |
+|---|---|
+| the jar's sha256 and byte size | recomputed, **both match the pin** (14 576 275 bytes) |
+| `GameConstants` + the whole six-row `RobotType` table, by REFLECTION | rendered into `src/battlecode/years/bc17/constants.nim` by `tools/JavaBc17Tables.java constants` + `tools/gen_year_constants.py --year bc17 --tables`, and the generator's own `--check` is byte-clean |
+| **all 22 committed maps against the JVM's own `LiveMap`** | `tools/JavaBc17Tables.java maps` and `tools/convert_maps_bc17.py --dump-bits` produce **5 204 canonical raw-bits lines each and they are byte-identical** — width, height, origin, seed, rounds and every initial body's id, team, type, float coordinates, radius, health, contained bullets and contained robot, in `getInitialBodies()` order. This is Tier B (iii) in full, measured. |
+| **the fdlibm port against the JVM's own `StrictMath`** | `data/bc17/fdlibm_vectors.json` — 440 boundary rows and **eleven expression-shape digests over 2 000 000 samples** drawn by `java.util.Random(20170101)` — reproduced **BIT FOR BIT** by `src/battlecode/fdlibm.nim` + `years/bc17/geom.nim` (`tests/test_bc17_fdlibm.nim`, 0 mismatches in 448 rows and 11/11 digests). This is Tier B (ii) in full, measured. |
+| **the two `IDGenerator` streams (D3)** | the first eight robot ids for map seed 98 are `13527, 10137, 10443, 12235, 13581, 11621, 11304, 11839` and the first eight bullet ids are `33728, 35734, 33147, 32964, 35666, 34517, 34646, 34056` — exactly the values measured on the live engine, including the bullet generator's **two-block head start** (`tests/test_bc17_ids.nim`) |
+| **the trove iteration order (D1)** | ids `{2,3,4,5}` walk `5 4 3 2` and `{14,15,16,17,34,35}` walk `17 16 15 14 35 34`, and `clear()` retains capacity 23 — the orders measured on the jar's own classes and cross-checked against the live engine's `eachRobot` |
+| **the income cliff** | `max(0, 2 − 0.01 × supply)` is exactly 0 at 200, and an idle 299-round game ends with the exact bits of `300.0` on both sides (`tests/test_bc17_economy.nim`) |
+
+## The three engine patches, and why each is legitimate
+
+They are **not landed yet** (they belong to the outstanding job) but they are
+decided and they are recorded here so the job cannot quietly grow a fourth:
+
+1. **`strictmath.patch`** — the eleven `Math.{atan2,sin,cos,sqrt}` call sites
+   in `common/Direction.java`, `common/MapLocation.java` and
+   `world/InternalBullet.java` become `StrictMath`. Legitimate because every
+   one of those results is narrowed to `float32` before it reaches any state,
+   and at `float32` the patched and unpatched engines agree in every one of
+   20 000 000 measured samples: what the patch buys is that the residual — a
+   double-level 1-ulp difference straddling a float32 rounding boundary — becomes
+   **exactly zero**.
+2. **`rtree_order.patch`** — `ObjectInfo`'s six `net.sf.jsi` `nearestN`
+   queries become the same `(distanceSquared, id)` enumeration the Nim side
+   uses (D2). Legitimate because jsi's exact-tie order is an artefact of the
+   R-tree's insertion history and **is not stable even against itself in one
+   process** (measured: the same five points gave two different orders), so
+   there is nothing faithful to reproduce.
+3. **`examplefuncsplayer17/determinism.patch`** — the scaffold bot's three
+   `Math.random()` calls become a per-robot `java.util.Random(rc.getID())`,
+   **with the `&&` short-circuit draw order preserved exactly**. Legitimate
+   because the stock line draws from the wall-clock-seeded global RNG and is
+   not reproducible even against itself.
+
+## What is NOT compared, and will not be
+
+**The only behaviour this oracle cannot compare is how much thinking each side
+got — and NO 2017 RULE READS IT.** `bytecodesUsed` is replay telemetry and
+`prevBytecodesUsed` is written and never read by any gameplay path, so the
+`DecisionOps` divergence (V1) has no observable consequence in the rules; on
+the engine side the metering can be proved never to have fired by asserting
+`Clock.getBytecodesLeft() > 5000` at the end of every turn of every compared
+bot. That assertion belongs to the outstanding job.
+
+`GameWorld.rand` (a third `Random(mapSeed)` the engine constructs and never
+reads), team memory (V4), `resign()` (V6) and the debug indicator APIs are not
+compared because they are not ported, and each is recorded rather than
+silently dropped.

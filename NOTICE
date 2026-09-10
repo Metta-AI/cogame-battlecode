@@ -857,3 +857,104 @@ to this repository. Where this repository's documents describe "the play the
 2019 meta made", that is a statement about the run's source idea's
 characterisation of the 2019 season, not a claim about any repository's
 contents.
+
+
+## battlecode/battlecode-server-2017 engine — AGPL-3.0
+
+Repository: <https://github.com/battlecode/battlecode-server-2017>, pinned at
+commit **`165d8a8ef24f03e13a101bb8bc9f5b32dcb33c6c`** (`HEAD` of `master`,
+2017-03-26). **The repository root `COPYING` is the GNU Affero General Public
+License v3 (34 520 bytes) and it is the ONLY licence file anywhere in the
+tree** — verified — so every file used below is covered by that one licence,
+**the same licence this repository carries**, and unlike the 2016, 2019 and
+2020 sources there is no GPL-to-AGPL section 13 argument to make at all. The
+published artefact `org.battlecode:battlecode:2017.1.6.2` (a fat jar, sha256
+`9254e89268fd6efb72cafc037e3eded006aefd1d19aa44195c945b43ceb7bff9`,
+14 576 275 bytes — both recomputed in phase 20) is the same work; it bundles
+`gnu/trove` (LGPL-2.1), `net/sf/jsi` (LGPL/BSD), the Kotlin standard library,
+flatbuffers-java, Apache Commons, SLF4J, Java-WebSocket and ObjectWeb ASM,
+**none of which is redistributed by this repository**: the jar is downloaded in
+CI and at map-conversion time and never enters an image.
+
+What derives from it, named individually:
+`src/battlecode/years/bc17/{geom,index,units,world,ballistics,actions,trees,rules,maps,knobs}.nim`
+— the 2017 rule set **hand-written in Nim from reading the source** (a
+behaviour port, not a translation of copied files) from
+`world/{GameWorld,ObjectInfo,InternalRobot,InternalTree,InternalBullet,RobotControllerImpl,LiveMap}.java`
+and `common/{GameConstants,RobotType,MapLocation,Direction}.java`, with
+`specs-1.6.2.html` as the human-readable spec — **where the spec and the engine
+disagree the engine wins**, and all six disagreements plus every deliberate
+difference are in `docs/RULES-BC17.md`;
+`src/battlecode/years/bc17/trove.nim` — the **observable iteration order** of
+`gnu.trove.map.hash.TIntObjectHashMap` (trove4j 3.0.3, **LGPL-2.1**),
+reproduced because `GameWorld.updateTrees` accumulates a float32 sum in it;
+**this file vendors no trove source and no trove bytecode**, it reproduces the
+behaviour of a documented open-addressing scheme hand-written in Nim, and this
+paragraph records the dependency and its licence because reproducing a
+library's iteration order is a derivation of its behaviour;
+`src/battlecode/fdlibm.nim`'s `fdlibmSin`, `fdlibmCos`, `fdlibmAtan`,
+`fdlibmAtan2` and `remPio2Medium` — ports of **fdlibm 5.3** (Sun Microsystems,
+1993), the algorithm `java.lang.StrictMath` is specified against;
+`src/battlecode/years/bc17/constants.nim` — **generated** by
+`tools/JavaBc17Tables.java constants` + `tools/gen_year_constants.py --year
+bc17` by reflecting `GameConstants` and `RobotType` out of the jar's own
+classes; `data/maps/bc17/*.json` — 22 of the engine's own 70
+`battlecode/world/resources/*.map17` flatbuffers, converted at build time by
+`tools/convert_maps_bc17.py` (the runtime sim has no flatbuffer reader); and
+`tools/JavaBc17Tables.java`, which is compiled and run only in CI.
+
+**The engine is used only at CI time and at map-conversion time**, from the
+published jar, verified by sha256, byte size and `GameConstants.SPEC_VERSION`.
+**No JDK, no JRE, no Java and no upstream Java source exists in any image this
+repository builds.**
+
+## battlecode/battlecode-scaffold-2017 — the licensed weak floor, AGPL-3.0
+
+Repository: <https://github.com/battlecode/battlecode-scaffold-2017>, pinned at
+commit **`76e7b51e06088fdcce2f6a6b97aff21782ae20d0`** (2017-08-25). Root
+`LICENSE` is the GNU Affero General Public License v3.
+
+`src/battlecode/years/bc17/chassis/examplefuncsplayer17.nim` is a
+**statement-for-statement port** of `src/examplefuncsplayer/RobotPlayer.java`
+with one hunk applied (a deterministic per-robot `java.util.Random(rc.getID())`
+in place of `Math.random()`, whose draw ORDER — including Java's `&&`
+short-circuit — is preserved exactly). It is the parity oracle's other side, so
+it **may not gain behaviour**. Two of its helpers are also the behaviour source
+for two procs of the strong chassis, and saying so is cheaper than leaving it
+implicit: `chassis/kit.nim`'s seven-direction obstacle probe is `tryMove`
+(`RobotPlayer.java:215-244`) and `chassis/micro.nim`'s bullet-collision test is
+`willCollideWithMe` (`:253-277`). **Nothing else in `orchard` comes from
+anywhere but the engine source, the 1.6.2 spec page and this run's own
+design.**
+
+## benzyx/omega-ruby-battlecode, humford/Battlecode2017, SiestaGuru/Battlecode-2017---Bruteforcer — NOT READ
+
+All three repositories carry **no licence anywhere**, so this run treats them
+as unreadable. They are **not cloned, not read, not copied, not vendored, not
+compiled, not translated and not fetched**, and none contributes a single line
+to this repository. Where this repository's documents describe "the play the
+2017 meta made", that is a statement about the run's source idea's
+characterisation of the 2017 season, not a claim about any repository's
+contents.
+
+## battlecode/battlecode-client-17 sprites — AGPL-3.0
+
+Repository: <https://github.com/battlecode/battlecode-client-17>, pinned at
+commit **`feb3e03820ba442ab233f05d2432b0dc2833aa98`** (2017-03-26). **The root
+`LICENSE` is the GNU Affero General Public License v3; `package.json` declares
+`"license": "GPL-3.0"`. The two disagree, and both are compatible with this
+repository's AGPL-3.0** — recorded here rather than papered over.
+
+`data/atlas_bc17.png` and `data/atlas_bc17.json` are cut by
+`tools/build_sprite_atlas_bc17.py` from exactly **twenty-two** files:
+`src/static/img/sprites/{archon,gardener,lumberjack,soldier,tank,scout,bullet_tree}_{red,blue}.png`
+(fourteen, 32x32 and 50x50),
+`src/static/img/map/{full_health_tree,low_health_tree,sapling,tree_bullets,tree_robots}.png`
+(five, 32x32) and `src/static/img/bullets/bullet_{slow,medium,fast}.png`
+(three, 26/18/16 — one per bullet speed). (The design note's headline calls this
+set "twenty-one" while its own file list enumerates twenty-two; the
+ENUMERATION is what is shipped.) **`sprites/*_neutral.png`,
+`sprites/recruit_*.png` (a unit type the shipped `RobotType` does not have),
+`sprites/unknown.png`, `src/static/img/controls/`, `yellow_star.png` and
+`map/tiled_1.jpg` are NOT used, NOT cut and NOT shipped.** No client code is
+shipped, embedded or built.
