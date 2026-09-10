@@ -4141,11 +4141,16 @@ html[data-year="bc19"] #chrome:has(#endcard.on) #bc19-doctrines {
   visibility: hidden;
 }
 
-/* Beat markers, EVERY ONE scoped to html[data-year="bc19"]. TWELVE kinds,
-   and `tests/test_bc19_beats.nim` asserts that the COMMITTED FIXTURE
-   REPLAY emits every one of them -- emission, label and style, all three,
-   and the CSS check reads the kinds the fixture ACTUALLY EMITTED rather
-   than a hand-written list (the bc25 r1-F26 finding). SIX of the twelve
+/* Beat markers, EVERY ONE scoped to html[data-year="bc19"]. TWELVE kinds
+   DECLARED here, ELEVEN OF THEM EMITTED by the committed fixture replay:
+   `famine` fires only on the refusal path of an affordability check
+   (`src/battlecode/years/bc19/actions.nim`), and the scripted champion's
+   `refused_actions == 0` survival gate precludes it. That is what
+   `tests/test_bc19_beats.nim` asserts -- the eleven by emission, label and
+   style, `famine`'s ABSENCE from the fixture, its LABEL off two synthetic
+   events, and a scoped rule for ALL TWELVE declared kinds -- and the style
+   check reads the kinds the fixture ACTUALLY EMITTED rather than a
+   hand-written list (the bc25 r1-F26 finding). SIX of the twelve
    names already exist for another year (`doctrine`, `game`, `build`,
    `rout`, `duel`, `end`), which is exactly why the scoping is mandatory;
    six are new (`church`, `castle`, `mine`, `famine`, `trade`,
