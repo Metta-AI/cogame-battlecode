@@ -86,3 +86,9 @@ proc tradePlan*(w: World, s: Side, r: Robot): tuple[ok: bool, k, f: int] =
     result = (ok: true, k: sign * sellK, f: sign * (-buyF))
   if result.ok and not payableForUs(w, s, result.k, result.f):
     result = (ok: false, k: 0, f: 0)
+  ## AN OFFER ONLY HAS TO BE MADE ONCE. `last_offer[us]` holds it until this
+  ## castle replaces it (rule 6.7), so re-proposing an offer identical to the
+  ## one already standing spends a castle's turn on nothing.
+  if result.ok and w.lastOffer[us][0] == result.k and
+      w.lastOffer[us][1] == result.f:
+    result = (ok: false, k: 0, f: 0)
