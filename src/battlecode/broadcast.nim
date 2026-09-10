@@ -41,6 +41,11 @@ from years/bc16/constants as c16 import nil
 from years/bc16/units as u16 import nil
 from years/bc16/economy as e16 import nil
 from years/bc16/health as h16 import nil
+from years/bc19/world as w19 import nil
+from years/bc19/rules as r19 import nil
+from years/bc19/constants as c19 import nil
+from years/bc19/units as u19 import nil
+from years/bc19/maps as m19 import nil
 from years/bc22/anomaly as a22 import nil
 from years/bc22/economy as e22 import nil
 from years/bc22/constants as c22 import nil
@@ -160,6 +165,7 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
   let isBc23 = doc.year == "bc23"
   let isBc22 = doc.year == "bc22"
   let isBc16 = doc.year == "bc16"
+  let isBc19 = doc.year == "bc19"
   ## The bc23-only kinds below (`anchor_built`, `island_captured`,
   ## `island_lost`, `conquest_progress`, `well_transformed`, `well_upgraded`,
   ## `first_elixir_unit`, `boost_field`, `destabilize_hit`) need no
@@ -189,7 +195,8 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       of "drone_water_drop": "drop"
       of "hq_buried": "bury"
       of "hq_drowned": "drown"
-      of "first_action": (if isBc25 or isBc23 or isBc22 or isBc16: "build"
+      of "first_action": (if isBc25 or isBc23 or isBc22 or isBc16 or isBc19:
+                            "build"
                           else: "")
       of "tower_built": "tower"
       of "tower_upgraded": "upgrade"
@@ -197,7 +204,8 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       of "srp_completed", "srp_active", "srp_broken": "srp"
       of "coverage": "coverage"
       of "starved": "starve"
-      of "rout": (if isBc25 or isBc23 or isBc22 or isBc16: "rout" else: "")
+      of "rout": (if isBc25 or isBc23 or isBc22 or isBc16 or isBc19: "rout"
+                  else: "")
       of "anchor_built": "anchor"
       of "island_captured", "island_lost": "island"
       of "conquest_progress": "conquest"
@@ -214,6 +222,16 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       of "anomaly_dodged": "dodge"
       of "archon_lost", "archon_relocated": "archon"
       of "unit_milestone": "build"
+      # The bc19-only kinds need no discriminator: no other year emits those
+      # event names. Two of their beat kinds (`build`, `end`) are spelled the
+      # same as another year's, which is exactly why the CSS is scoped per
+      # year.
+      of "church_built", "church_lost": "church"
+      of "castle_lost": "castle"
+      of "depot_claimed": "mine"
+      of "famine": "famine"
+      of "trade": "trade"
+      of "preacher_splash": "splash"
       of "zombie_wave": "wave"
       of "outbreak": "outbreak"
       of "den_destroyed": "den"
@@ -361,7 +379,16 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       ## DUEL. bc16 has no launcher, so it takes bc22's wording; testing
       ## `isBc22` alone dropped bc16 into bc23's branch and told a bc16
       ## spectator about a unit its year does not have.
-      if isBc22 or isBc16:
+      if isBc19:
+        ## bc19 counts EVERY unit lost by both sides in the same round, not
+        ## just the ones that can attack: this year's pilgrims are targets
+        ## worth killing (the reclaim pays 12 karbonite for a loaded one),
+        ## so a round in which both sides lost a robot is a SKIRMISH, not a
+        ## launcher duel and not an attacker trade.
+        label = "SKIRMISH — " & $e.fields{"lost"}[0].getInt() &
+          " lost to " & $e.fields{"lost"}[1].getInt() & ", game " &
+          $(e.game + 1) & ", round " & $e.round
+      elif isBc22 or isBc16:
         label = "TRADE — " & $e.fields{"lost"}[0].getInt() &
           " attackers lost to " & $e.fields{"lost"}[1].getInt() & ", game " &
           $(e.game + 1) & ", round " & $e.round
@@ -370,9 +397,17 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
           " lost to " & $e.fields{"lost"}[1].getInt() & ", game " &
           $(e.game + 1) & ", round " & $e.round
     of "unit_milestone":
-      label = e.fields{"alias"}.getStr() & " commissions its first " &
-        e.fields{"unit"}.getStr().replace("_", " ") & " — game " &
-        $(e.game + 1) & ", round " & $e.round
+      ## bc16 emits this with a TWELVE-value unit vocabulary and bc19 with a
+      ## SIX-value one, so the label tests the year — a bc19 spectator must
+      ## never be told about a unit type its year does not have.
+      if isBc19:
+        label = e.fields{"alias"}.getStr() & " commissions its first " &
+          e.fields{"unit"}.getStr() & " — game " & $(e.game + 1) &
+          ", round " & $e.round
+      else:
+        label = e.fields{"alias"}.getStr() & " commissions its first " &
+          e.fields{"unit"}.getStr().replace("_", " ") & " — game " &
+          $(e.game + 1) & ", round " & $e.round
     of "zombie_wave":
       label = "WAVE — " & $e.fields{"total"}.getInt() & " zombies from " &
         $e.fields{"dens_spawning"}.getInt() & " dens at outbreak level " &
@@ -408,12 +443,23 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
         ", and it is hunting whoever is nearest, game " & $(e.game + 1) &
         ", round " & $e.round
     of "tiebreak":
-      label = "ROUND " & $e.round & " — " &
-        e.fields{"rung"}.getStr().replace("_", " ") & " decides it: archons " &
-        $e.fields{"archons"}[0].getInt() & " to " &
-        $e.fields{"archons"}[1].getInt() & ", archon health " &
-        $e.fields{"archon_health_tenths"}[0].getInt() & " to " &
-        $e.fields{"archon_health_tenths"}[1].getInt()
+      ## bc16 carries `archons` + `archon_health_tenths`; bc19 carries
+      ## `castles`, `health` and `worth`, and its health is the TOTAL over
+      ## every live unit rather than over the castles.
+      if isBc19:
+        label = "ROUND " & $e.round & " — castles level at " &
+          $e.fields{"castles"}[0].getInt() & ", " &
+          e.fields{"rung"}.getStr().replace("_", " ") & " decides it: " &
+          $e.fields{"health"}[0].getInt() & " to " &
+          $e.fields{"health"}[1].getInt() & " on unit health"
+      else:
+        label = "ROUND " & $e.round & " — " &
+          e.fields{"rung"}.getStr().replace("_", " ") &
+          " decides it: archons " &
+          $e.fields{"archons"}[0].getInt() & " to " &
+          $e.fields{"archons"}[1].getInt() & ", archon health " &
+          $e.fields{"archon_health_tenths"}[0].getInt() & " to " &
+          $e.fields{"archon_health_tenths"}[1].getInt()
     of "lab_built":
       label = e.fields{"alias"}.getStr() &
         (if e.fields{"finished"}.getBool(): " finishes" else: " places") &
@@ -453,6 +499,44 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       label = e.fields{"alias"}.getStr() & " dodges the " &
         e.fields{"type"}.getStr().toUpperAscii() & " — game " &
         $(e.game + 1) & ", round " & $e.round
+    of "church_built":
+      label = e.fields{"alias"}.getStr() & " raises a church at " &
+        $e.fields{"x"}.getInt() & "," & $e.fields{"y"}.getInt() &
+        (if e.fields{"enemy_half"}.getInt() == 1: " — inside their half"
+         else: "") & ", game " & $(e.game + 1) & ", round " & $e.round
+    of "church_lost":
+      label = "CHURCH LOST — " & e.fields{"alias"}.getStr() & "'s church at " &
+        $e.fields{"x"}.getInt() & "," & $e.fields{"y"}.getInt() & ", " &
+        $e.fields{"churches"}.getInt() & " left, game " & $(e.game + 1) &
+        ", round " & $e.round
+    of "castle_lost":
+      label = "CASTLE DOWN — " & e.fields{"alias"}.getStr() & " has " &
+        $e.fields{"castles_left"}.getInt() & " left, killed by a " &
+        e.fields{"cause"}.getStr() & ", game " & $(e.game + 1) &
+        ", round " & $e.round
+    of "depot_claimed":
+      label = e.fields{"alias"}.getStr() & " works a " &
+        e.fields{"resource"}.getStr() & " depot at " &
+        $e.fields{"x"}.getInt() & "," & $e.fields{"y"}.getInt() &
+        ", game " & $(e.game + 1) & ", round " & $e.round
+    of "famine":
+      label = e.fields{"alias"}.getStr().toUpperAscii() & " IS OUT OF " &
+        e.fields{"resource"}.getStr().toUpperAscii() &
+        (if e.fields{"resource"}.getStr() == "fuel": " — nothing can move"
+         else: " — nothing can be built") &
+        ", game " & $(e.game + 1) & ", round " & $e.round
+    of "trade":
+      label = "BARTER — " & $abs(e.fields{"karbonite"}.getInt()) &
+        " karbonite for " & $abs(e.fields{"fuel"}.getInt()) & " fuel" &
+        (if e.fields{"payable"}.getInt() == 1: "" else: " (unpayable)") &
+        ", game " & $(e.game + 1) & ", round " & $e.round
+    of "preacher_splash":
+      label = "Preacher blast at " & $e.fields{"x"}.getInt() & "," &
+        $e.fields{"y"}.getInt() & " — " &
+        $e.fields{"enemy_killed"}.getInt() & " of theirs and " &
+        $e.fields{"friendly_killed"}.getInt() & " of " &
+        e.fields{"alias"}.getStr() & "'s, game " & $(e.game + 1) &
+        ", round " & $e.round
     of "archon_lost":
       ## bc22 AND bc16 both emit `archon_lost`, with DIFFERENT FIELDS —
       ## bc22 carries `gold_dropped`, bc16 carries the `cause` — so the
@@ -1879,6 +1963,267 @@ proc bc16ChromeJson*(
   }
   $node
 
+# ---------------------------------------------------------------------------
+#  bc19 — Battlecode 2019 "Crusade"
+# ---------------------------------------------------------------------------
+
+proc bc19Castles(w: w19.World, sideAslot: int): JsonNode =
+  ## `#bc19-castles`: THE HEADLINE READOUT AND THE YEAR'S WHOLE STORY. Both
+  ## orders' castle tally with a 200-HP pip per castle that drains as it is
+  ## shot, and a church count beside it. LOSE YOUR LAST CASTLE AND YOU LOSE
+  ## ON THE SPOT, so this is the only readout that can end the match before
+  ## round 1000.
+  var orders = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: u19.tRed else: u19.tBlue)
+    var pips = newJArray()
+    for r in w.robots:
+      if r.team != team or r.unit != c19.ukCastle: continue
+      pips.add(%*{"id": r.id, "x": r.x, "y": r.y, "health": r.health,
+                  "max": u19.startingHpOf(c19.ukCastle)})
+    orders.add(%*{
+      "alias": aliasFor(slot),
+      "alive": w19.castlesAlive(w, team),
+      "start": w.stats.castlesStart[ord(team)],
+      "lost": w.stats.castlesLost[ord(team)],
+      "churches": w19.churchesAlive(w, team),
+      "pips": pips
+    })
+  %*{"orders": orders}
+
+proc bc19Fuel(w: w19.World, sideAslot: int): JsonNode =
+  ## `#bc19-fuel`: THE YEAR'S SIGNATURE READOUT, AND THE ONE NO OTHER YEAR
+  ## HAS — the fuel clock. Karbonite and fuel banked, the FUEL DELTA THIS
+  ## ROUND (the flat +25 trickle against what the order actually spent, so a
+  ## spectator sees an order going broke twenty rounds early), the mining
+  ## rate, the unrefined load in transit on pilgrims, and the round counter.
+  ## It keeps BOTH BARS, THE DELTA AND THE ROUND COUNTER AT EVERY WIDTH,
+  ## including 360 px, because it is the readout that makes the year make
+  ## sense.
+  var orders = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: u19.tRed else: u19.tBlue)
+    let t = ord(team)
+    orders.add(%*{
+      "alias": aliasFor(slot),
+      "karbonite": w.karbonite[t],
+      "fuel": w.fuel[t],
+      "trickle": c19.TrickleFuel,
+      "fuel_spent": w.stats.fuelSpent[t],
+      "karbonite_mined": w.stats.karboniteMined[t],
+      "fuel_mined": w.stats.fuelMined[t],
+      "karbonite_in_transit": w19.carriedKarbonite(w, team),
+      "fuel_in_transit": w19.carriedFuel(w, team),
+      "pilgrims": w19.unitCount(w, team, c19.ukPilgrim)
+    })
+  %*{
+    "orders": orders,
+    "round": w.round,
+    "rounds": w.maxRounds,
+    "note": "the only free income in the game is twenty-five fuel a round, " &
+      "and it is FLAT -- it does not scale with castles or churches"
+  }
+
+proc bc19Econ(w: w19.World, sideAslot: int): JsonNode =
+  ## `#bc19-econ`: per order, karbonite and fuel banked, mined and spent;
+  ## depots worked out of depots on the board; churches built, standing and
+  ## lost WITH THOSE IN THE ENEMY'S HALF CALLED OUT; karbonite and fuel
+  ## reclaimed off kills; and the barter ledger.
+  var orders = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: u19.tRed else: u19.tBlue)
+    let t = ord(team)
+    var worked = 0
+    for r in w.robots:
+      if r.team == team and r.unit == c19.ukPilgrim and
+          (w19.hasKarbonite(w, r.x, r.y) or w19.hasFuel(w, r.x, r.y)):
+        inc worked
+    orders.add(%*{
+      "alias": aliasFor(slot),
+      "karbonite": w.karbonite[t],
+      "fuel": w.fuel[t],
+      "karbonite_mined": w.stats.karboniteMined[t],
+      "fuel_mined": w.stats.fuelMined[t],
+      "karbonite_spent": w.stats.karboniteSpent[t],
+      "fuel_spent": w.stats.fuelSpent[t],
+      "karbonite_deposited": w.stats.karboniteDeposited[t],
+      "fuel_deposited": w.stats.fuelDeposited[t],
+      "fuel_trickled": w.stats.fuelTrickled[t],
+      "depots_worked": worked,
+      "depots_on_map": w.map.karboniteDepots + w.map.fuelDepots,
+      "churches_built": w.stats.churchesBuilt[t],
+      "churches_standing": w19.churchesAlive(w, team),
+      "churches_lost": w.stats.churchesLost[t],
+      "churches_in_enemy_half": w.stats.enemyHalfChurches[t],
+      "karbonite_reclaimed": w.stats.karboniteReclaimed[t],
+      "fuel_reclaimed": w.stats.fuelReclaimed[t],
+      "trades_proposed": w.stats.tradesProposed[t],
+      "trades_executed": w.stats.tradesExecuted[t],
+      "trade_karbonite_net": w.stats.tradeKarboniteNet[t],
+      "trade_fuel_net": w.stats.tradeFuelNet[t],
+      "net_worth": w19.worthOf(w, team)
+    })
+  %*{"orders": orders}
+
+proc bc19Units(w: w19.World, sideAslot: int): JsonNode =
+  ## `#bc19-units`: per order, the six-type census with castles emphasised,
+  ## UNITS CARRYING AN UNREFINED LOAD shown separately, units built and lost,
+  ## and FRIENDLY-FIRE AND SELF DAMAGE AS THEIR OWN NUMBER — because with
+  ## `preacher_share` high that is where the losses come from.
+  var orders = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: u19.tRed else: u19.tBlue)
+    let t = ord(team)
+    var loaded = 0
+    for r in w.robots:
+      if r.team == team and (r.karbonite > 0 or r.fuel > 0): inc loaded
+    orders.add(%*{
+      "alias": aliasFor(slot),
+      "castle": w19.castlesAlive(w, team),
+      "church": w19.churchesAlive(w, team),
+      "pilgrim": w19.unitCount(w, team, c19.ukPilgrim),
+      "crusader": w19.unitCount(w, team, c19.ukCrusader),
+      "prophet": w19.unitCount(w, team, c19.ukProphet),
+      "preacher": w19.unitCount(w, team, c19.ukPreacher),
+      "loaded": loaded,
+      "built": w.stats.unitsBuilt[t],
+      "lost": w.stats.unitsLost[t],
+      "kills": w.stats.kills[t],
+      "attacks": w.stats.attacks[t],
+      "damage_dealt": w.stats.damageDealt[t],
+      "damage_taken": w.stats.damageTaken[t],
+      "friendly_fire_damage": w.stats.friendlyFireDamage[t],
+      "self_damage": w.stats.selfDamage[t],
+      "splash_kills": w.stats.splashKills[t],
+      "health": w19.totalHealth(w, team)
+    })
+  %*{"orders": orders}
+
+proc bc19Crusade(w: w19.World, sideAslot: int): JsonNode =
+  ## `#bc19-crusade`: the endcard war panel. Per order, everything the note
+  ## asks for, PLUS the tiebreak ledger — all three round-1000 rungs with
+  ## both sides' numbers and which one decided it. None of it is stored in
+  ## the replay: the wasm sim re-derives every round.
+  var orders = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: u19.tRed else: u19.tBlue)
+    let t = ord(team)
+    orders.add(%*{
+      "alias": aliasFor(slot),
+      "castles_start": w.stats.castlesStart[t],
+      "castles_lost": w.stats.castlesLost[t],
+      "castles_left": w19.castlesAlive(w, team),
+      "churches_built": w.stats.churchesBuilt[t],
+      "churches_standing": w19.churchesAlive(w, team),
+      "churches_lost": w.stats.churchesLost[t],
+      "churches_in_enemy_half": w.stats.enemyHalfChurches[t],
+      "karbonite_mined": w.stats.karboniteMined[t],
+      "fuel_mined": w.stats.fuelMined[t],
+      "karbonite_deposited": w.stats.karboniteDeposited[t],
+      "fuel_deposited": w.stats.fuelDeposited[t],
+      "karbonite_spent": w.stats.karboniteSpent[t],
+      "fuel_spent": w.stats.fuelSpent[t],
+      "fuel_trickled": w.stats.fuelTrickled[t],
+      "karbonite_banked": w.karbonite[t],
+      "fuel_banked": w.fuel[t],
+      "units_built": w.stats.unitsBuilt[t],
+      "pilgrims_built": w.stats.pilgrimsBuilt[t],
+      "crusaders_built": w.stats.crusadersBuilt[t],
+      "prophets_built": w.stats.prophetsBuilt[t],
+      "preachers_built": w.stats.preachersBuilt[t],
+      "units_lost": w.stats.unitsLost[t],
+      "damage_dealt": w.stats.damageDealt[t],
+      "damage_taken": w.stats.damageTaken[t],
+      "friendly_fire_damage": w.stats.friendlyFireDamage[t],
+      "self_damage": w.stats.selfDamage[t],
+      "kills": w.stats.kills[t],
+      "splash_kills": w.stats.splashKills[t],
+      "karbonite_reclaimed": w.stats.karboniteReclaimed[t],
+      "fuel_reclaimed": w.stats.fuelReclaimed[t],
+      "trades_proposed": w.stats.tradesProposed[t],
+      "trades_executed": w.stats.tradesExecuted[t],
+      "trade_karbonite_net": w.stats.tradeKarboniteNet[t],
+      "trade_fuel_net": w.stats.tradeFuelNet[t],
+      "moves": w.stats.moves[t],
+      "move_fuel_spent": w.stats.moveFuelSpent[t],
+      "radio_messages": w.stats.radioMessages[t],
+      "castle_talks": w.stats.castleTalks[t]
+    })
+  let redSlot = sideAslot
+  let blueSlot = 1 - sideAslot
+  var castles = [0, 0]
+  var health = [0, 0]
+  var worth = [0, 0]
+  castles[redSlot] = w19.castlesAlive(w, u19.tRed)
+  castles[blueSlot] = w19.castlesAlive(w, u19.tBlue)
+  health[redSlot] = w19.totalHealth(w, u19.tRed)
+  health[blueSlot] = w19.totalHealth(w, u19.tBlue)
+  worth[redSlot] = w19.worthOf(w, u19.tRed)
+  worth[blueSlot] = w19.worthOf(w, u19.tBlue)
+  %*{
+    "orders": orders,
+    "tiebreak": {
+      "rung": w19.endReasonName(w.endRung),
+      "win_condition": w.winCondition,
+      "castles": [castles[0], castles[1]],
+      "unit_health": [health[0], health[1]],
+      "net_worth": [worth[0], worth[1]],
+      "round": w.tiebreakRound
+    },
+    "castle_separation_min": m19.separation(w.map, true),
+    "castle_separation_max": m19.separation(w.map, false)
+  }
+
+proc bc19ChromeJson*(
+  doc: ReplayDoc, w: w19.World, view: ViewerState,
+  frame, totalFrames, gameIndex, sideAslot: int,
+  beats: JsonNode, gameChips: JsonNode, ended: bool
+): string =
+  ## One frame of bc19 chrome. `t` / `st` / `mx` / `mt` are the GENERIC
+  ## timeline keys `chrome_common.js` reads, unchanged, so the clock, the
+  ## transport and the scrubber are driven by the starter's own code; the
+  ## `bc19_*` keys are what the APPENDED bc19 game block draws.
+  let phase = if ended: "gameover" else: "playing"
+  let points = r19.gamePoints(w)
+  var node = %*{
+    "t": frame,
+    "st": 0,
+    "mx": max(1, totalFrames - 1),
+    "mt": 0,
+    "sp": view.speed,
+    "pl": view.playing,
+    "lp": view.loop,
+    "sk": view.skipLulls,
+    "ff": false,
+    "en": true,
+    "ph": phase,
+    "lob": 0,
+    "pov": -1,
+    "nim": GameVersion,
+    "year": "bc19",
+    "beats": beats,
+    "game": gameIndex + 1,
+    "games": doc.games.len,
+    "map": doc.plan.maps[min(gameIndex, doc.plan.maps.high)],
+    "round": w.round,
+    "rounds": doc.plan.maxRounds,
+    "aliases": [AliasA, AliasB],
+    "names": [doc.names[0], doc.names[1]],
+    "sides": [(if sideAslot == 0: "RED" else: "BLUE"),
+              (if sideAslot == 0: "BLUE" else: "RED")],
+    "points": [points[(if sideAslot == 0: 0 else: 1)],
+               points[(if sideAslot == 0: 1 else: 0)]],
+    "bc19_castles": bc19Castles(w, sideAslot),
+    "bc19_fuel": bc19Fuel(w, sideAslot),
+    "bc19_econ": bc19Econ(w, sideAslot),
+    "bc19_units": bc19Units(w, sideAslot),
+    "bc19_crusade": bc19Crusade(w, sideAslot),
+    "gamechips": gameChips,
+    "doctrines": doctrineWords(doc),
+    "result": doc.result
+  }
+  $node
+
 proc sessionChromeJson*(
   doc: ReplayDoc, s: Session, view: ViewerState,
   frame, totalFrames, gameIndex, sideAslot: int,
@@ -1908,4 +2253,7 @@ proc sessionChromeJson*(
       beats, gameChips, ended)
   of yBc16:
     bc16ChromeJson(doc, s.w16, view, frame, totalFrames, gameIndex, sideAslot,
+      beats, gameChips, ended)
+  of yBc19:
+    bc19ChromeJson(doc, s.w19, view, frame, totalFrames, gameIndex, sideAslot,
       beats, gameChips, ended)

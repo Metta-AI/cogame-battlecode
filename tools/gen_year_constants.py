@@ -14,7 +14,7 @@ hand-edited constant fails the build.
     tools/gen_year_constants.py --engine ... --check   # diff, exit 1 on drift
 
 `--year bc20`, `--year bc21`, `--year bc22`, `--year bc23`, `--year bc24`,
-`--year bc25` and `--year bc16` do the same job
+`--year bc25`, `--year bc16` and `--year bc19` do the same job
 for the other year modules against a checkout of the matching engine at its
 pinned commit. bc20 and bc21 read `common/GameConstants.java` and
 `common/RobotType.java`; bc24 reads `common/GameConstants.java`,
@@ -24,7 +24,9 @@ bc25 reads `common/GameConstants.java` and `common/UnitType.java`; bc23 reads
 bc22 reads `common/GameConstants.java`, `common/RobotType.java` and
 `common/AnomalyType.java`; bc16 reads `common/GameConstants.java` and
 `common/RobotType.java` (whose constants are INTERFACE fields, with no
-`public static final` modifiers, so it needs its own regex):
+`public static final` modifiers, so it needs its own regex); and bc19 reads
+`coldbrew/specs.json`, which is JSON rather than Java and is therefore the
+simplest arm this tool has:
 
     tools/gen_year_constants.py --year bc20 --engine /path/to/battlecode20 \
         --out src/battlecode/years/bc20/constants.nim
@@ -1198,11 +1200,195 @@ def render_bc16(engine: pathlib.Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+
+# ---------------------------------------------------------------------------
+#  bc19 -- Battlecode 2019 "Crusade"
+# ---------------------------------------------------------------------------
+
+BC19_COMMIT = "80cf1cc535ec5a30559274aa1b49807ad4859925"
+
+BC19_UNIT_NAMES = ["CASTLE", "CHURCH", "PILGRIM", "CRUSADER", "PROPHET",
+                   "PREACHER"]
+
+BC19_SCALARS = [
+    "COMMUNICATION_BITS", "CASTLE_TALK_BITS", "MAX_ROUNDS", "TRICKLE_FUEL",
+    "INITIAL_KARBONITE", "INITIAL_FUEL", "MINE_FUEL_COST", "KARBONITE_YIELD",
+    "FUEL_YIELD", "MAX_TRADE", "MAX_BOARD_SIZE", "MAX_ID",
+    "CASTLE", "CHURCH", "PILGRIM", "CRUSADER", "PROPHET", "PREACHER",
+    "RED", "BLUE", "CHESS_INITIAL", "CHESS_EXTRA", "TURN_MAX_TIME",
+    "MAX_MEMORY",
+]
+
+
+def bc19_nullable(value, name: str) -> tuple[str, str]:
+    """(literal, isNull) for one nullable integer column of `SPECS.UNITS`."""
+    if value is None:
+        return "-1", "true"
+    if not isinstance(value, int):
+        raise SystemExit(f"::error::SPECS.UNITS.{name} is not an integer or "
+                         f"null: {value!r}")
+    return str(value), "false"
+
+
+def render_bc19(engine: pathlib.Path) -> str:
+    """bc19's arm reads JSON, not Java -- the simplest arm this tool has."""
+    import json
+    specs = json.loads((engine / "coldbrew/specs.json").read_text())
+    units = specs["UNITS"]
+    if len(units) != 6:
+        raise SystemExit(
+            f"::error::expected 6 SPECS.UNITS rows, saw {len(units)}")
+    for key in BC19_SCALARS:
+        if key not in specs:
+            raise SystemExit(f"::error::coldbrew/specs.json has no {key}")
+    for i, name in enumerate(BC19_UNIT_NAMES):
+        if specs[name] != i:
+            raise SystemExit(
+                f"::error::SPECS.{name} is {specs[name]}, expected {i} -- the "
+                "ordinal order is load-bearing (it is `build_unit` on the "
+                "wire and the atlas index)")
+
+    lines: list[str] = []
+    add = lines.append
+    add('## Battlecode 2019 "Crusade" gameplay constants '
+        "-- GENERATED, do not edit.")
+    add("##")
+    add(f"## Source: github.com/battlecode/battlecode19 at commit "
+        f"`{BC19_COMMIT}`,")
+    add("## file `coldbrew/specs.json`, read by")
+    add("## `tools/gen_year_constants.py --year bc19`. The `test` job of")
+    add("## `.github/workflows/ci.yml` re-runs that generator with `--check`,")
+    add("## which byte-diffs this file, so an edit here fails the build")
+    add("## instead of quietly changing the rules under a `GameVersion` that")
+    add("## no longer describes them.")
+    add("##")
+    add("## THE 2019 SPEC EXISTS ONLY AS THIS FILE PLUS `app/src/views/docs.js`")
+    add("## (the human-readable page), and where the two disagree THE ENGINE")
+    add("## WINS -- all seven disagreements are tabled in")
+    add("## `docs/RULES-BC19.md`.")
+    add("##")
+    add("## 2019 IS AN INTEGER YEAR. Health, karbonite, fuel, damage,")
+    add("## capacities, radii, yields and costs are all integers, so a Nim")
+    add("## `int` port is bit-exact by construction. Exactly TWO non-integer")
+    add("## operations exist on gameplay paths and both have finite domains")
+    add("## and are TABLED in `data/bc19/tables.json`:")
+    add("## `Math.ceil(Math.sqrt(r2))` for r2 in 0..7938 and the reclaim's")
+    add("## `Math.floor(a/b)`. There is NO `sqrt`, NO `pow`, NO `exp` and NO")
+    add("## float64 accumulation on any runtime path, and")
+    add("## `src/battlecode/fdlibm.nim` is not imported by bc19 at all.")
+    add("##")
+    add("## THREE `null`/scalar coercions in this table are REAL RULES (D6),")
+    add("## which is why every nullable column carries its own `*Null` flag")
+    add("## rather than collapsing to 0:")
+    add("##   1. `CHURCH.ATTACK_RADIUS` is the SCALAR `0`, not a pair, so")
+    add("##      `r > radius[1]` and `r < radius[0]` are both `false` and a")
+    add("##      CHURCH may legally `attack` any on-board square for 0 fuel")
+    add("##      and 0 damage, consuming its turn;")
+    add("##   2. `PILGRIM.ATTACK_RADIUS` is `null`, so `null[1]` throws and a")
+    add("##      pilgrim attack is a VALIDATION FAILURE, not an action;")
+    add("##   3. `CASTLE`/`CHURCH` capacities are `null` and")
+    add("##      `Math.min(n, null) === 0`, so a structure that lands a kill")
+    add("##      reclaims exactly nothing.")
+    add("")
+    add(f'const EngineCommit* = "{BC19_COMMIT}"')
+    add('const EngineNpmPackage* = "bc19@0.4.6"')
+    add("")
+    add("type")
+    add("  UnitKind* = enum")
+    add("    ## `SPECS`'s own ordinal order. THE ORDINAL IS LOAD-BEARING: it is")
+    add("    ## `build_unit` on the wire, the `SPECS.UNITS` index and the")
+    add("    ## sprite-atlas index.")
+    for i, name in enumerate(BC19_UNIT_NAMES):
+        add(f'    uk{name.capitalize()} = {i}')
+    add("")
+    add("  AttackRadiusShape* = enum")
+    add("    ## What `SPECS.UNITS[u].ATTACK_RADIUS` actually IS in the JSON.")
+    add("    arPair       ## a two-element `[min, max]` array")
+    add("    arScalarZero ## the bare number `0` -- the CHURCH (D6.1)")
+    add("    arNull       ## `null` -- the PILGRIM (D6.2)")
+    add("")
+    add("  UnitSpec* = object")
+    add("    constructionKarbonite*: int")
+    add("    constructionKarboniteNull*: bool")
+    add("    constructionFuel*: int")
+    add("    constructionFuelNull*: bool")
+    add("    karboniteCapacity*: int")
+    add("    karboniteCapacityNull*: bool")
+    add("    fuelCapacity*: int")
+    add("    fuelCapacityNull*: bool")
+    add("    speed*: int")
+    add("    fuelPerMove*: int")
+    add("    fuelPerMoveNull*: bool")
+    add("    startingHp*: int")
+    add("    visionRadius*: int")
+    add("    attackDamage*: int")
+    add("    attackDamageNull*: bool")
+    add("    attackRadius*: AttackRadiusShape")
+    add("    attackRadiusMin*: int")
+    add("    attackRadiusMax*: int")
+    add("    attackFuelCost*: int")
+    add("    attackFuelCostNull*: bool")
+    add("    damageSpread*: int")
+    add("    damageSpreadNull*: bool")
+    add("")
+    add("const")
+    for key in BC19_SCALARS:
+        add(f"  {camel(key)}* = {specs[key]}")
+    add("")
+    add("  Units*: array[UnitKind, UnitSpec] = [")
+    for i, name in enumerate(BC19_UNIT_NAMES):
+        u = units[i]
+        ck, ckn = bc19_nullable(u["CONSTRUCTION_KARBONITE"], "CONSTRUCTION_KARBONITE")
+        cf, cfn = bc19_nullable(u["CONSTRUCTION_FUEL"], "CONSTRUCTION_FUEL")
+        kc, kcn = bc19_nullable(u["KARBONITE_CAPACITY"], "KARBONITE_CAPACITY")
+        fc, fcn = bc19_nullable(u["FUEL_CAPACITY"], "FUEL_CAPACITY")
+        fp, fpn = bc19_nullable(u["FUEL_PER_MOVE"], "FUEL_PER_MOVE")
+        ad, adn = bc19_nullable(u["ATTACK_DAMAGE"], "ATTACK_DAMAGE")
+        af, afn = bc19_nullable(u["ATTACK_FUEL_COST"], "ATTACK_FUEL_COST")
+        ds, dsn = bc19_nullable(u["DAMAGE_SPREAD"], "DAMAGE_SPREAD")
+        ar = u["ATTACK_RADIUS"]
+        if ar is None:
+            shape, lo, hi = "arNull", -1, -1
+        elif isinstance(ar, list):
+            shape, lo, hi = "arPair", ar[0], ar[1]
+        elif ar == 0:
+            shape, lo, hi = "arScalarZero", -1, -1
+        else:
+            raise SystemExit(
+                f"::error::SPECS.UNITS[{i}].ATTACK_RADIUS is {ar!r}, which is "
+                "neither a pair, nor the scalar 0, nor null")
+        add(f"    UnitSpec(  ## {name}")
+        add(f"      constructionKarbonite: {ck}, constructionKarboniteNull: {ckn},")
+        add(f"      constructionFuel: {cf}, constructionFuelNull: {cfn},")
+        add(f"      karboniteCapacity: {kc}, karboniteCapacityNull: {kcn},")
+        add(f"      fuelCapacity: {fc}, fuelCapacityNull: {fcn},")
+        add(f"      speed: {u['SPEED']},")
+        add(f"      fuelPerMove: {fp}, fuelPerMoveNull: {fpn},")
+        add(f"      startingHp: {u['STARTING_HP']},")
+        add(f"      visionRadius: {u['VISION_RADIUS']},")
+        add(f"      attackDamage: {ad}, attackDamageNull: {adn},")
+        add(f"      attackRadius: {shape},")
+        add(f"      attackRadiusMin: {lo}, attackRadiusMax: {hi},")
+        add(f"      attackFuelCost: {af}, attackFuelCostNull: {afn},")
+        add(f"      damageSpread: {ds}, damageSpreadNull: {dsn}),")
+    add("  ]")
+    add("")
+    add("  MaxSignalRadius* = 2 * (MaxBoardSize - 1) * (MaxBoardSize - 1)")
+    add("    ## `game.js:833`: `signal_radius <= 2*Math.pow(MAX_BOARD_SIZE-1,2)`")
+    add("    ## = 7938, which is also the domain bound of the tabled")
+    add("    ## `ceil(sqrt(r2))`.")
+    add("")
+    add("  MaxGiveAmount* = 255")
+    add("    ## `game.js:904`: `give_karbonite < 2^8` and `give_fuel < 2^8`.")
+    add("")
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--year", default="bc26",
                     choices=["bc26", "bc20", "bc21", "bc22", "bc23", "bc24",
-                             "bc25", "bc16"])
+                             "bc25", "bc16", "bc19"])
     ap.add_argument("--engine", required=True, type=pathlib.Path)
     ap.add_argument("--out", type=pathlib.Path, default=None)
     ap.add_argument("--check", action="store_true",
@@ -1214,13 +1400,15 @@ def main() -> int:
     label = {"bc26": TAG, "bc20": BC20_COMMIT, "bc21": BC21_COMMIT,
              "bc22": BC22_COMMIT,
              "bc23": BC23_COMMIT, "bc24": BC24_COMMIT,
-             "bc25": BC25_COMMIT, "bc16": BC16_COMMIT}[args.year]
+             "bc25": BC25_COMMIT, "bc16": BC16_COMMIT,
+             "bc19": BC19_COMMIT}[args.year]
     text = {"bc26": render, "bc20": render_bc20,
             "bc21": render_bc21, "bc22": render_bc22,
             "bc23": render_bc23,
             "bc24": render_bc24,
             "bc25": render_bc25,
-            "bc16": render_bc16}[args.year](args.engine)
+            "bc16": render_bc16,
+            "bc19": render_bc19}[args.year](args.engine)
     if args.check:
         current = out.read_text() if out.exists() else ""
         if current != text:
