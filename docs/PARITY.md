@@ -2094,11 +2094,12 @@ the two patches above.
 
 **RUN, AND GREEN, WITH AN EMPTY LEDGER.** The whole oracle is the
 `parity-oracle-bc19` job of `.github/workflows/ci.yml` (`timeout-minutes: 45`),
-which runs on every push. The first run taken as a verdict is
-**`34446572285`** — job `parity-oracle-bc19`, id `102772780365`, on
-`bc19-year-module` at `7aa8e6712c`, **conclusion `success`**, wall clock
-**1 m 57 s** (06:46:01Z → 06:47:58Z). Every tier named above ran in that one
-job and every tier passed:
+which runs on every push. The run taken as the verdict is the one on `main`
+at the shipped sha: **`34454858348`** — job `parity-oracle-bc19`, id
+**`102798775171`**, on `main` at `d2f5d3d707`, **conclusion `success`**, wall
+clock **1 m 53 s** (08:23:06Z → 08:24:59Z), reporting `compared 54
+whole-game pairs, 0 failure(s)` over 54 `BIT-EXACT` lines. Every tier named
+above ran in that one job and every tier passed:
 
 | tier | what it ran there | verdict |
 |---|---|---|
@@ -2113,7 +2114,7 @@ job and every tier passed:
 
 **`tools/ci/parity_ledger_bc19.json` IS `[]` AND STAYED `[]`.** No pair
 diverged, so the comparator wrote no digest, so the job's
-`parity-bc19-digests` artifact **does not exist in run `34446572285`** — the
+`parity-bc19-digests` artifact **does not exist in run `34454858348`** — the
 upload is `if-no-files-found: ignore`, which makes that artifact's absence the
 positive evidence of an empty ledger rather than a gap in it.
 
