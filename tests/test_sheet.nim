@@ -356,6 +356,57 @@ block:
     checkEq(year & " still records NONE", empty.defaultsApplied.len, 0)
 
 block:
+  ## THE YEAR-NEUTRAL SIDE OF THE ENVELOPE RESOLVER, FROM bc19 (§Tests item
+  ## 15). The bc19 run is provably ADDITIVE for the EIGHT already-shipped
+  ## years: every vector above still parses to the `Sheet` it did before, and
+  ## bc19 goes through the SAME resolver with no year-neutral change at all.
+  ## The bc19 SIDE of the same resolver is `tests/test_bc19_sheet.nim`; what
+  ## belongs here is the year-neutral half.
+  let bc19 = parseReply(
+    """{"protocol":"x","doctrine":{"unit_mix":70}}""", YearBc19)
+  checkEq("a bc19 sheet inside a protocol envelope is unwrapped",
+    bc19.doctrine19.unitMix, 70)
+  checkEq("with the rule recorded", bc19.envelope, "doctrine")
+  let bc19flat = parseReply("""{"unit_mix":70}""", YearBc19)
+  checkEq("a BARE FLAT bc19 sheet needs no envelope", bc19flat.envelope, "")
+  checkEq("and its knobs apply", bc19flat.doctrine19.unitMix, 70)
+  let bc19named = parseReply(
+    """{"battlecode_2019_doctrine":{"unit_mix":70}}""", YearBc19)
+  checkEq("and a single object-valued key is unwrapped for bc19 too",
+    bc19named.doctrine19.unitMix, 70)
+  checkEq("with the key recorded", bc19named.envelope,
+    "battlecode_2019_doctrine")
+  checkEq("knownKeysFor routes bc19 to its own eleven",
+    knownKeysFor(YearBc19).len, 11)
+  check("and `chassis` is not one of them (D1)",
+    "chassis" notin knownKeysFor(YearBc19))
+  ## bc19 is the THIRD year to count absent keys as defaulted, beside bc22
+  ## and bc16 — and it must not change what any other year records.
+  let bc19empty = parseReply("""{"sheet":{}}""", YearBc19)
+  checkEq("bc19 records all eleven of ITS knobs as defaulted",
+    bc19empty.defaultsApplied.len, 11)
+  ## And a bc19 payload parsed AS ANOTHER YEAR leaves that year's doctrine at
+  ## its own defaults rather than bleeding across, in both directions.
+  let bc19AsBc22 = parseReply("""{"unit_mix":70}""", YearBc22)
+  checkEq("a bc19 knob name means nothing to bc22",
+    bc19AsBc22.doctrine22, parseReply("{}", YearBc22).doctrine22)
+  let bc16AsBc19 = parseReply("""{"turret_count":9}""", YearBc19)
+  checkEq("and a bc16 knob name means nothing to bc19",
+    bc16AsBc19.doctrine19, parseReply("{}", YearBc19).doctrine19)
+  ## The whole resolver ladder, for bc19, in one pass — so this year cannot
+  ## be the one that quietly diverges from the shared rule.
+  for (payload, envelope) in [
+      ("""{}""", ""),
+      ("""{"sheet":{"unit_mix":70}}""", "sheet"),
+      ("""{"doctrine":{"unit_mix":70}}""", "doctrine"),
+      ("""{"protocol":"x","doctrine":{"unit_mix":70}}""", "doctrine"),
+      ("""{"my_wrapper":{"unit_mix":70}}""", "my_wrapper"),
+      ("""{"unit_mix":70}""", ""),
+      ("""{"a":{},"b":{}}""", "")]:
+    checkEq("bc19 envelope for " & payload,
+      validate(parseJson(payload), YearBc19).envelope, envelope)
+
+block:
   ## THE YEAR-NEUTRAL SIDE OF THE ENVELOPE RESOLVER, FROM bc16. This run is
   ## provably ADDITIVE for the seven shipped years: every existing vector
   ## above still parses to the same `Sheet` it did before, and bc16 goes

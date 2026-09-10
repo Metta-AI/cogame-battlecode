@@ -242,6 +242,40 @@ const Bc16GameKeys* = [
   ## `zombies_killed`, `outbreak_level_end`, `schedule_rounds` and
   ## `tiebreak_round` are the fourteen scalars.
 
+const Bc19GameKeys* = [
+  "castles_start", "castles_end", "castles_lost", "churches_built",
+  "churches_end", "churches_lost", "enemy_half_churches", "unit_health_end",
+  "karbonite_end", "fuel_end", "net_worth_end", "karbonite_mined",
+  "fuel_mined", "karbonite_spent", "fuel_spent", "fuel_trickled",
+  "karbonite_reclaimed", "fuel_reclaimed", "karbonite_deposited",
+  "fuel_deposited", "pilgrims_built", "crusaders_built", "prophets_built",
+  "preachers_built", "units_lost", "mine_actions", "mine_actions_wasted",
+  "give_actions", "damage_taken", "friendly_fire_damage", "self_damage",
+  "splash_kills", "moves", "move_fuel_spent", "radio_messages",
+  "radio_fuel_spent", "castle_talks", "trades_proposed", "trades_executed",
+  "trade_karbonite_net", "trade_fuel_net", "lattice_units_placed",
+  "builds_refused", "refused_actions", "decision_ops_peak",
+  "castles_per_side", "board_width", "passable_squares", "karbonite_depots",
+  "fuel_depots", "symmetry_horizontal", "castle_separation_min",
+  "castle_separation_max", "ids_spent", "win_condition", "queue_length_end"
+]
+  ## bc19's own optional siblings. It REUSES SEVEN keys that already exist
+  ## with the same meaning and the same type rather than duplicating them,
+  ## and those seven are deliberately NOT in this list: `units_built`,
+  ## `units_alive`, `attacks`, `damage_dealt`, `kills` and `robots_lost`
+  ## (bc20/bc22/bc23/bc24/bc25), and `tiebreak_round` (bc16 -- the round the
+  ## end ladder was evaluated on, the same meaning in both years).
+  ## `castles_per_side`, `board_width`, `passable_squares`,
+  ## `karbonite_depots`, `fuel_depots`, `symmetry_horizontal` (0/1),
+  ## `castle_separation_min`, `castle_separation_max`, `ids_spent`,
+  ## `win_condition` and `queue_length_end` are the eleven scalars.
+  ##
+  ## `castle_separation_min` and `castle_separation_max` are the ONLY two
+  ## non-integer numbers bc19 reports, and they are reported to ONE DECIMAL:
+  ## they are Euclidean distances between two squares and there is no
+  ## integer reading of them. Every other bc19 number is an exact integer,
+  ## because the 2019 rule set has no float state at all (D5).
+
 const EndReasons* = [
   "kings_destroyed", "cats_cleared", "round_limit", "abandoned",
   "hq_destroyed", "quantity", "quality", "broadcasts", "highest_id",
@@ -254,7 +288,8 @@ const EndReasons* = [
   "more_elixir_net_worth", "more_mana_net_worth",
   "more_adamantium_net_worth",
   "more_archons", "more_gold_net_worth", "more_lead_net_worth",
-  "archons_destroyed", "more_archon_health", "more_parts_net_worth"
+  "archons_destroyed", "more_archon_health", "more_parts_net_worth",
+  "castles_destroyed", "more_castles", "more_unit_health"
 ]
   ## The union of all SIX years' `DominationFactor` renderings plus our own
   ## wall-clock `abandoned`. bc24's `MORE_FLAGS_PICKED` and `RESIGNATION` are
@@ -278,6 +313,16 @@ const EndReasons* = [
   ## documents `annihilated` as THOSE years' factor and a bc16 replay must
   ## trace to `DESTROYED`. `zombified` and `cleansed` are NOT added: both are
   ## reachable only on armageddon maps, which are out of scope (bc16 V4).
+  ##
+  ## bc19 adds EXACTLY THREE -- `castles_destroyed`, `more_castles` and
+  ## `more_unit_health` -- and REUSES `coin_flip` (bc22's, the same words for
+  ## the same single `random() > 0.5` draw) and `abandoned`.
+  ## `opponent_failed_to_initialize` and `both_failed_to_initialize` are NOT
+  ## added: win conditions 3 and 4 are unreachable in this port, because
+  ## every robot is handed its side's chassis at the moment it is created
+  ## (docs/RULES-BC19.md section Divergences item 6, V6). `annihilated` is
+  ## deliberately not reused for `castles_destroyed` for the same reason
+  ## bc16 did not reuse it.
 
 const ResultsKeys* = [
   "names", "aliases", "scores", "wins", "points", "games", "seed", "year",

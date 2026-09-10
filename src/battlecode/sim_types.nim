@@ -13,12 +13,45 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV11"
+  GameVersion* = "GV12"
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV12 — the `bc19` year module: Battlecode 2019 "Crusade" ported from
+    ##        battlecode19 at commit 80cf1cc5 (npm `bc19` 0.4.6; the spec
+    ##        exists only as `coldbrew/specs.json` plus
+    ##        `app/src/views/docs.js`, and THE ENGINE IS THE TIEBREAKER —
+    ##        seven documented docs-vs-engine disagreements, all resolved in
+    ##        the engine's favour): the driver loop that evaluates `isOver`
+    ##        BEFORE EVERY TURN (so a castle annihilation stops the game
+    ##        mid-round and round 1000 gets exactly ONE turn), the turn queue
+    ##        as a plain insertion-ordered ARRAY with by-value removal and
+    ##        `robin` shifted back on a death, units built in a round taking
+    ##        a turn in the SAME round, the flat 25-fuel-per-team-per-round
+    ##        trickle as the only passive income, the six unit types with
+    ##        their integer costs, ranges and the PREACHER's nine-square
+    ##        team-blind blast, the reclaim
+    ##        `floor((karbonite + buildK/2) / r2_to_attacker)` with its
+    ##        capacity clamp, mining at 2 karbonite or 10 fuel with unrefined
+    ##        carry and `give`-to-deposit, the CHURCH built only by a
+    ##        PILGRIM, the 16-bit radio with its `ceil(sqrt(r2))` fuel cost
+    ##        charged ONCE per turn, the free 8-bit castle-talk channel, the
+    ##        inter-team castle barter with its reset-then-throw quirk, and
+    ##        the seven-rung `isOver` ladder with the `win_condition = 1`
+    ##        overwrite on a round-1000 coin flip, behind `game_config.year`.
+    ##        MT19937 replaces `java.util.Random` for this year only and
+    ##        lives in `years/bc19/mt19937.nim`. The wall-clock chess clock
+    ##        and the unseeded `visible`-order shuffle are documented
+    ##        divergences (V1, V2) and the map generator is run at BUILD TIME
+    ##        (V3). bc16, bc20, bc21, bc22, bc23, bc24, bc25 AND bc26
+    ##        SEMANTICS ARE UNCHANGED: no GV04..GV11 recording carries a byte
+    ##        whose meaning changed — this run makes no year-neutral
+    ##        behaviour change at all — which is why
+    ##        `ReplayCompatibleGameVersions` is EXTENDED rather than reset
+    ##        and every hosted replay keeps rendering.
     ##
     ## GV11 — the `bc16` year module: Battlecode 2016 "Zombie Invasion"
     ##        ported from battlecode-server-2016 at commit 11a0b09f (oracle
@@ -218,7 +251,7 @@ const
     ##        formation, squeaks, cats, backstab, float32-narrowed scoring.
 
   ReplayCompatibleGameVersions* = ["GV04", "GV05", "GV06", "GV07", "GV08",
-                                   "GV09", "GV10", GameVersion]
+                                   "GV09", "GV10", "GV11", GameVersion]
     ## Versions whose recordings this build can still re-derive. A replay
     ## carrying anything else is refused with a readable message rather than
     ## silently re-simulated under different rules.
@@ -268,6 +301,8 @@ type
     scExamplefuncsplayer22 = "examplefuncsplayer22"
     scBulwark = "bulwark"
     scGreenhorn = "greenhorn"
+    scSaber = "saber"
+    scExamplefuncsplayer19 = "examplefuncsplayer19"
 
   ConfigError* = object of CatchableError
     ## An unusable `game_config`. The container exits 2 on this, per ctf.

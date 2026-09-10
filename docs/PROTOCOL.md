@@ -598,3 +598,48 @@ bc16 joins bc22 as the second — and only other — year that also records an
 would change what a bc20/bc21/bc23/bc24/bc25/bc26 episode records in that
 array, so it is per-year by construction and `tests/test_sheet.nim` asserts
 both halves.
+
+
+---
+
+## The bc19 payload
+
+`game_config.year = "bc19"` selects Battlecode 2019 "Crusade". The protocol id
+is **unchanged** (`cogame.battlecode.v1`): the wire shape is identical and only
+the year-dependent payload differs.
+
+**The observation is a SEALED ONE-SHOT brief and there is no per-round
+observation of any kind.** It carries, per game: `map`, `map_seed`, `width`,
+`height`, `you_are` (`RED` or `BLUE`), `rounds`, `rounds_are_one_based`,
+`symmetry` and a `symmetry_note` saying which midline the board is mirrored
+across, `passable_squares` / `total_squares` / `passable_pct`,
+**both orders' castle positions**, `castle_separation_min` and `_max`, and a
+`karbonite_depots` / `fuel_depots` block with the total, the per-side count,
+the nearest one to you in steps, and a note saying what a pilgrim standing on
+one actually does. Both orders' castle positions are given because **they are
+not secret**: every robot is handed the complete terrain, karbonite and fuel
+maps on its first turn (`coldbrew/game.js:728-730`) and the board is a mirror,
+so the enemy castles are derivable in a few operations on turn 1.
+
+Beside the map cards the brief carries the economy block (the flat 25-fuel
+trickle, the mining yields and capacities, the reclaim formula and the
+barter), the six unit types with their exact costs, health, ranges — including
+**the PROPHET's r² 16 MINIMUM** and **the PREACHER's nine-square team-blind
+blast** — speeds, fuel per r² and vision, the combat rules (no vision test, no
+team check, no path check), the two comms channels, a **HOW A GAME ENDS**
+block, the eleven-knob `sheet_schema` with every default and range, the
+scoring weights and the deadlines.
+
+**Hidden**: the opponent's doctrine, sheet, notes and motto (sealed and
+simultaneous, never sent in either direction at any time); the opponent's real
+player name; every in-match state; the other seat's fallback status; and
+**`robot.time`**, which is wall-clock derived and would make the prompt
+non-reproducible (divergence V7).
+
+`results.games[]` carries bc19's optional statistics beside the five
+year-neutral required keys; `end_reason` is one of `castles_destroyed`,
+`more_castles`, `more_unit_health`, `coin_flip` or `abandoned`, and
+`win_condition` carries **the engine's own integer** beside it, so a replay
+always traces back to a branch of `isOver` — including the round-1000
+all-square case, which the engine records as `1` while the winner really is a
+coin flip (`docs/RULES-BC19.md`).

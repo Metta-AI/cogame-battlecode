@@ -67,7 +67,8 @@
   // unit and doctrine panels, or bc24's flag, crumb, level and doctrine
   // panels.
   var SIZES = [[360, 640], [720, 900], [1280, 720]];
-  var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22', 'bc16'];
+  var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22',
+               'bc16', 'bc19'];
   // The readouts a year's own CSS must suppress while the endcard is up,
   // because `#endcard`'s background is a radial gradient at 0.82-0.95 alpha
   // and is therefore NOT opaque over the board: a box left visible under it
@@ -77,7 +78,9 @@
   // A year that adds one adds an entry here and gets the check for free.
   var SUPPRESSED_BY_ENDCARD = {
     bc16: ['bc16-archons', 'bc16-horde', 'bc16-econ', 'bc16-units',
-           'bc16-doctrines']
+           'bc16-doctrines'],
+    bc19: ['bc19-castles', 'bc19-fuel', 'bc19-econ', 'bc19-units',
+           'bc19-doctrines']
   };
 
   function runes(text) { return Array.from(text); }
@@ -593,6 +596,143 @@
       notes.slice(0, 120) + '</span></div>';
   }
 
+  // ------------------------------------------------------------------
+  //  bc19 -- Battlecode 2019 "Crusade"
+  // ------------------------------------------------------------------
+  // `plainWords19()`'s WIDEST output, both poles at once: for every one of
+  // the eleven knobs, the value whose clause is longest. 576 characters over
+  // eleven clauses against the second pole's 543 -- a doctrine card sized
+  // for the median sheet is a card that reads short on the widest one.
+  var BC19_WORDS = [
+    ['rushes preachers at their castles from round one',
+     'wants 24 pilgrims per structure by round one hundred',
+     'raises a church at the first good depot cluster',
+     'keeps 2000 fuel in the bank before it spends on war',
+     'spends 100 percent of its army karbonite on prophets',
+     'spends 100 percent of what is left on preachers',
+     'commits a church inside their half at round 1000',
+     'walls the midline shut, its own pilgrims included',
+     'tells its castles the census and every alarm',
+     'answers anything within range-squared 400 of a structure',
+     'stands an offer to sell karbonite for fuel'],
+    ['turtles behind a prophet lattice and wins on castles',
+     'wants 0 pilgrims per structure by round one hundred',
+     'never sends a pilgrim out to raise a church',
+     'keeps 0 fuel in the bank before it spends on war',
+     'spends 0 percent of its army karbonite on prophets',
+     'spends 0 percent of what is left on preachers',
+     'never sends a church into their half',
+     'leaves the midline open and walks at their castles',
+     'tells its castles where every structure stands',
+     'answers anything within range-squared 1 of a structure',
+     'never barters with the enemy']
+  ];
+  // EVERY NUMBER BELOW IS MEASURED, not invented: the widest value each
+  // field reached on ANY round of 66 games -- all 22 committed boards
+  // against three doctrine pairs (the preacher rush, the wall turtle, and
+  // each against itself). Karbonite banked 6 411, fuel banked 32 391,
+  // karbonite mined 10 842, fuel mined 61 830, in transit 176k/870f,
+  // deposited 10 742k/61 360f, churches 29 built / 29 standing / 1 lost /
+  // 4 in the enemy half, reclaimed 222k/99f, barter 809 offered -> 150
+  // matched with net 441k/-2 476f, 3 castles, 44 pilgrims, 13 crusaders,
+  // 33 prophets, 73 preachers, 353 units built, 330 lost, 6 970 damage,
+  // 40 friendly fire, 20 self, 330 kills of which 91 by blast, 5 760
+  // karbonite and 86 821 fuel spent, 25 000 from the trickle, 8 490 unit
+  // health, 10 149 net worth, 159 robots in the queue, castles 78.1 apart.
+  // A readout sized for four digits and fed six is a readout that reads
+  // short.
+  var bc19Castles = '';
+  for (var c19 = 0; c19 < 2; c19++) {
+    bc19Castles += '<span class="' + (c19 === 0 ? 'ash' : 'basil') + '">' +
+      ALIASES[c19] + '</span>' +
+      '<span class="pips">\u25cf\u25d5\u25d1</span>' +
+      '<span>3</span>' +
+      '<span class="church">+29 \u26ea</span>' +
+      '<span class="lost">lost 3</span>' +
+      (c19 === 0 ? '<span class="lost">\u2014</span>' : '');
+  }
+  var bc19Fuel = '';
+  for (var f19c = 0; f19c < 2; f19c++) {
+    bc19Fuel += '<span class="karb">' + ALIASES[f19c].slice(5) +
+      ' \u25c66411</span>' +
+      '<span class="fuel">\u25b232391</span>' +
+      '<span class="' + (f19c === 0 ? 'up' : 'down') + '">+25 ' +
+      (f19c === 0 ? '+' : '\u2212') + '1284</span>' +
+      '<span class="rate">\u26cf 10842k 61830f</span>' +
+      '<span class="transit">\u21e2176k 870f</span>';
+  }
+  bc19Fuel += '<span class="clock">ROUND 1000 / 1000</span>';
+  var bc19Econ = '';
+  for (var e19 = 0; e19 < 2; e19++) {
+    bc19Econ += '<div class="row"><span class="who">' + ALIASES[e19] +
+      '</span><span class="karb">6411 karbonite</span>' +
+      '<span class="fuel">32391 fuel</span>' +
+      '<span class="lbl">mined 10842k/61830f</span>' +
+      '<span class="dep">deposited 10742k/61360f</span>' +
+      '<span class="lbl">depots 13/26</span>' +
+      '<span class="chr">churches 29/29 \u00b7 lost 1 \u00b7 4 in their ' +
+      'half</span>' +
+      '<span class="lbl">reclaimed 222k/99f</span>' +
+      '<span class="bar">barter 809\u2192150 \u00b7 net 441k/-2476f</span>' +
+      '</div>';
+  }
+  var bc19Units = '';
+  for (var u19 = 0; u19 < 2; u19++) {
+    bc19Units += '<div class="row"><span class="who">' + ALIASES[u19] +
+      '</span><span class="cas">\u265c3</span>' +
+      '<span class="chu">\u26ea29</span>' +
+      '<span class="pil">P44</span>' +
+      '<span class="mil">C13</span>' +
+      '<span class="mil">R33</span>' +
+      '<span class="mil">X73</span>' +
+      '<span class="load">carrying 41</span>' +
+      '<span class="lbl">built 353 \u00b7 lost 330</span>' +
+      '<span class="lbl">dealt 6970</span>' +
+      '<span class="ff">friendly fire 40 \u00b7 self 20</span></div>';
+  }
+  // BOTH SEATS AT THE FULL 280-RUNE CAP AT ONCE, plus the fallback badge,
+  // the SUBMITTED-VS-APPLIED badge, the 48-rune motto and the 120-rune
+  // submitted sheet: the widest line `#bc19-doctrines` can ever hold.
+  var bc19Doctrines = '';
+  for (var m19 = 0; m19 < 2; m19++) {
+    bc19Doctrines += '<div class="dline"><span class="dname">' +
+      ALIASES[m19] + '</span> \u2014 ' + NAMES[m19] +
+      (m19 === 1 ? ' <span class="dfall">[fallback: timeout]</span>' : '') +
+      ' <span class="dbadge">envelope: doctrine \u00b7 11 of 11 knobs ' +
+      'defaulted</span>' +
+      '<br>' + BC19_WORDS[m19].join(' \u00b7 ') +
+      '<br>\u201c' + motto + '\u201d' +
+      '<br><i>' + notes + '</i>' +
+      '<br><span class="dsub">what the cog actually sent: ' +
+      notes.slice(0, 120) + '</span></div>';
+  }
+  // `renderEndcardExtras()`'s own markup at the same measured-widest
+  // numbers. It belongs INSIDE the card because that is where the page puts
+  // it, and the war panel is most of what makes a real bc19 endcard taller
+  // than the board region.
+  var bc19Crusade = '';
+  for (var g19 = 0; g19 < 2; g19++) {
+    bc19Crusade += '<div class="clan"><b>' + ALIASES[g19] + '</b>: castles ' +
+      '3 started, 3 lost, 3 left' +
+      '<br>churches: 29 built, 29 standing, 1 lost, 4 inside their half' +
+      '<br>karbonite: 10842 mined, 10742 deposited, 5760 spent, 6411 banked' +
+      '<br>fuel: 61830 mined, 25000 from the trickle, 86821 spent, ' +
+      '32391 banked' +
+      '<br>units: 353 built (234 pilgrim, 13 crusader, 33 prophet, ' +
+      '73 preacher), 330 lost' +
+      '<br>damage dealt 6970 \u00b7 taken 6970 \u00b7 friendly fire 40 ' +
+      '\u00b7 self 20' +
+      '<br>kills 330 (91 by preacher blast), reclaimed 222 karbonite and ' +
+      '99 fuel off them' +
+      '<br>barter: 809 offered, 150 matched, net 441 karbonite and ' +
+      '-2476 fuel</div>';
+  }
+  bc19Crusade += '<div class="ladder">round 1000 ladder \u2014 ' +
+    '<span>castles 3 to 3</span> \u00b7 ' +
+    '<span class="won">unit health 8490 to 7220</span> \u00b7 ' +
+    '<span>net worth 10149 to 9004</span> \u00b7 engine win condition 1 ' +
+    '\u00b7 castles started 14.0 to 78.1 apart</div>';
+
   // --- the ENDCARD, WITH SOMETHING ON IT (r2-E2) -------------------------
   // `#endcard` was laid out EMPTY here, purely so the HUD-suppression rule
   // could be read off the browser. An empty card cannot show what a full one
@@ -608,7 +748,8 @@
   var ENDCARD_WORDS = {
     bc26: WORDS, bc20: BC20_WORDS, bc21: BC21_WORDS, bc24: BC24_WORDS,
     bc25: BC25_WORDS, bc23: BC23_WORDS, bc22: BC22_WORDS,
-    bc16: [BC16_WORDS[0].join(', '), BC16_WORDS[1].join(', ')]
+    bc16: [BC16_WORDS[0].join(', '), BC16_WORDS[1].join(', ')],
+    bc19: [BC19_WORDS[0].join(', '), BC19_WORDS[1].join(', ')]
   };
   // renderEndcard()'s own markup: `<b>alias</b> name`, the year's words joined
   // into one sentence, and the motto in quotes when there is one.
@@ -656,6 +797,7 @@
       'played \u00b7 3000 rounds in the last one</div>' +
     '<div class="ec-teams" id="ec-teams">' + endcardTeams + '</div>' +
     '<div id="bc16-siege">' + bc16Siege + '</div>' +
+    '<div id="bc19-crusade">' + bc19Crusade + '</div>' +
     '<div class="ec-replay" id="ec-replay">replay <b>3000</b> rounds \u00b7 ' +
       '<b>2</b> games</div>';
 
@@ -673,6 +815,7 @@
           '<button type="button" id="bc23-doctrines-toggle" hidden>doctrines</button>' +
           '<button type="button" id="bc22-doctrines-toggle" hidden>doctrines</button>' +
           '<button type="button" id="bc16-doctrines-toggle" hidden>doctrines</button>' +
+          '<button type="button" id="bc19-doctrines-toggle" hidden>doctrines</button>' +
         '</div></div>' +
         '<div class="plates" id="plates-r">' + plate(1, 'basil') + '</div>' +
       '</div>' +
@@ -749,6 +892,14 @@
         '<button type="button" id="bc16-doctrines-close" ' +
         'aria-label="Dismiss doctrines">&times;</button>' +
         '<div id="bc16-doctrines-body">' + bc16Doctrines + '</div></div>' +
+      '<div id="bc19-castles">' + bc19Castles + '</div>' +
+      '<div id="bc19-fuel">' + bc19Fuel + '</div>' +
+      '<div id="bc19-units">' + bc19Units + '</div>' +
+      '<div id="bc19-econ">' + bc19Econ + '</div>' +
+      '<div id="bc19-doctrines" role="region" aria-label="Doctrines">' +
+        '<button type="button" id="bc19-doctrines-close" ' +
+        'aria-label="Dismiss doctrines">&times;</button>' +
+        '<div id="bc19-doctrines-body">' + bc19Doctrines + '</div></div>' +
       // The page's own endcard, `display: none` until a check raises it. It is
       // here so the HUD-suppression rule can be read off the browser rather
       // than off a text grep (r1-F1), and it must be a CHILD OF #chrome

@@ -46,6 +46,10 @@ import bc16/maps as maps16
 import bc16/rules as rules16
 import bc16/world as world16
 import bc16/chassis/kit as kit16
+import bc19/maps as maps19
+import bc19/rules as rules19
+import bc19/world as world19
+import bc19/chassis/kit as kit19
 
 export registry
 
@@ -59,6 +63,7 @@ type
     yBc23 = "bc23"
     yBc22 = "bc22"
     yBc16 = "bc16"
+    yBc19 = "bc19"
 
   Session* = ref object
     ## One game in progress, in whichever year's sim. `stepRound` advances it;
@@ -98,6 +103,10 @@ type
       w16*: world16.World
       sides16*: array[2, kit16.Side]
       chassis16*: array[2, rules16.ChassisKind16]
+    of yBc19:
+      w19*: world19.World
+      sides19*: array[2, kit19.Side]
+      chassis19*: array[2, rules19.ChassisKind19]
 
   GameOutcome* = object
     ## The YEAR-NEUTRAL per-game outcome. `results.games[]`'s five required
@@ -220,6 +229,24 @@ const Bc16RungNames* = ["-", "archons_destroyed", "more_archons",
                         "highest_id"]
   ## `Domination`'s ordinals, for `tiebreak.rung`.
 
+const Bc19ActionNames* = [
+  "nothing", "move", "attack", "build", "mine", "trade", "give", "timeout"
+]
+  ## `ActionRecord.action` ordinals 0..7; 7 is UNREACHABLE upstream (V6).
+  ## The field is `action`, never `kind`: a field named `kind` is flattened
+  ## into the same object as the event's own `kind` key and silently
+  ## overwrites it (the bc23 r1-F25 finding).
+
+const Bc19UnitNames* = [
+  "castle", "church", "pilgrim", "crusader", "prophet", "preacher"
+]
+  ## `SPECS` ordinals 0..5, for `unit_milestone.unit`.
+
+const Bc19RungNames* = [
+  "-", "castles_destroyed", "coin_flip", "more_castles", "more_unit_health"
+]
+  ## for `tiebreak.rung`.
+
 const Bc25TowerNames* = ["paint", "money", "defense"]
   ## `TowerKind`'s ordinals, for `tower_built` / `tower_upgraded` /
   ## `tower_lost`.
@@ -233,6 +260,7 @@ proc yearIdOf*(year: string): YearId =
   of "bc23": yBc23
   of "bc22": yBc22
   of "bc16": yBc16
+  of "bc19": yBc19
   else: yBc26
 
 proc strongChassisFor*(year: string): ScriptedChassis =
@@ -247,6 +275,7 @@ proc strongChassisFor*(year: string): ScriptedChassis =
   of yBc23: scLemonade
   of yBc22: scWololo
   of yBc16: scBulwark
+  of yBc19: scSaber
 
 proc parseScriptedChassis*(name: string): ScriptedChassis =
   ## Year-free reading of a recorded `seats[].chassis` string. An unrecognised
@@ -271,6 +300,7 @@ proc poolNamesFor*(year, pool: string): seq[string] =
   of yBc23: maps23.poolNames(pool)
   of yBc22: maps22.poolNames(pool)
   of yBc16: maps16.poolNames(pool)
+  of yBc19: maps19.poolNames(pool)
 
 proc drawMapsFor*(year, pool: string, seed, count: int): seq[string] =
   case yearIdOf(year)
@@ -282,6 +312,7 @@ proc drawMapsFor*(year, pool: string, seed, count: int): seq[string] =
   of yBc23: maps23.drawMaps(pool, seed, count)
   of yBc22: maps22.drawMaps(pool, seed, count)
   of yBc16: maps16.drawMaps(pool, seed, count)
+  of yBc19: maps19.drawMaps(pool, seed, count)
 
 proc sideAslotFor*(year: string, seed, gameIndex: int): int =
   case yearIdOf(year)
@@ -293,6 +324,7 @@ proc sideAslotFor*(year: string, seed, gameIndex: int): int =
   of yBc23: maps23.sideAslotFor(seed, gameIndex)
   of yBc22: maps22.sideAslotFor(seed, gameIndex)
   of yBc16: maps16.sideAslotFor(seed, gameIndex)
+  of yBc19: maps19.sideAslotFor(seed, gameIndex)
 
 proc mapPathFor*(year, name: string): string =
   case yearIdOf(year)
@@ -304,6 +336,7 @@ proc mapPathFor*(year, name: string): string =
   of yBc23: maps23.mapPath(name)
   of yBc22: maps22.mapPath(name)
   of yBc16: maps16.mapPath(name)
+  of yBc19: maps19.mapPath(name)
 
 proc mapCardFor*(year, name: string, slot, sideAslot, rounds: int): JsonNode =
   ## The per-map facts a seat may legitimately know before writing its
@@ -348,6 +381,10 @@ proc mapCardFor*(year, name: string, slot, sideAslot, rounds: int): JsonNode =
     card
   of yBc16:
     var card = maps16.mapCard(maps16.loadMap(name), slot, sideAslot)
+    card["rounds"] = %rounds
+    card
+  of yBc19:
+    var card = maps19.mapCard(maps19.loadMap(name), slot, sideAslot)
     card["rounds"] = %rounds
     card
 
@@ -430,6 +467,15 @@ proc newSession*(year: string, mapName: string, sheets: array[2, Sheet],
                    rules16.chassisKindFor(chassis[1])]
     result.chassis16 = [kinds16[sideAslot], kinds16[1 - sideAslot]]
     result.sides16 = rules16.newSides16(sheets, sideAslot)
+  of yBc19:
+    let spec = maps19.loadMap(mapName)
+    result = Session(year: yBc19, mapName: mapName, sideAslot: sideAslot,
+                     gameIndex: gameIndex)
+    result.w19 = world19.newWorld(spec, maxRounds)
+    let kinds19 = [rules19.chassisKindFor(chassis[0]),
+                   rules19.chassisKindFor(chassis[1])]
+    result.chassis19 = [kinds19[sideAslot], kinds19[1 - sideAslot]]
+    result.sides19 = rules19.newSides19(sheets, sideAslot)
 
 proc stepRound*(s: Session) =
   case s.year
@@ -441,6 +487,7 @@ proc stepRound*(s: Session) =
   of yBc23: rules23.runRound(s.w23, s.sides23, s.chassis23)
   of yBc22: rules22.runRound(s.w22, s.sides22, s.chassis22)
   of yBc16: rules16.runRound(s.w16, s.sides16, s.chassis16)
+  of yBc19: rules19.runRound(s.w19, s.sides19, s.chassis19)
 
 proc currentRound*(s: Session): int =
   ## **THE SESSION-LEVEL NUMBER IS ROUNDS PLAYED, and it is 1-BASED FOR EVERY
@@ -466,6 +513,7 @@ proc currentRound*(s: Session): int =
   of yBc23: s.w23.currentRound
   of yBc22: s.w22.currentRound
   of yBc16: s.w16.currentRound + 1
+  of yBc19: s.w19.round
 
 proc running*(s: Session): bool =
   case s.year
@@ -477,6 +525,7 @@ proc running*(s: Session): bool =
   of yBc23: s.w23.running
   of yBc22: s.w22.running
   of yBc16: s.w16.running
+  of yBc19: s.w19.running
 
 proc hashChainHex*(s: Session): string =
   case s.year
@@ -488,6 +537,7 @@ proc hashChainHex*(s: Session): string =
   of yBc23: toHex(s.w23.hashChain)
   of yBc22: toHex(s.w22.hashChain)
   of yBc16: toHex(s.w16.hashChain)
+  of yBc19: toHex(s.w19.hashChain)
 
 proc mapWidth*(s: Session): int =
   case s.year
@@ -499,6 +549,7 @@ proc mapWidth*(s: Session): int =
   of yBc23: s.w23.width
   of yBc22: s.w22.width
   of yBc16: s.w16.width
+  of yBc19: s.w19.width
 
 proc mapHeight*(s: Session): int =
   case s.year
@@ -510,6 +561,7 @@ proc mapHeight*(s: Session): int =
   of yBc23: s.w23.height
   of yBc22: s.w22.height
   of yBc16: s.w16.height
+  of yBc19: s.w19.height
 
 # ---------------------------------------------------------------------------
 #  Playing a game, and converting the year's outcome to the neutral one
@@ -863,6 +915,79 @@ proc statsJson16*(o: rules16.GameOutcome16): JsonNode =
     "tiebreak_round": o.tiebreakRound
   }
 
+proc statsJson19*(o: rules19.GameOutcome19): JsonNode =
+  %*{
+    "castles_start": [o.castlesStart[0], o.castlesStart[1]],
+    "castles_end": [o.castlesEnd[0], o.castlesEnd[1]],
+    "castles_lost": [o.castlesLost[0], o.castlesLost[1]],
+    "churches_built": [o.churchesBuilt[0], o.churchesBuilt[1]],
+    "churches_end": [o.churchesEnd[0], o.churchesEnd[1]],
+    "churches_lost": [o.churchesLost[0], o.churchesLost[1]],
+    "enemy_half_churches": [o.enemyHalfChurches[0], o.enemyHalfChurches[1]],
+    "unit_health_end": [o.unitHealthEnd[0], o.unitHealthEnd[1]],
+    "karbonite_end": [o.karboniteEnd[0], o.karboniteEnd[1]],
+    "fuel_end": [o.fuelEnd[0], o.fuelEnd[1]],
+    "net_worth_end": [o.netWorthEnd[0], o.netWorthEnd[1]],
+    "karbonite_mined": [o.karboniteMined[0], o.karboniteMined[1]],
+    "fuel_mined": [o.fuelMined[0], o.fuelMined[1]],
+    "karbonite_spent": [o.karboniteSpent[0], o.karboniteSpent[1]],
+    "fuel_spent": [o.fuelSpent[0], o.fuelSpent[1]],
+    "fuel_trickled": [o.fuelTrickled[0], o.fuelTrickled[1]],
+    "karbonite_reclaimed":
+      [o.karboniteReclaimed[0], o.karboniteReclaimed[1]],
+    "fuel_reclaimed": [o.fuelReclaimed[0], o.fuelReclaimed[1]],
+    "karbonite_deposited":
+      [o.karboniteDeposited[0], o.karboniteDeposited[1]],
+    "fuel_deposited": [o.fuelDeposited[0], o.fuelDeposited[1]],
+    "units_built": [o.unitsBuilt[0], o.unitsBuilt[1]],
+    "pilgrims_built": [o.pilgrimsBuilt[0], o.pilgrimsBuilt[1]],
+    "crusaders_built": [o.crusadersBuilt[0], o.crusadersBuilt[1]],
+    "prophets_built": [o.prophetsBuilt[0], o.prophetsBuilt[1]],
+    "preachers_built": [o.preachersBuilt[0], o.preachersBuilt[1]],
+    "units_alive": [o.unitsAlive[0], o.unitsAlive[1]],
+    "units_lost": [o.unitsLost[0], o.unitsLost[1]],
+    "mine_actions": [o.mineActions[0], o.mineActions[1]],
+    "mine_actions_wasted":
+      [o.mineActionsWasted[0], o.mineActionsWasted[1]],
+    "give_actions": [o.giveActions[0], o.giveActions[1]],
+    "attacks": [o.attacks[0], o.attacks[1]],
+    "damage_dealt": [o.damageDealt[0], o.damageDealt[1]],
+    "damage_taken": [o.damageTaken[0], o.damageTaken[1]],
+    "friendly_fire_damage":
+      [o.friendlyFireDamage[0], o.friendlyFireDamage[1]],
+    "self_damage": [o.selfDamage[0], o.selfDamage[1]],
+    "splash_kills": [o.splashKills[0], o.splashKills[1]],
+    "kills": [o.kills[0], o.kills[1]],
+    "robots_lost": [o.robotsLost[0], o.robotsLost[1]],
+    "moves": [o.moves[0], o.moves[1]],
+    "move_fuel_spent": [o.moveFuelSpent[0], o.moveFuelSpent[1]],
+    "radio_messages": [o.radioMessages[0], o.radioMessages[1]],
+    "radio_fuel_spent": [o.radioFuelSpent[0], o.radioFuelSpent[1]],
+    "castle_talks": [o.castleTalks[0], o.castleTalks[1]],
+    "trades_proposed": [o.tradesProposed[0], o.tradesProposed[1]],
+    "trades_executed": [o.tradesExecuted[0], o.tradesExecuted[1]],
+    "trade_karbonite_net":
+      [o.tradeKarboniteNet[0], o.tradeKarboniteNet[1]],
+    "trade_fuel_net": [o.tradeFuelNet[0], o.tradeFuelNet[1]],
+    "lattice_units_placed":
+      [o.latticeUnitsPlaced[0], o.latticeUnitsPlaced[1]],
+    "builds_refused": [o.buildsRefused[0], o.buildsRefused[1]],
+    "refused_actions": [o.refusedActions[0], o.refusedActions[1]],
+    "decision_ops_peak": [o.decisionOpsPeak[0], o.decisionOpsPeak[1]],
+    "castles_per_side": o.castlesPerSide,
+    "board_width": o.boardWidth,
+    "passable_squares": o.passableSquares,
+    "karbonite_depots": o.karboniteDepots,
+    "fuel_depots": o.fuelDepots,
+    "symmetry_horizontal": o.symmetryHorizontal,
+    "castle_separation_min": o.castleSeparationMin,
+    "castle_separation_max": o.castleSeparationMax,
+    "ids_spent": o.idsSpent,
+    "win_condition": o.winCondition,
+    "tiebreak_round": o.tiebreakRound,
+    "queue_length_end": o.queueLengthEnd
+  }
+
 proc playGameFor*(
   year, mapName: string, sheets: array[2, Sheet],
   chassis: array[2, ScriptedChassis],
@@ -950,6 +1075,16 @@ proc playGameFor*(
       endReason: o.endReason, points: o.points, hashChain: o.hashChain,
       roundChains: o.roundChains, aborted: o.aborted,
       stats: statsJson16(o)), w.events)
+  of yBc19:
+    let spec = maps19.loadMap(mapName)
+    let (w, o) = rules19.playGame(spec, sheets,
+      [rules19.chassisKindFor(chassis[0]), rules19.chassisKindFor(chassis[1])],
+      index, sideAslot, maxRounds, budgetSeconds)
+    (GameOutcome(index: o.index, mapName: o.mapName, sideAslot: o.sideAslot,
+      roundsPlayed: o.roundsPlayed, winnerSlot: o.winnerSlot,
+      endReason: o.endReason, points: o.points, hashChain: o.hashChain,
+      roundChains: o.roundChains, aborted: o.aborted,
+      stats: statsJson19(o)), w.events)
 
 proc bc21Breakpoints*(): seq[int] =
   ## The slanderer influence breakpoints, for the bc21 doctrine brief. Read

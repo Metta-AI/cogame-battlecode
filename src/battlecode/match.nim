@@ -345,6 +345,7 @@ proc collectGameEvents(
         elif plan.year == "bc23": Bc23ActionNames[e.b]
         elif plan.year == "bc22": Bc22ActionNames[e.b]
         elif plan.year == "bc16": Bc16ActionNames[e.b]
+        elif plan.year == "bc19": Bc19ActionNames[max(0, min(7, e.b))]
         else: Bc24ActionNames[e.b]
       events.add(ev("first_action", game = gameIndex, round = e.c,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
@@ -379,12 +380,17 @@ proc collectGameEvents(
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                     "skill": Bc24SkillNames[e.b], "level": e.c}))
     of "unit_milestone":
-      ## bc16 ONLY. The first of each of the five buildable types per side, so
-      ## a spectator sees "Clan Ash commissions its first TURRET" rather than
-      ## a census that moved.
+      ## bc16 AND bc19. The first of each buildable type per side, so a
+      ## spectator sees "Clan Ash commissions its first PREACHER" rather
+      ## than a census that moved. The two years have DIFFERENT unit
+      ## vocabularies -- twelve values against six -- so the table is chosen
+      ## by the year on the replay header.
+      let unitName =
+        if plan.year == "bc19": Bc19UnitNames[max(0, min(5, e.b))]
+        else: Bc16UnitNames[max(0, min(11, e.b))]
       events.add(ev("unit_milestone", game = gameIndex, round = e.round,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
-                    "unit": Bc16UnitNames[max(0, min(11, e.b))],
+                    "unit": unitName,
                     "total": e.c}))
     of "rout":
       ## bc24 spells the count `jailed` (its ducks go to jail); bc25 spells it
@@ -392,7 +398,7 @@ proc collectGameEvents(
       ## on the replay header says which field to read. bc16 spells it `lost`
       ## too, and its threshold is its own (five robots in one round).
       if plan.year == "bc25" or plan.year == "bc23" or plan.year == "bc22" or
-          plan.year == "bc16":
+          plan.year == "bc16" or plan.year == "bc19":
         events.add(ev("rout", game = gameIndex, round = e.round,
           fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                       "lost": e.b}))
@@ -505,6 +511,28 @@ proc collectGameEvents(
                     "outbreak_level": (if parts.len > 1: intOrZero(parts[1])
                                        else: 0)}))
     of "tiebreak":
+      ## bc16 packs the two archon counts and parts worths; bc19 packs the
+      ## two CASTLE counts, the two net worths and `<healthRed>:<healthBlue>`.
+      ## Both are in TEAM order and both are re-indexed to SEAT order here.
+      if plan.year == "bc19":
+        let aSlot = plan.sideAslots[gameIndex]
+        var castles = [0, 0]
+        castles[aSlot] = e.b div 100
+        castles[1 - aSlot] = e.b mod 100
+        var worth = [0, 0]
+        worth[aSlot] = e.c div 100000
+        worth[1 - aSlot] = e.c mod 100000
+        var health = [0, 0]
+        let hparts = e.s.split(':')
+        if hparts.len > 1:
+          health[aSlot] = intOrZero(hparts[0])
+          health[1 - aSlot] = intOrZero(hparts[1])
+        events.add(ev("tiebreak", game = gameIndex, round = e.round,
+          fields = %*{"rung": Bc19RungNames[max(0, min(4, e.a))],
+                      "castles": [castles[0], castles[1]],
+                      "health": [health[0], health[1]],
+                      "worth": [worth[0], worth[1]]}))
+        continue
       ## `e.b` packs the two archon counts, `e.c` the two parts net worths and
       ## `e.s` is `<archonHealthTenthsA>:<...B>`, all in TEAM order.
       let aSlot = plan.sideAslots[gameIndex]
@@ -524,6 +552,48 @@ proc collectGameEvents(
                     "archons": [archons[0], archons[1]],
                     "archon_health_tenths": [hp[0], hp[1]],
                     "parts_worth": [worth[0], worth[1]]}))
+    # --- bc19 -------------------------------------------------------------
+    of "church_built":
+      events.add(ev("church_built", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": e.b div 100, "y": e.b mod 100,
+                    "churches": e.c,
+                    "enemy_half": intOrZero(e.s)}))
+    of "church_lost":
+      events.add(ev("church_lost", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": e.b div 100, "y": e.b mod 100,
+                    "churches": e.c}))
+    of "castle_lost":
+      events.add(ev("castle_lost", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": e.b div 100, "y": e.b mod 100,
+                    "castles_left": e.c, "cause": e.s}))
+    of "depot_claimed":
+      events.add(ev("depot_claimed", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "resource": e.s,
+                    "x": e.b div 100, "y": e.b mod 100,
+                    "worked": e.c}))
+    of "famine":
+      events.add(ev("famine", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "resource": (if e.b == 0: "karbonite" else: "fuel")}))
+    of "trade":
+      ## The barter's sign convention is the ENGINE's: POSITIVE MEANS THE
+      ## RESOURCE MOVES RED TO BLUE. The event carries the raw signed pair
+      ## plus whether the matched deal was payable.
+      events.add(ev("trade", game = gameIndex, round = e.round,
+        fields = %*{"karbonite": e.a, "fuel": e.b, "payable": e.c}))
+    of "preacher_splash":
+      let parts = e.s.split(':')
+      events.add(ev("preacher_splash", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "enemy_killed": e.b div 100,
+                    "friendly_killed": e.b mod 100,
+                    "self_damage": e.c,
+                    "x": (if parts.len > 0: intOrZero(parts[0]) else: 0),
+                    "y": (if parts.len > 1: intOrZero(parts[1]) else: 0)}))
     else: discard
 
 proc bc20HqEvents(outcome: GameOutcome, gameIndex: int,
@@ -622,7 +692,13 @@ func winBonusFor*(year: string): float =
   ## is 9.1 points against 36 available below, so its `points` can favour the
   ## loser too (docs/RULES-BC16.md, Scoring; `tests/test_bc16_scoring.nim`
   ## asserts that case explicitly rather than leaving it to be found).
-  if yearIdOf(year) in {yBc25, yBc23, yBc22, yBc16}: 200.0 else: 100.0
+  ## bc19 pays 200 for EXACTLY bc22's and bc16's reason: its 64/24/12
+  ## weights read the engine's own two deciding rungs, and a one-castle
+  ## margin on a 3-vs-2 board is `3/5 - 2/5 = 0.2` of 64 = 12.8 points
+  ## against 36 available below, so its `points` can favour the LOSER too
+  ## (docs/RULES-BC19.md, Scoring; `tests/test_bc19_scoring.nim` asserts
+  ## that case explicitly rather than leaving it to be found).
+  if yearIdOf(year) in {yBc25, yBc23, yBc22, yBc16, yBc19}: 200.0 else: 100.0
 
 proc scoresFor*(games: seq[GameOutcome],
                 year = "bc26"): array[2, float] =

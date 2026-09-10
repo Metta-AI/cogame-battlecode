@@ -393,9 +393,9 @@ block:
 ## The renderer fixture lays the full-cap doctrine text out for EVERY year.
 block:
   let fixture = readFile("tools/ci/renderer_fixture.html")
-  check("the fixture has a row per year",
-    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22', " &
-      "'bc16'];" in fixture)
+  check("the fixture has a row per year, now NINE of them",
+    "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22'," in
+      fixture and "'bc16', 'bc19'];" in fixture)
   check("and fills bc21's own readouts",
     "bc21-influence" in fixture and "bc21-votes" in fixture and
     "bc21-doctrines-body" in fixture)
@@ -871,9 +871,9 @@ block:
     "window.Bc25Block = {" in page)
   check("and the shared onText calls it",
     "if (window.Bc25Block) window.Bc25Block.onFrame(s);" in page)
-  check("and the bc26 branch is guarded off for bc25, bc23, bc22 and now " &
-    "bc16 too, so the discriminator is EIGHT-way",
-    "if (!isBc16 && !isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 &&" in
+  check("and the bc26 branch is guarded off for bc25, bc23, bc22, bc16 and " &
+    "now bc19 too, so the discriminator is NINE-way",
+    "if (!isBc16 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && !isBc23 &&" in
       page)
 
 block:
@@ -1164,9 +1164,9 @@ block:
     "if (window.Bc22Block) window.Bc22Block.onFrame(s);" in page)
   check("and the inherited block attaches the transport to it",
     "window.Bc22Block.attach({" in page)
-  check("the bc26 branch is guarded off for bc22 and bc16 too, so the " &
-    "discriminator is EIGHT-way",
-    "if (!isBc16 && !isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 &&" in
+  check("the bc26 branch is guarded off for bc22, bc16 and bc19 too, so " &
+    "the discriminator is NINE-way",
+    "if (!isBc16 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && !isBc23 &&" in
       page)
   for alias in ["window.Bc20Block = {", "window.Bc21Block = {",
                 "window.Bc23Block = {", "window.Bc24Block = {",
@@ -1463,7 +1463,7 @@ block:
   check("#bc16-econ too",
     "#bc16-econ { bottom: calc(var(--band, 0px) + 8px); }" in page)
   check("and relayout() MEASURES both of them into --statrail",
-    "'bc16-econ', 'bc16-units']" in page)
+    "'bc16-econ', 'bc16-units'" in page)
   check("while #killfeed is still lifted above the rail",
     "calc(var(--band, 0px) + var(--statrail, 0px) + 8px)" in page)
   check("#bc16-archons is the headline pill, in the top band",
@@ -1551,6 +1551,13 @@ block:
         if one.startsWith("#bc16-") or
            one.startsWith("html[data-year=\"bc16\"] ") or
            one.startsWith("html:not([data-year=\"bc16\"]) "):
+          continue
+        ## A LATER YEAR'S BLOCK LEGITIMATELY NAMES THIS YEAR'S IDS under its
+        ## OWN `data-year`, to hide them: `html[data-year="bc19"] #bc16-econ`
+        ## is year-scoped, just to a different year. Anything of that shape
+        ## is scoped; anything else is not. (bc22 already carries exactly
+        ## this carve-out for the same reason.)
+        if one.startsWith("html[data-year=\"bc") and "] #bc16-" in one:
           continue
         unscoped16.add(one)
     sel16 = ""
@@ -1654,5 +1661,282 @@ block:
   checkEq("all twelve types at all four palettes (" & missing.join(", ") &
     ")", missing.len, 0)
   check("plus the rubble texture", "\"creep\"" in atlas)
+
+# --- THE BC19 GAME BLOCK ----------------------------------------------------
+block:
+  ## §Tests item 27. The same obligations every year module before it had to
+  ## meet, plus the two `--statrail` ids, the two-palette atlas and the
+  ## endcard fixes. bc19 is the NINTH year block in this page, so every
+  ## count below is nine-way.
+  let page = readFile("client/replay_broadcast.html")
+
+  ## 1. NO NAME COLLISIONS. `markBeat` is `chrome_common.js`'s and a
+  ##    same-named function here would HOIST OVER it (the tandem 2026-08-23
+  ##    collision).
+  checkEq("the bc19 block does not define `markBeat` at all",
+    page.count("function markBeat"), 0)
+  checkEq("its beat builder has its own name",
+    page.count("function buildBc19BeatButtons"), 1)
+  checkEq("and so does its spoiler gate",
+    page.count("function applyBc19BeatSpoilers"), 1)
+  for taken in ["function buildBeatButtons", "function buildBc20BeatButtons",
+                "function buildBc21BeatButtons",
+                "function buildBc22BeatButtons",
+                "function buildBc23BeatButtons",
+                "function buildBc24BeatButtons",
+                "function buildBc25BeatButtons",
+                "function buildBc16BeatButtons"]:
+    checkEq("and it does not redefine " & taken, page.count(taken), 1)
+  for alias in ["window.Bc20Block = {", "window.Bc21Block = {",
+                "window.Bc22Block = {", "window.Bc23Block = {",
+                "window.Bc24Block = {", "window.Bc25Block = {",
+                "window.Bc16Block = {"]:
+    checkEq("the bc19 block does not redeclare " & alias,
+      page.count(alias), 1)
+  ## And it shadows no `ChromeCommon` alias.
+  checkEq("the block registers on window.Bc19Block",
+    page.count("window.Bc19Block = {"), 1)
+  check("and the shared onText calls it",
+    "if (window.Bc19Block) window.Bc19Block.onFrame(s);" in page)
+  check("and the inherited block attaches the transport to it",
+    "window.Bc19Block.attach({" in page)
+
+  ## 2. THE SIX bc19 IDS ARE ALL PRESENT, and no starter element was removed
+  ##    to make room for them.
+  for id in ["bc19-castles", "bc19-fuel", "bc19-econ", "bc19-units",
+             "bc19-doctrines", "bc19-doctrines-toggle", "bc19-crusade"]:
+    check("the page carries #" & id, "id=\"" & id & "\"" in page)
+  for kept in ["coopchip", "bars", "gamechips", "econ", "doctrines",
+               "bc20-flood", "bc21-units", "bc22-archons", "bc23-islands",
+               "bc24-flags", "bc25-srp", "bc16-archons", "viewpanel",
+               "killfeed", "scrub", "endcard"]:
+    check("and the starter element #" & kept & " is still there",
+      "id=\"" & kept & "\"" in page)
+
+  ## 3. `#bc19-doctrines` is dismissible, capped-and-scrolling, and OUTSIDE
+  ##    var(--band).
+  check("the doctrine overlay has a dismiss control with an aria-label",
+    "id=\"bc19-doctrines-close\"" in page and
+    "aria-label=\"Dismiss doctrines\"" in page)
+  check("a re-open chip", "id=\"bc19-doctrines-toggle\"" in page)
+  check("an Escape binding scoped to bc19",
+    "getAttribute('data-year') !== 'bc19'" in page)
+  check("self-dismissal on the first playback advance",
+    "if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed)" in page)
+  check("and it is CAPPED AND SCROLLS rather than clipping",
+    "#bc19-doctrines {" in page and
+    "calc(100% - var(--topband, 0px) - var(--band, 0px) - 46px));" in page)
+  check("and it carries the SUBMITTED-VS-APPLIED badge the envelope pin " &
+    "requires", "knobs defaulted" in page and
+    "what the cog actually sent" in page)
+
+  ## 4. THE TWO RAIL BOXES are above the band and IN the `--statrail` set;
+  ##    the two top-band pills are deliberately NOT.
+  check("#bc19-units is lifted above var(--band)",
+    "#bc19-units { bottom: calc(var(--band, 0px) + 76px); }" in page)
+  check("#bc19-econ too",
+    "#bc19-econ { bottom: calc(var(--band, 0px) + 8px); }" in page)
+  check("and relayout() MEASURES both of them into --statrail",
+    "'bc19-econ', 'bc19-units'" in page)
+  check("while #killfeed is still lifted above the rail",
+    "calc(var(--band, 0px) + var(--statrail, 0px) + 8px)" in page)
+
+  ## 4b. THE TWO SIGNATURE READOUTS, and the takeover on the one no other
+  ##     year has. `#bc19-castles` FLASHES when a castle dies — the only
+  ##     event that can end this game before round 1000 — and `#bc19-fuel`
+  ##     is struck by a `famine` or a `trade` beat. Both are asserted in the
+  ##     same triad shape as bc16's: the rule exists, the page adds that
+  ##     exact class, and the page takes it off again.
+  check("there is a rule for `flash` to activate",
+    "#bc19-castles.flash { animation: bc19flash" in page)
+  check("with the keyframes it names", "@keyframes bc19flash {" in page)
+  check("and the page adds that exact class", "box.classList.add('flash');" in
+    page)
+  check("after taking it off, so a second death re-triggers the animation",
+    "box.classList.remove('flash');" in page and
+    "void box.offsetWidth;" in page)
+  check("driven by an actual drop in the castle count",
+    "if (lastCastles[i] >= 0 && order.alive < lastCastles[i]) died = true;" in
+      page)
+  check("there is a rule for `struck` to activate",
+    "#bc19-fuel.struck {" in page)
+  check("the strip takeover ADDS the class its CSS rule uses",
+    "box.classList.add('struck');" in page)
+  check("and takes it off again, so the readouts come back",
+    "box.classList.remove('struck');" in page)
+  check("it is driven by a FAMINE or a TRADE beat, for two seconds, in the " &
+    "beat's own plain words",
+    "if (b.k !== 'famine' && b.k !== 'trade') return;" in page and
+    "struckUntil = Date.now() + 2000;" in page and
+    "'<span class=\"tell\">' + esc(struckText) +" in page)
+  ## AND THE KINDS IT KEYS ON ARE KINDS THE COMMITTED ARTEFACT REALLY EMITS,
+  ## with labels — otherwise the takeover is as dead as bc16's CSS rule was
+  ## (r1-F9). `tests/test_bc19_beats.nim` asserts the same fixture carries
+  ## eleven of the twelve kinds and records that `famine` is the twelfth
+  ## BECAUSE THE STRONG CHASSIS NEVER ASKS FOR WHAT IT CANNOT PAY; this
+  ## closes the loop between the fixture and the page for the kind that IS
+  ## emitted, and the `famine` half of the takeover is exercised from a
+  ## synthetic event in the beats shard.
+  block:
+    let fixture = parseReplay(readFile("tests" / "fixtures" /
+      "replay-bc19.json"))
+    var gameStart: seq[int]
+    var total = 0
+    for g in fixture.games:
+      gameStart.add(total)
+      total += g.rounds
+    proc frameOf(g, r: int): int =
+      if g < 0 or g >= gameStart.len: 0 else: gameStart[g] + max(0, r - 1)
+    var struckKinds: seq[string]
+    for b in beatsFor(fixture, frameOf):
+      let k = b["k"].getStr()
+      if k notin ["famine", "trade"]: continue
+      if b["label"].getStr().len == 0: continue
+      if k notin struckKinds: struckKinds.add(k)
+    check("the committed fixture emits a labelled `trade` beat, so the " &
+      "takeover fires", "trade" in struckKinds)
+
+  ## 5. EVERY #bc19-* CSS RULE IS SCOPED TO THE YEAR, one way or the other.
+  ##    The whole <style> block, not a line scan (r1-F24).
+  let cssOpen19 = page.find("<style>")
+  let cssClose19 = page.find("</style>")
+  var css19 = page[cssOpen19 + len("<style>") ..< cssClose19]
+  while true:
+    let a = css19.find("/*")
+    if a < 0: break
+    let b = css19.find("*/", a)
+    if b < 0: break
+    css19 = css19[0 ..< a] & " " & css19[b + 2 .. ^1]
+  var unscoped19: seq[string]
+  var scanned19 = 0
+  var sel19 = ""
+  for ch in css19:
+    if ch notin {'{', '}', ';'}:
+      sel19.add(ch)
+      continue
+    if ch == '{' and "bc19" in sel19:
+      for part in sel19.split(','):
+        let one = part.splitWhitespace().join(" ")
+        if "bc19" notin one: continue
+        if one.startsWith("@"): continue
+        inc scanned19
+        if one.startsWith("#bc19-") or
+           one.startsWith("html[data-year=\"bc19\"] ") or
+           one.startsWith("html:not([data-year=\"bc19\"]) "):
+          continue
+        ## A LATER YEAR'S BLOCK LEGITIMATELY NAMES THIS YEAR'S IDS under its
+        ## OWN `data-year`, to hide them.
+        if one.startsWith("html[data-year=\"bc") and "] #bc19-" in one:
+          continue
+        unscoped19.add(one)
+    sel19 = ""
+  check("the scan saw the bc19 rules at all", scanned19 >= 20)
+  checkEq("and every one of them is year-scoped (" &
+    unscoped19.join(" | ") & ")", unscoped19.len, 0)
+
+  ## AND THE SIBLING IDS ARE HIDDEN ON A bc19 REPLAY — what bc19 removes is
+  ## NOTHING from the page and EVERYTHING from the screen.
+  for id in ["coopchip", "econ", "doctrines", "bc20-flood", "bc21-units",
+             "bc22-archons", "bc22-anomaly", "bc23-islands", "bc24-flags",
+             "bc25-srp", "bc16-archons", "bc16-horde", "bc16-econ",
+             "bc16-units"]:
+    check("html[data-year=\"bc19\"] hides #" & id,
+      "html[data-year=\"bc19\"] #" & id in page)
+  for id in ["bc19-castles", "bc19-fuel", "bc19-econ", "bc19-units",
+             "bc19-doctrines", "bc19-doctrines-toggle", "bc19-crusade"]:
+    check("and every other year hides #" & id,
+      "html:not([data-year=\"bc19\"]) #" & id in page)
+
+  ## THE ENDCARD FIXES, for bc19.
+  let tableStart19 = page.find("var ENDCARD_NOUNS = {")
+  let tableEnd19 = page.find("};", tableStart19)
+  let nounTable19 = page[tableStart19 .. tableEnd19]
+  check("the noun table has a bc19 row", "bc19:" in nounTable19)
+  check("with THIS year's nouns", "unit: 'castle'" in nounTable19 and
+    "res: 'karbonite'" in nounTable19 and "res2: 'fuel'" in nounTable19)
+  ## NO OTHER YEAR'S RESOURCE OR UNIT NOUN may reach a bc19 card.
+  block:
+    var bc19Row = ""
+    var inRow = false
+    for line in nounTable19.splitLines():
+      if "bc19:" in line: inRow = true
+      if inRow: bc19Row.add(line & " ")
+      if inRow and "limit:" in line: inRow = false
+    check("the bc19 row was found", bc19Row.len > 0)
+    for noun in ["rat", "cheese", "king", "lead", "gold", "chips", "crumbs",
+                 "parts", "archon", "soup", "influence", "vote", "paint",
+                 "adamantium", "mana", "elixir", "bread", "flag", "money",
+                 "sky island", "well"]:
+      check("no `" & noun & "` on a bc19 card: " & bc19Row.strip(),
+        noun notin bc19Row)
+  check("every printed bc19 number goes through ONE formatter",
+    "function stat(value, kind) {" in page)
+  check("a blank bc19 motto renders NOTHING",
+    "if (d.motto) html += '<br>\\u201c'" in page)
+  ## NO HUD BLEED-THROUGH. The static half below is a grep and a grep is NOT
+  ## coverage: this repo shipped `#endcard.show ~ #bc16-archons`, which named
+  ## a class the page never sets AND the wrong sibling direction, and a grep
+  ## for exactly that string was GREEN while the rule matched nothing
+  ## (r1-F1). The gate is a computed style in `tools/ci/renderer_fixture.html`,
+  ## which raises `#endcard` and reads `visibility` on all five boxes; this
+  ## static pair only pins the shape so a future edit cannot quietly drop it.
+  check("and the bc19 boxes are hidden while the endcard shows (no HUD " &
+    "bleed-through)",
+    "html[data-year=\"bc19\"] #chrome:has(#endcard.on) #bc19-castles" in
+      page and "visibility: hidden;" in page)
+  check("keyed on the class the page ACTUALLY toggles, parent-scoped rather " &
+    "than sibling-scoped",
+    "#endcard.show ~ #bc19-castles" notin page and
+    "#endcard.on ~ #bc19-castles" notin page)
+  for id in ["bc19-castles", "bc19-fuel", "bc19-econ", "bc19-units",
+             "bc19-doctrines"]:
+    check("every bc19 box is named in the suppression rule: " & id,
+      "html[data-year=\"bc19\"] #chrome:has(#endcard.on) #" & id in page)
+  block:
+    let fixture = readFile("tools/ci/renderer_fixture.html")
+    check("the fixture lays bc19 out at three widths",
+      "'bc16', 'bc19'];" in fixture)
+    check("and it proves the suppression by computed style, not by grep",
+      "bc19: ['bc19-castles', 'bc19-fuel', 'bc19-econ', 'bc19-units'," in
+        fixture and "'bc19-doctrines']" in fixture)
+    check("with the war panel INSIDE the card, where the page puts it",
+      "'<div id=\"bc19-crusade\">' + bc19Crusade + '</div>' +" in fixture)
+    check("and every readout fed its MEASURED WIDEST value",
+      "EVERY NUMBER BELOW IS MEASURED" in fixture and
+      "10842" in fixture and "61830" in fixture)
+    check("and both doctrine poles at the full rune caps",
+      "var BC19_WORDS = [" in fixture and
+      "BC19_WORDS[m19].join(' \\u00b7 ')" in fixture)
+    check("with the endcard fed this year's own words",
+      "bc19: [BC19_WORDS[0].join(', '), BC19_WORDS[1].join(', ')]" in fixture)
+  ## The tiebreak ledger — all three round-1000 rungs and which one decided
+  ## it.
+  check("the war panel draws the whole tiebreak ladder",
+    "ladder \\u2014 '" in page and "g.tiebreak" in page)
+
+  ## `#viewpanel` is KEPT: bc19's played pool spans 32x32 to 64x64, so the
+  ## native 16 px render is 512 to 1024 px wide — every single one of them
+  ## LARGER than the 360 px featured-match frame.
+  check("the zoom panel is still in the page", "id=\"viewpanel\"" in page)
+
+# --- the bc19 sprite atlas --------------------------------------------------
+block:
+  check("the bc19 atlas image is committed", fileExists("data/atlas_bc19.png"))
+  check("with its index", fileExists("data/atlas_bc19.json"))
+  let atlas = readFile("data/atlas_bc19.json")
+  ## ALL SIX UNIT TYPES AT BOTH `Team` PALETTES. bc19 has NO neutral and NO
+  ## third faction — the 2019 board is two orders and nothing else — so two
+  ## palettes is the whole set rather than a shortfall.
+  var missing19: seq[string]
+  for kind in ["castle", "church", "pilgrim", "crusader", "prophet",
+               "preacher"]:
+    for team in ["a", "b"]:
+      let name = team & "_" & kind
+      if "\"" & name & "\"" notin atlas: missing19.add(name)
+  checkEq("all six types at both palettes (" & missing19.join(", ") & ")",
+    missing19.len, 0)
+  check("and there is no neutral palette, because this year has none",
+    "\"neutral_castle\"" notin atlas and "\"horde_castle\"" notin atlas)
+  check("at the 16 px tile the renderer draws", "\"tile\":16" in atlas)
 
 finish("test_viewer")

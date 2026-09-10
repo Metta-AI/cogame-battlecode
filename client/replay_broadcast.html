@@ -3932,6 +3932,252 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
   #bc16-doctrines { max-width: 96%; font-size: 10px; }
 }
 
+/* ======================================================================
+   BC19 additions to the inherited cogame-battlecode chrome
+   ----------------------------------------------------------------------
+   Battlecode 2019 "Crusade". NO STARTER ELEMENT IS REMOVED FROM THE PAGE:
+   the bc26 block's ids and the bc16/bc20/bc21/bc22/bc23/bc24/bc25 blocks'
+   all stay exactly where they are, and what bc19 removes is nothing from
+   the page and everything from the SCREEN. Every rule below is scoped to
+   `html[data-year="bc19"]`, INCLUDING EVERY BEAT-MARKER COLOUR (the bc21
+   r1-F4 fix), so none of them can restyle another year's marker of the
+   same name -- and six of bc19's twelve beat kinds ARE spelled the same as
+   another year's.
+   ====================================================================== */
+html[data-year="bc19"] #coopchip,
+html[data-year="bc19"] #bars,
+html[data-year="bc19"] #econ,
+html[data-year="bc19"] #doctrines,
+html[data-year="bc19"] #bc20-flood,
+html[data-year="bc19"] #bc20-soup,
+html[data-year="bc19"] #bc20-units,
+html[data-year="bc19"] #bc20-doctrines,
+html[data-year="bc19"] #bc20-doctrines-toggle,
+html[data-year="bc19"] #bc20-chain,
+html[data-year="bc19"] #bc21-votes,
+html[data-year="bc19"] #bc21-influence,
+html[data-year="bc19"] #bc21-units,
+html[data-year="bc19"] #bc21-doctrines,
+html[data-year="bc19"] #bc21-doctrines-toggle,
+html[data-year="bc19"] #bc21-bids,
+html[data-year="bc19"] #bc23-islands,
+html[data-year="bc19"] #bc23-econ,
+html[data-year="bc19"] #bc23-units,
+html[data-year="bc19"] #bc23-doctrines,
+html[data-year="bc19"] #bc23-doctrines-toggle,
+html[data-year="bc19"] #bc23-tempest,
+html[data-year="bc19"] #bc24-flags,
+html[data-year="bc19"] #bc24-crumbs,
+html[data-year="bc19"] #bc24-levels,
+html[data-year="bc19"] #bc24-doctrines,
+html[data-year="bc19"] #bc24-doctrines-toggle,
+html[data-year="bc19"] #bc24-traps,
+html[data-year="bc19"] #bc25-coverage,
+html[data-year="bc19"] #bc25-towers,
+html[data-year="bc19"] #bc25-econ,
+html[data-year="bc19"] #bc25-doctrines,
+html[data-year="bc19"] #bc25-doctrines-toggle,
+html[data-year="bc19"] #bc25-srp,
+html[data-year="bc19"] #bc22-archons,
+html[data-year="bc19"] #bc22-anomaly,
+html[data-year="bc19"] #bc22-econ,
+html[data-year="bc19"] #bc22-units,
+html[data-year="bc19"] #bc22-doctrines,
+html[data-year="bc19"] #bc22-doctrines-toggle,
+html[data-year="bc19"] #bc22-mutation,
+html[data-year="bc19"] #bc16-archons,
+html[data-year="bc19"] #bc16-horde,
+html[data-year="bc19"] #bc16-econ,
+html[data-year="bc19"] #bc16-units,
+html[data-year="bc19"] #bc16-doctrines,
+html[data-year="bc19"] #bc16-doctrines-toggle,
+html[data-year="bc19"] #bc16-siege { display: none !important; }
+
+html:not([data-year="bc19"]) #bc19-castles,
+html:not([data-year="bc19"]) #bc19-fuel,
+html:not([data-year="bc19"]) #bc19-econ,
+html:not([data-year="bc19"]) #bc19-units,
+html:not([data-year="bc19"]) #bc19-doctrines,
+html:not([data-year="bc19"]) #bc19-doctrines-toggle,
+html:not([data-year="bc19"]) #bc19-crusade { display: none !important; }
+
+/* THE HEADLINE READOUT AND THE YEAR'S WHOLE STORY: a two-sided castle
+   tally with a 200-HP pip per castle that drains as it is shot, and a
+   church count beside it. It flashes red when a castle dies, because that
+   is the only event that can end the game before round 1000. Top-centre
+   pill slot, ABOVE the board and never inside the transport band. */
+#bc19-castles {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(var(--topband, 0px) + 6px);
+  display: flex; gap: 8px; align-items: baseline;
+  font: 700 12px/1 var(--mono); color: #d9cdb8;
+  background: rgba(10, 12, 18, .82); border: 1px solid #2a3342;
+  border-radius: 999px; padding: 5px 12px; z-index: 7; white-space: nowrap;
+}
+#bc19-castles.flash { animation: bc19flash .9s ease-out 1; }
+@keyframes bc19flash {
+  0% { box-shadow: 0 0 0 0 rgba(221, 0, 72, .9); }
+  100% { box-shadow: 0 0 0 14px rgba(221, 0, 72, 0); }
+}
+#bc19-castles .ash { color: #7fb2e8; }
+#bc19-castles .basil { color: #dd0048; }
+#bc19-castles .pips { letter-spacing: .08em; }
+#bc19-castles .church { color: #9fd4a0; }
+#bc19-castles .lost { color: #6f6558; }
+
+/* THE YEAR'S SIGNATURE READOUT, AND THE ONE NO OTHER YEAR HAS: THE FUEL
+   CLOCK. Karbonite and fuel banked as two bars, the FUEL DELTA THIS ROUND
+   (the flat +25 trickle against what the order actually spent, so a
+   spectator sees an order going broke twenty rounds early), the mining
+   rate, the unrefined load in transit on pilgrims, and the round counter.
+   It KEEPS BOTH BARS, THE DELTA AND THE ROUND COUNTER AT EVERY WIDTH,
+   INCLUDING 360 px, because it is the readout that makes the year make
+   sense. Top band, beside the castle pill, never inside the transport
+   band. */
+#bc19-fuel {
+  position: absolute; right: 8px;
+  top: calc(var(--topband, 0px) + 6px);
+  display: flex; gap: 7px; align-items: baseline; flex-wrap: wrap;
+  justify-content: flex-end; max-width: calc(56% - 8px);
+  font: 700 11px/1.3 var(--mono); color: #d9cdb8;
+  background: rgba(10, 12, 18, .82); border: 1px solid #2a3342;
+  border-radius: 10px; padding: 5px 10px; z-index: 7;
+}
+#bc19-fuel .karb { color: #3fd8e0; font-weight: 800; }
+#bc19-fuel .fuel { color: #e0a13f; font-weight: 800; }
+#bc19-fuel .up { color: #7fd48f; }
+#bc19-fuel .down { color: #e0523a; }
+#bc19-fuel .rate { color: #b6a892; }
+#bc19-fuel .transit { color: #9fb0bd; }
+#bc19-fuel .clock { color: #f2e8d8; }
+#bc19-fuel .tl { letter-spacing: .12em; color: #6f6558; }
+#bc19-fuel .tell { color: #ffd9a0; font-weight: 700; }
+#bc19-fuel.struck {
+  background: rgba(60, 12, 18, .92); border-color: #dd0048;
+}
+
+#bc19-econ, #bc19-units {
+  position: absolute; left: 8px;
+  width: max-content; max-width: calc(100% - 16px);
+  font: 500 10px/1.35 var(--mono); color: #cdbfa6;
+  background: rgba(10, 12, 18, .78); border: 1px solid #2a3342;
+  border-radius: 8px; padding: 5px 8px; z-index: 6;
+}
+#bc19-units { bottom: calc(var(--band, 0px) + 76px); }
+#bc19-econ { bottom: calc(var(--band, 0px) + 8px); }
+/* The two rail boxes WRAP their rows (the bc16 r1-F2 repair, kept): a
+   nowrap flex row inside a `max-content` box keeps laying its fields out
+   past the cap and draws the last one off the frame at 360 px. */
+#bc19-econ .row, #bc19-units .row {
+  display: flex; gap: 3px 7px; align-items: baseline; white-space: nowrap;
+  flex-wrap: wrap;
+}
+#bc19-econ .who, #bc19-units .who {
+  min-width: 4.2em; color: #8b8375; font-weight: 700;
+}
+#bc19-econ .karb { color: #3fd8e0; }
+#bc19-econ .fuel { color: #e0a13f; }
+#bc19-econ .dep { color: #7fd48f; }
+#bc19-econ .chr { color: #9fd4a0; }
+#bc19-econ .bar { color: #b98ad0; }
+#bc19-econ .lbl { color: #8b8375; }
+#bc19-units .cas { color: #dd0048; font-weight: 700; }
+#bc19-units .chu { color: #9fd4a0; }
+#bc19-units .pil { color: #3fd8e0; }
+#bc19-units .mil { color: #9fb0bd; }
+#bc19-units .load { color: #e8c46a; }
+#bc19-units .ff { color: #e07a3a; font-weight: 700; }
+#bc19-units .lbl { color: #8b8375; }
+
+/* The dismissible doctrine overlay: a close control, an Escape binding, a
+   re-open chip and self-dismissal on the first playback advance. CAPPED
+   AND SCROLLING (the bc23/bc25 doctrine-card clipping finding). It sits
+   ABOVE the board and NEVER inside the transport band, and it carries the
+   SUBMITTED-VS-APPLIED BADGE the envelope pin requires. */
+#bc19-doctrines {
+  position: absolute; left: 8px; right: 8px;
+  top: calc(var(--topband, 0px) + 34px);
+  max-height: min(46vh,
+    calc(100% - var(--topband, 0px) - var(--band, 0px) - 46px));
+  overflow: auto;
+  font: 500 11px/1.4 var(--mono); color: #d9cdb8;
+  background: rgba(10, 12, 18, .9); border: 1px solid #2a3342;
+  border-radius: 8px; padding: 8px 26px 8px 10px; z-index: 8;
+}
+#bc19-doctrines.dismissed { display: none !important; }
+#bc19-doctrines-close {
+  position: absolute; top: 3px; right: 6px;
+  background: none; border: 0; color: #b6a892; cursor: pointer;
+  font: 700 15px/1 var(--mono); padding: 2px 4px;
+}
+#bc19-doctrines-close:hover { color: #fff; }
+#bc19-doctrines .dline { margin-bottom: 6px; }
+#bc19-doctrines .dname { color: #f2e8d8; font-weight: 700; }
+#bc19-doctrines .dfall { color: #dd0048; }
+#bc19-doctrines .dbadge { color: #ffb347; font-weight: 700; }
+#bc19-doctrines .dsub { color: #8b8375; }
+
+/* The endcard war panel. Nothing about castles, churches, karbonite, fuel
+   or the barter is stored in the replay: the wasm sim re-derives every
+   round. */
+#bc19-crusade {
+  margin-top: 8px; font: 500 11px/1.45 var(--mono);
+  color: #d9cdb8; max-height: 30vh; overflow: auto;
+}
+#bc19-crusade .clan b { color: #f0d070; }
+#bc19-crusade .ladder { color: #b6a892; }
+#bc19-crusade .ladder .won { color: #f2e8d8; font-weight: 700; }
+
+/* THE HUD MAY NOT BLEED THROUGH THE ENDCARD (the bc23 finding).
+   PARENT-SCOPED and keyed on `.on`, the class the page actually toggles
+   (the bc16 r1-F1 repair, kept): `~` selects only FOLLOWING siblings while
+   the `#bc19-*` boxes are emitted BEFORE `#endcard` inside `#chrome`.
+   The gate for this is a COMPUTED STYLE, not a text grep. */
+html[data-year="bc19"] #chrome:has(#endcard.on) #bc19-castles,
+html[data-year="bc19"] #chrome:has(#endcard.on) #bc19-fuel,
+html[data-year="bc19"] #chrome:has(#endcard.on) #bc19-econ,
+html[data-year="bc19"] #chrome:has(#endcard.on) #bc19-units,
+html[data-year="bc19"] #chrome:has(#endcard.on) #bc19-doctrines {
+  visibility: hidden;
+}
+
+/* Beat markers, EVERY ONE scoped to html[data-year="bc19"]. TWELVE kinds,
+   and `tests/test_bc19_beats.nim` asserts that the COMMITTED FIXTURE
+   REPLAY emits every one of them -- emission, label and style, all three,
+   and the CSS check reads the kinds the fixture ACTUALLY EMITTED rather
+   than a hand-written list (the bc25 r1-F26 finding). SIX of the twelve
+   names already exist for another year (`doctrine`, `game`, `build`,
+   `rout`, `duel`, `end`), which is exactly why the scoping is mandatory;
+   six are new (`church`, `castle`, `mine`, `famine`, `trade`,
+   `splash`). */
+html[data-year="bc19"] .beat-marker.doctrine { background: #9a8ad0; }
+html[data-year="bc19"] .beat-marker.game     { background: #b6a892; }
+html[data-year="bc19"] .beat-marker.build    { background: #7fb2e5; }
+html[data-year="bc19"] .beat-marker.church   { background: #9fd4a0; }
+html[data-year="bc19"] .beat-marker.castle   { background: #dd0048; width: 3px; }
+html[data-year="bc19"] .beat-marker.mine     { background: #3fd8e0; }
+html[data-year="bc19"] .beat-marker.famine   { background: #e0523a; width: 3px; }
+html[data-year="bc19"] .beat-marker.trade    { background: #b98ad0; }
+html[data-year="bc19"] .beat-marker.splash   { background: #fd5f00; width: 3px; }
+html[data-year="bc19"] .beat-marker.rout     { background: #c0392b; width: 3px; }
+html[data-year="bc19"] .beat-marker.duel     { background: #e07a3a; }
+html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
+
+/* 360 px, the featured-match iframe width. Word labels go to glyphs and
+   `#viewpanel` shrinks to its minimum before anything else, but
+   `#bc19-fuel` KEEPS BOTH BARS, THE FUEL DELTA AND THE ROUND COUNTER --
+   they are what make this year legible. */
+@media (max-width: 640px) {
+  #bc19-castles { font-size: 10px; gap: 5px; }
+  #bc19-castles .lost { display: none; }
+  #bc19-fuel { font-size: 9px; gap: 5px; max-width: calc(62% - 8px); }
+  #bc19-fuel .tl { display: none; }
+  #bc19-econ, #bc19-units { font-size: 9px; }
+  #bc19-econ .who, #bc19-units .who { min-width: 2.6em; }
+  #bc19-econ .lbl, #bc19-units .lbl { display: none; }
+  #bc19-doctrines { max-width: 96%; font-size: 10px; }
+}
+
 
 </style>
 </head>
@@ -3986,6 +4232,9 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
                   title="Show the doctrines">doctrines</button>
           <!-- BC16: re-opens #bc16-doctrines after it has been dismissed. -->
           <button type="button" id="bc16-doctrines-toggle" hidden
+                  title="Show the doctrines">doctrines</button>
+          <!-- BC19: re-opens #bc19-doctrines after it has been dismissed. -->
+          <button type="button" id="bc19-doctrines-toggle" hidden
                   title="Show the doctrines">doctrines</button>
         </div>
       </div>
@@ -4094,6 +4343,18 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
       <div id="bc16-doctrines-body"></div>
     </div>
 
+    <!-- BC19 additions to the inherited cogame-battlecode chrome -->
+    <div id="bc19-castles"></div>
+    <div id="bc19-fuel"></div>
+    <div id="bc19-units"></div>
+    <div id="bc19-econ"></div>
+    <div id="bc19-doctrines" role="region" aria-label="Doctrines">
+      <button type="button" id="bc19-doctrines-close"
+              aria-label="Dismiss doctrines" title="Dismiss doctrines (Esc)"
+              >&times;</button>
+      <div id="bc19-doctrines-body"></div>
+    </div>
+
     <!-- BC22 additions to the inherited cogame-battlecode chrome -->
     <div id="bc22-archons"></div>
     <div id="bc22-anomaly"></div>
@@ -4178,6 +4439,10 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
            or zombies is stored in the replay -- the wasm sim re-derives
            every round. -->
       <div id="bc16-siege"></div>
+      <!-- BC19: the war panel. Nothing about castles, churches, karbonite,
+           fuel or the barter is stored in the replay -- the wasm sim
+           re-derives every round. -->
+      <div id="bc19-crusade"></div>
       <div class="ec-replay" id="ec-replay"></div>
     </div>
   </div>
@@ -6153,6 +6418,433 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
 })();
 </script>
 
+
+<!-- ======================================================================
+     BC19 additions to the inherited cogame-battlecode chrome
+     ----------------------------------------------------------------------
+     The game block for the `bc19` year. It registers itself on
+     `window.Bc19Block` BEFORE the inherited block runs, and the inherited
+     block calls into it: two lines there, everything else here. No function
+     name in this file collides with `chrome_common.js`, with the bc26 block
+     or with the bc16, bc20, bc21, bc22, bc23, bc24 and bc25 ones -- the
+     beat builder is `buildBc19BeatButtons`, never `markBeat` (the tandem
+     2026-08-23 hoisting collision), never `buildBeatButtons` (bc26), and
+     never `buildBc16BeatButtons`, `buildBc20BeatButtons`,
+     `buildBc21BeatButtons`, `buildBc22BeatButtons`, `buildBc23BeatButtons`,
+     `buildBc24BeatButtons` or `buildBc25BeatButtons`.
+     ====================================================================== -->
+<script>
+(function () {
+  'use strict';
+
+  var api = null;                    // {C, send, seek, dismissEndcard}
+  var beatsBuilt = false;
+  var beatEls = [];
+  var dismissed = false;
+  var pinned = false;                // the viewer opened it themselves
+  var lastFrame = -1;
+  var lastCastles = [-1, -1];
+  var lastFuel = [-1, -1];
+  var lastState = null;              // the frame the strip re-renders from
+  var struckAt = -1;
+  var struckText = '';
+  var struckUntil = 0;
+  var struckTimer = null;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  // ONE formatter for every printed number (endcard fix 3). bc19 makes this
+  // easy: EVERY bc19 STATISTIC IS ALREADY AN INTEGER, because the 2019 rule
+  // set has no float state at all. The only decimals on a bc19 card are the
+  // two castle-separation distances, which go through `'dist'` and print as
+  // `x.x` -- so a `/\d\.\d{3,}/` grep of the rendered text finds nothing.
+  function stat(value, kind) {
+    var n = Number(value || 0);
+    if (kind === 'dist') return n.toFixed(1);
+    if (kind === 'pct') return Math.round(n) + ' %';
+    return String(Math.round(n));
+  }
+
+  // ---- the dismissible doctrine overlay ---------------------------------
+  function setDoctrinesOpen(open) {
+    var panel = $('bc19-doctrines');
+    var chip = $('bc19-doctrines-toggle');
+    if (!panel) return;
+    dismissed = !open;
+    panel.classList.toggle('dismissed', !open);
+    if (chip) chip.hidden = open;
+  }
+
+  function wireDoctrines() {
+    var close = $('bc19-doctrines-close');
+    if (close) {
+      close.addEventListener('click', function (event) {
+        event.stopPropagation();
+        pinned = false;
+        setDoctrinesOpen(false);
+      });
+    }
+    var chip = $('bc19-doctrines-toggle');
+    if (chip) {
+      chip.addEventListener('click', function (event) {
+        event.stopPropagation();
+        // A panel the viewer opened by hand STAYS open -- that is their
+        // choice, not a lid the page left on the board.
+        pinned = true;
+        setDoctrinesOpen(true);
+      });
+    }
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape' && event.key !== 'Esc') return;
+      if (document.documentElement.getAttribute('data-year') !== 'bc19') return;
+      pinned = false;
+      setDoctrinesOpen(false);
+    });
+    // The viewer who never presses play still gets the board back.
+    setTimeout(function () {
+      if (!pinned) setDoctrinesOpen(false);
+    }, 6000);
+  }
+
+  // ---- beats ------------------------------------------------------------
+  function buildBc19BeatButtons(s) {
+    if (beatsBuilt || !s.beats || !s.beats.length) return;
+    beatsBuilt = true;
+    var scrub = $('scrub');
+    var span = Math.max(1, (s.mx || 1) - (s.st || 0));
+    s.beats.forEach(function (b) {
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'beat-marker ' + (b.k || 'game');
+      el.style.left =
+        (Math.min(1, Math.max(0, (b.t - (s.st || 0)) / span)) * 100) + '%';
+      el.setAttribute('aria-label', b.label || b.k);
+      el.title = b.label || b.k;
+      el.__tick = b.t;
+      el.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (api) api.seek(b.t / span);
+      });
+      if (scrub && scrub.parentNode) scrub.parentNode.appendChild(el);
+      beatEls.push(el);
+    });
+  }
+
+  function applyBc19BeatSpoilers(s) {
+    if (!beatEls.length) return;
+    var show = !!s.sp0 || s.ph === 'gameover';
+    beatEls.forEach(function (el) {
+      el.style.visibility = (show || el.__tick <= s.t) ? 'visible' : 'hidden';
+    });
+  }
+
+  // ---- the castle pill: the only readout that can end the game ----------
+  function castlePips(order) {
+    var out = '';
+    (order.pips || []).slice(0, 8).forEach(function (c) {
+      var frac = c.max > 0 ? c.health / c.max : 0;
+      out += ['\u25cb', '\u25d4', '\u25d1', '\u25d5', '\u25cf'][
+        Math.max(0, Math.min(4, Math.round(frac * 4)))];
+    });
+    return out || '\u00b7';
+  }
+
+  function renderCastles(s) {
+    var box = $('bc19-castles');
+    var a = s.bc19_castles;
+    if (!box || !a || !a.orders) return;
+    var html = '';
+    a.orders.forEach(function (order, i) {
+      var cls = i === 0 ? 'ash' : 'basil';
+      html += '<span class="' + cls + '">' + esc(order.alias) + '</span>' +
+        '<span class="pips">' + castlePips(order) + '</span>' +
+        '<span>' + stat(order.alive, 'int') + '</span>' +
+        '<span class="church">+' + stat(order.churches, 'int') +
+        ' \u26ea</span>' +
+        '<span class="lost">lost ' + stat(order.lost, 'int') + '</span>';
+      if (i === 0) html += '<span class="lost">\u2014</span>';
+    });
+    box.innerHTML = html;
+    // FLASH RED WHEN A CASTLE DIES: it is the only event that can end the
+    // game before round 1000.
+    var died = false;
+    a.orders.forEach(function (order, i) {
+      if (lastCastles[i] >= 0 && order.alive < lastCastles[i]) died = true;
+      lastCastles[i] = order.alive;
+    });
+    if (died) {
+      box.classList.remove('flash');
+      void box.offsetWidth;
+      box.classList.add('flash');
+    }
+  }
+
+  // ---- the fuel clock: the readout no other year has --------------------
+  function fuelStrike(s, prevFrame) {
+    if (!s.beats) return;
+    var hit = null;
+    s.beats.forEach(function (b) {
+      if (b.k !== 'famine' && b.k !== 'trade') return;
+      if (b.t <= prevFrame || b.t > s.t || !b.label) return;
+      hit = b;                       // the last one inside this step wins
+    });
+    if (!hit || hit.t === struckAt) return;
+    struckAt = hit.t;
+    struckText = hit.label;
+    struckUntil = Date.now() + 2000;
+    if (struckTimer) clearTimeout(struckTimer);
+    struckTimer = setTimeout(function () {
+      struckTimer = null;
+      struckUntil = 0;
+      var box = $('bc19-fuel');
+      if (box) box.classList.remove('struck');
+      if (lastState) renderFuel(lastState);
+    }, 2000);
+  }
+
+  function renderFuel(s) {
+    var box = $('bc19-fuel');
+    var f = s.bc19_fuel;
+    if (!box || !f || !f.orders) return;
+    if (struckUntil > Date.now()) {
+      box.classList.add('struck');
+      box.innerHTML = '<span class="tell">' + esc(struckText) + '</span>' +
+        '<span class="clock">ROUND ' + stat(f.round, 'int') + ' / ' +
+        stat(f.rounds, 'int') + '</span>';
+      return;
+    }
+    box.classList.remove('struck');
+    var html = '';
+    f.orders.forEach(function (o, i) {
+      // The FUEL DELTA THIS ROUND: the flat +25 trickle against what the
+      // order actually spent. A spectator sees an order going broke twenty
+      // rounds early.
+      var delta = lastFuel[i] >= 0 ? o.fuel - lastFuel[i] : 0;
+      lastFuel[i] = o.fuel;
+      var sign = delta >= 0 ? 'up' : 'down';
+      html += '<span class="karb">' + esc(o.alias.slice(5)) + ' \u25c6' +
+        stat(o.karbonite, 'int') + '</span>' +
+        '<span class="fuel">\u25b2' + stat(o.fuel, 'int') + '</span>' +
+        '<span class="' + sign + '">+' + stat(f.orders[i].trickle, 'int') +
+        ' ' + (delta >= 0 ? '+' : '\u2212') + stat(Math.abs(delta), 'int') +
+        '</span>' +
+        '<span class="rate">\u26cf ' + stat(o.karbonite_mined, 'int') +
+        'k ' + stat(o.fuel_mined, 'int') + 'f</span>' +
+        '<span class="transit">\u21e2' +
+        stat(o.karbonite_in_transit, 'int') + 'k ' +
+        stat(o.fuel_in_transit, 'int') + 'f</span>';
+    });
+    html += '<span class="clock">ROUND ' + stat(f.round, 'int') + ' / ' +
+      stat(f.rounds, 'int') + '</span>';
+    box.innerHTML = html;
+  }
+
+  // ---- the two rail boxes ----------------------------------------------
+  function renderEcon(s) {
+    var box = $('bc19-econ');
+    var e = s.bc19_econ;
+    if (!box || !e || !e.orders) return;
+    var html = '';
+    e.orders.forEach(function (o) {
+      html += '<div class="row"><span class="who">' + esc(o.alias) +
+        '</span><span class="karb">' + stat(o.karbonite, 'int') +
+        ' karbonite</span>' +
+        '<span class="fuel">' + stat(o.fuel, 'int') + ' fuel</span>' +
+        '<span class="lbl">mined ' + stat(o.karbonite_mined, 'int') + 'k/' +
+        stat(o.fuel_mined, 'int') + 'f</span>' +
+        '<span class="dep">deposited ' +
+        stat(o.karbonite_deposited, 'int') + 'k/' +
+        stat(o.fuel_deposited, 'int') + 'f</span>' +
+        '<span class="lbl">depots ' + stat(o.depots_worked, 'int') + '/' +
+        stat(o.depots_on_map, 'int') + '</span>' +
+        '<span class="chr">churches ' + stat(o.churches_built, 'int') +
+        '/' + stat(o.churches_standing, 'int') + ' \u00b7 lost ' +
+        stat(o.churches_lost, 'int') + ' \u00b7 ' +
+        stat(o.churches_in_enemy_half, 'int') + ' in their half</span>' +
+        '<span class="lbl">reclaimed ' +
+        stat(o.karbonite_reclaimed, 'int') + 'k/' +
+        stat(o.fuel_reclaimed, 'int') + 'f</span>' +
+        '<span class="bar">barter ' + stat(o.trades_proposed, 'int') +
+        '\u2192' + stat(o.trades_executed, 'int') + ' \u00b7 net ' +
+        stat(o.trade_karbonite_net, 'int') + 'k/' +
+        stat(o.trade_fuel_net, 'int') + 'f</span></div>';
+    });
+    box.innerHTML = html;
+  }
+
+  function renderUnits(s) {
+    var box = $('bc19-units');
+    var u = s.bc19_units;
+    if (!box || !u || !u.orders) return;
+    var html = '';
+    u.orders.forEach(function (o) {
+      html += '<div class="row"><span class="who">' + esc(o.alias) +
+        '</span><span class="cas">\u265c' + stat(o.castle, 'int') +
+        '</span>' +
+        '<span class="chu">\u26ea' + stat(o.church, 'int') + '</span>' +
+        '<span class="pil">P' + stat(o.pilgrim, 'int') + '</span>' +
+        '<span class="mil">C' + stat(o.crusader, 'int') + '</span>' +
+        '<span class="mil">R' + stat(o.prophet, 'int') + '</span>' +
+        '<span class="mil">X' + stat(o.preacher, 'int') + '</span>' +
+        '<span class="load">carrying ' + stat(o.loaded, 'int') + '</span>' +
+        '<span class="lbl">built ' + stat(o.built, 'int') + ' \u00b7 lost ' +
+        stat(o.lost, 'int') + '</span>' +
+        '<span class="lbl">dealt ' + stat(o.damage_dealt, 'int') + '</span>' +
+        '<span class="ff">friendly fire ' +
+        stat(o.friendly_fire_damage, 'int') + ' \u00b7 self ' +
+        stat(o.self_damage, 'int') + '</span></div>';
+    });
+    box.innerHTML = html;
+  }
+
+  // ---- the doctrine card, with the submitted-vs-applied badge ----------
+  function renderDoctrines(s) {
+    var body = $('bc19-doctrines-body');
+    if (!body || !s.doctrines) return;
+    var html = '';
+    s.doctrines.forEach(function (d) {
+      html += '<div class="dline"><span class="dname">' + esc(d.alias) +
+        '</span> \u2014 ' + esc(d.name) +
+        (d.fallback ? ' <span class="dfall">[fallback: ' +
+          esc(d.fallback) + ']</span>' : '');
+      var defaulted = (d.defaults_applied || []).length;
+      var knobs = d.knob_count || 11;
+      if (d.envelope || defaulted > 0) {
+        html += ' <span class="dbadge">envelope: ' +
+          esc(d.envelope || 'none') + ' \u00b7 ' + defaulted + ' of ' +
+          knobs + ' knobs defaulted</span>';
+      }
+      html += '<br>' + esc((d.words || []).join(' \u00b7 '));
+      if (d.notes) html += '<br><i>' + esc(d.notes) + '</i>';
+      if (d.submitted) {
+        html += '<br><span class="dsub">what the cog actually sent: ' +
+          esc(d.submitted) + '</span>';
+      }
+      html += '</div>';
+    });
+    body.innerHTML = html;
+  }
+
+  // ---- the killfeed ------------------------------------------------------
+  function renderFeed(s) {
+    var feed = $('killfeed');
+    if (!feed || !s.beats) return;
+    var lines = [];
+    s.beats.forEach(function (b) {
+      if (b.t > s.t) return;
+      if (!b.label) return;
+      lines.push(b);
+    });
+    var tail = lines.slice(-7);
+    var html = '';
+    tail.forEach(function (b) {
+      html += '<div class="kf ' + esc(b.k) + '">' + esc(b.label) + '</div>';
+    });
+    feed.innerHTML = html;
+  }
+
+  // ---- the endcard war panel --------------------------------------------
+  function renderEndcardExtras(s) {
+    var panel = $('bc19-crusade');
+    var g = s.bc19_crusade;
+    if (!panel || !g || !g.orders) return;
+    var html = '';
+    g.orders.forEach(function (o) {
+      html += '<div class="clan"><b>' + esc(o.alias) + '</b>: castles ' +
+        stat(o.castles_start, 'int') + ' started, ' +
+        stat(o.castles_lost, 'int') + ' lost, ' +
+        stat(o.castles_left, 'int') + ' left' +
+        '<br>churches: ' + stat(o.churches_built, 'int') + ' built, ' +
+        stat(o.churches_standing, 'int') + ' standing, ' +
+        stat(o.churches_lost, 'int') + ' lost, ' +
+        stat(o.churches_in_enemy_half, 'int') + ' inside their half' +
+        '<br>karbonite: ' + stat(o.karbonite_mined, 'int') + ' mined, ' +
+        stat(o.karbonite_deposited, 'int') + ' deposited, ' +
+        stat(o.karbonite_spent, 'int') + ' spent, ' +
+        stat(o.karbonite_banked, 'int') + ' banked' +
+        '<br>fuel: ' + stat(o.fuel_mined, 'int') + ' mined, ' +
+        stat(o.fuel_trickled, 'int') + ' from the trickle, ' +
+        stat(o.fuel_spent, 'int') + ' spent, ' +
+        stat(o.fuel_banked, 'int') + ' banked' +
+        '<br>units: ' + stat(o.units_built, 'int') + ' built (' +
+        stat(o.pilgrims_built, 'int') + ' pilgrim, ' +
+        stat(o.crusaders_built, 'int') + ' crusader, ' +
+        stat(o.prophets_built, 'int') + ' prophet, ' +
+        stat(o.preachers_built, 'int') + ' preacher), ' +
+        stat(o.units_lost, 'int') + ' lost' +
+        '<br>damage dealt ' + stat(o.damage_dealt, 'int') +
+        ' \u00b7 taken ' + stat(o.damage_taken, 'int') +
+        ' \u00b7 friendly fire ' + stat(o.friendly_fire_damage, 'int') +
+        ' \u00b7 self ' + stat(o.self_damage, 'int') +
+        '<br>kills ' + stat(o.kills, 'int') + ' (' +
+        stat(o.splash_kills, 'int') + ' by preacher blast), reclaimed ' +
+        stat(o.karbonite_reclaimed, 'int') + ' karbonite and ' +
+        stat(o.fuel_reclaimed, 'int') + ' fuel off them' +
+        '<br>barter: ' + stat(o.trades_proposed, 'int') + ' offered, ' +
+        stat(o.trades_executed, 'int') + ' matched, net ' +
+        stat(o.trade_karbonite_net, 'int') + ' karbonite and ' +
+        stat(o.trade_fuel_net, 'int') + ' fuel' +
+        '</div>';
+    });
+    // THE TIEBREAK LEDGER: all three round-1000 rungs with both sides'
+    // numbers and which one decided it.
+    var t = g.tiebreak || {};
+    var rung = t.rung || '';
+    function row(name, key, pair) {
+      var won = rung === key ? ' class="won"' : '';
+      return '<span' + won + '>' + name + ' ' + stat(pair[0], 'int') +
+        ' to ' + stat(pair[1], 'int') + '</span>';
+    }
+    html += '<div class="ladder">round ' + stat(t.round, 'int') +
+      ' ladder \u2014 ' +
+      row('castles', 'more_castles', t.castles || [0, 0]) + ' \u00b7 ' +
+      row('unit health', 'more_unit_health', t.unit_health || [0, 0]) +
+      ' \u00b7 ' + row('net worth', '', t.net_worth || [0, 0]) +
+      ' \u00b7 engine win condition ' + stat(t.win_condition, 'int') +
+      ' \u00b7 castles started ' +
+      stat(g.castle_separation_min, 'dist') + ' to ' +
+      stat(g.castle_separation_max, 'dist') + ' apart</div>';
+    panel.innerHTML = html;
+  }
+
+  window.Bc19Block = {
+    attach: function (host) {
+      api = host;
+      wireDoctrines();
+    },
+    // True while a bc19 replay is on screen; the inherited block asks
+    // before it draws its own year's readouts.
+    active: function (s) { return s && s.year === 'bc19'; },
+    onFrame: function (s) {
+      if (s.year !== 'bc19') return;
+      buildBc19BeatButtons(s);
+      // The board is where the story is -- so the first frame that advances
+      // the playhead closes the panel, unless the viewer opened it by hand.
+      if (lastFrame >= 0 && s.t > lastFrame && !pinned && !dismissed) {
+        setDoctrinesOpen(false);
+      }
+      // The strip takeover reads the frame the playhead came FROM, so it
+      // has to be decided before `lastFrame` moves.
+      lastState = s;
+      fuelStrike(s, lastFrame);
+      lastFrame = s.t;
+      renderCastles(s);
+      renderFuel(s);
+      renderEcon(s);
+      renderUnits(s);
+      renderDoctrines(s);
+      renderFeed(s);
+      applyBc19BeatSpoilers(s);
+      renderEndcardExtras(s);
+    }
+  };
+})();
+</script>
+
 <!-- ======================================================================
      BC22 additions to the inherited cogame-battlecode chrome
      ----------------------------------------------------------------------
@@ -6616,6 +7308,16 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
     });
   }
 
+  // BC19 HOOK: the same two lines for the ninth year.
+  if (window.Bc19Block) {
+    window.Bc19Block.attach({
+      C: C,
+      send: send,
+      seek: function (frac) { seek(frac); },
+      dismissEndcard: function () { dismissEndcard(); }
+    });
+  }
+
   // ---- beats ------------------------------------------------------------
   // Deliberately NOT named markBeat: the starter's chrome_common already
   // exports one, and a same-named function in this block would hoist over
@@ -6885,6 +7587,16 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
     // Singularity: its games run to a 3000-round limit and are then decided
     // on the four-rung tiebreak ladder (docs/RULES-BC16.md).
     bc16: { unit: 'archon', units: 'archons', res: 'parts',
+            limit: 'the round limit ran out' },
+    // bc19's own nouns (endcard fix 1): the castle, its church and the two
+    // resources, so no other year's unit or resource word can reach a bc19
+    // card. bc19 has NO Singularity: its games run to a 1000-round limit and
+    // are then decided on the three-rung tiebreak ladder
+    // (docs/RULES-BC19.md).
+    bc19: { unit: 'castle', units: 'castles', res: 'karbonite',
+            res2: 'fuel', unit2: 'church', units2: 'churches',
+            worker: 'pilgrim', fast: 'crusader', ranged: 'prophet',
+            splash: 'preacher', node: 'depot', deal: 'barter',
             limit: 'the round limit ran out' }
   };
 
@@ -7018,7 +7730,7 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
       ['econ', 'bc20-soup', 'bc20-units', 'bc21-influence', 'bc21-units',
        'bc24-crumbs', 'bc24-levels', 'bc25-towers', 'bc25-econ',
        'bc23-econ', 'bc23-units', 'bc22-econ', 'bc22-units',
-       'bc16-econ', 'bc16-units']
+       'bc16-econ', 'bc16-units', 'bc19-econ', 'bc19-units']
         .forEach(function (id) {
           var el = document.getElementById(id);
           if (!el || !el.offsetParent) return;
@@ -7151,6 +7863,8 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
     var isBc23 = !!(window.Bc23Block && window.Bc23Block.active(s));
     var isBc22 = !!(window.Bc22Block && window.Bc22Block.active(s));
     var isBc16 = !!(window.Bc16Block && window.Bc16Block.active(s));
+    // BC19 HOOK (1 of 2): the NINTH year's guard.
+    var isBc19 = !!(window.Bc19Block && window.Bc19Block.active(s));
     if (window.Bc20Block) window.Bc20Block.onFrame(s);
     // BC21 HOOK (2 of 2).
     if (window.Bc21Block) window.Bc21Block.onFrame(s);
@@ -7163,8 +7877,10 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
     if (window.Bc22Block) window.Bc22Block.onFrame(s);
     // BC16 HOOK (2 of 2).
     if (window.Bc16Block) window.Bc16Block.onFrame(s);
-    if (!isBc16 && !isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 &&
-        !isBc25) {
+    // BC19 HOOK (2 of 2).
+    if (window.Bc19Block) window.Bc19Block.onFrame(s);
+    if (!isBc16 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && !isBc23 &&
+        !isBc24 && !isBc25) {
       buildBeatButtons(s);
       renderCoop(s);
       renderEcon(s);
@@ -7175,8 +7891,8 @@ html[data-year="bc16"] .beat-marker.end      { background: #ffffff; }
     renderGameChips(s);
     C.renderClock(s);
     C.renderTransport(s);
-    if (!isBc16 && !isBc20 && !isBc21 && !isBc22 && !isBc23 && !isBc24 &&
-        !isBc25) {
+    if (!isBc16 && !isBc19 && !isBc20 && !isBc21 && !isBc22 && !isBc23 &&
+        !isBc24 && !isBc25) {
       applyBeatSpoilers(s);
     }
     $('clock-caption').textContent = s.ph === 'gameover'

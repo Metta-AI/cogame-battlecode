@@ -33,6 +33,8 @@ type
     blExamplefuncsplayer22 = "examplefuncsplayer22"
     blBulwark = "bulwark"
     blGreenhorn = "greenhorn"
+    blSaber = "saber"
+    blExamplefuncsplayer19 = "examplefuncsplayer19"
 
 proc defaultBaselineFor*(year: string): Baseline =
   ## A seat that says nothing useful plays the year's STRONG published
@@ -45,6 +47,7 @@ proc defaultBaselineFor*(year: string): Baseline =
   of yBc23: blLemonade
   of yBc22: blWololo
   of yBc16: blBulwark
+  of yBc19: blSaber
   of yBc26: blAwu
 
 proc baselineFor*(year, name: string): Baseline =
@@ -89,6 +92,15 @@ proc baselineFor*(year, name: string): Baseline =
     of "scaffold", "greenhorn", "example", "examplefuncsplayer":
       blGreenhorn
     else: blBulwark
+  of yBc19:
+    ## `awu`, `saber`, `wololo` or anything unrecognised is the STRONG
+    ## doctrine chassis and the champions' chassis; `scaffold`, `example`,
+    ## `examplefuncsplayer` and `examplefuncsplayer19` are the deliberately
+    ## weak floor and the parity oracle's other side.
+    case key
+    of "scaffold", "example", "examplefuncsplayer", "examplefuncsplayer19":
+      blExamplefuncsplayer19
+    else: blSaber
   of yBc26:
     case key
     of "scaffold", "examplefuncsplayer", "example": blScaffold
@@ -129,6 +141,8 @@ proc baselineChassis*(kind: Baseline): ScriptedChassis =
   of blExamplefuncsplayer22: scExamplefuncsplayer22
   of blBulwark: scBulwark
   of blGreenhorn: scGreenhorn
+  of blSaber: scSaber
+  of blExamplefuncsplayer19: scExamplefuncsplayer19
   of blAwu: scAwu
 
 proc baselineReply*(kind: Baseline): string =
@@ -234,6 +248,17 @@ proc baselineReply*(kind: Baseline): string =
                  "neutral_activation":"opportunistic","retreat_hp":35,
                  "rubble_clear":"paths","infection_policy":"quarantine"},
         "notes":"default bulwark doctrine","motto":"The wall holds."}"""
+  of blSaber, blExamplefuncsplayer19:
+    ## The all-defaults bc19 sheet, which is ALSO the fallback sheet
+    ## §Decisions prints verbatim. `examplefuncsplayer19` reads no knob, so
+    ## it answers with the same sheet: the chassis, not the sheet, is what
+    ## makes it the weak floor (D1).
+    """{"sheet":{"opening":"pilgrim_eco","pilgrim_curve":9,
+                 "church_expansion":"mid","fuel_reserve":300,"unit_mix":45,
+                 "preacher_share":20,"church_saber_round":0,
+                 "symmetry_wall":"screen","castle_talk_use":"census",
+                 "defend_radius":100,"trade_policy":"mirror"},
+        "notes":"default saber doctrine","motto":"Mine, then march."}"""
 
 proc baselineSheet*(year: string, kind: Baseline): Sheet =
   result = parseReply(baselineReply(kind), year)

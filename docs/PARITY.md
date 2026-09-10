@@ -1951,3 +1951,183 @@ comparator or the driver needs to change.
   Deliberately not ported (V4, V5, V8). The Tier B step **names each one it
   skipped** in its log rather than silently passing over it.
 * **`rc.resign()`.** A real engine method that no doctrine sheet can call.
+
+---
+
+# bc19 — Battlecode 2019 "Crusade"
+
+**The oracle is JavaScript, and it is the first year in this repository whose
+engine is not Java.** `battlecode/battlecode19` at commit
+`80cf1cc535ec5a30559274aa1b49807ad4859925` is `coldbrew/`, a handful of
+CommonJS files. There is **no jar, no JVM and no JDK** anywhere in this year.
+
+## The pins, and why each is a pin rather than a preference
+
+| pin | value | why |
+|---|---|---|
+| engine commit | `80cf1cc535ec5a30559274aa1b49807ad4859925` | `HEAD` of `master`, 2019-08-09; root `LICENSE` GPL-3.0 and the ONLY licence file in the tree |
+| **Node** | **22.22.0**, asserted exactly | `coldbrew/game.js:153` passes `regions.sort` a **one-argument, sign-constant comparator**, so the map generator's output is **V8-implementation-defined**. Measured under this version the sort is a plain reversal in **42 of 42** multi-region cases and the region kept passable is **not the largest in 40** of them. A different V8 would generate **different boards from the same seeds**. |
+| npm | `mersenne-twister@1.1.0`, integrity `sha1-+RZhjuQ9cXnvz2Qb7EUx65Zwl4o=` | the ONE dependency the trace driver needs |
+| everything else | **not installed** | the engine's own `package.json` pulls **404** packages, including `vm2` (deprecated, known sandbox-escape CVEs), `rollup`, `esm` and `update-notifier`, which makes a **network call** on every `cli/run.js` invocation (`cli/run.js:13-16`). Whole 1000-round games were run in this sandbox on `game.js` + `action_record.js` + `specs.json` + `mersenne-twister` and nothing else. |
+
+**IF A FUTURE NODE BUMP MAKES THE MAP REGENERATION BYTE-DIFF FAIL, THE
+COMMITTED MAPS ARE THE RULES AND THE OLD NODE IS THE PIN.** Regenerating
+instead is a rules change and bumps `GameVersion`. That sentence is also in
+`tools/oracle/bc19/engine.lock`'s own header.
+
+## The two places the oracle is NOT the published engine
+
+Both are committed patches, applied in CI only, and each is asserted to apply
+with the expected hunk count.
+
+1. **`tools/oracle/bc19/visible_order.patch` (V2).**
+   `getGameStateDump` shuffles the `visible` array in place with a
+   Fisher–Yates pass driven by the **global, unseeded `Math.random()`** —
+   not `this.random()` (`coldbrew/game.js:717-722`). Measured in this
+   sandbox: **five distinct orders in six identical runs of seed 1.** There is
+   nothing to be faithful to, so the port orders by ascending `id` and the
+   patch puts the **same** order on the **engine** side. The normalisation is
+   therefore symmetric; neither trace is massaged alone.
+2. **`tools/oracle/bc19/examplefuncsplayer19/determinism.patch`**, two hunks.
+   Hunk 1 replaces `Math.floor(Math.random()*choices.length)` with a
+   `java.util.Random` seeded from the robot's own id, created once per robot:
+   the stock line draws from the wall-clock-seeded global RNG, so the stock
+   bot is not reproducible even against itself. A `java.util.Random` is
+   chosen rather than a second Mersenne Twister so the port can reuse
+   `src/battlecode/rng.nim` unchanged — and Tier A″ is then also a test of
+   that module against a **second, independent** generator running alongside
+   the engine's own MT19937. Hunk 2 removes the `this.me.team == 1` guard on
+   the castle's build: without it **RED never builds anything at all**, and a
+   baseline that is completely inert on one of the two sides cannot be scored,
+   cannot fill a league and makes the survival gate meaningless.
+
+## The one thing the driver does not take from upstream
+
+`tools/oracle/bc19/bc19_trace.js` reimplements `coldbrew/runtime.js`'s
+twenty-line `gameLoop`/`emptyQueue` rather than calling it, because
+`runtime.js` drives the game through `setInterval` — which cannot be run
+synchronously to completion — and `cli/run.js` additionally requires the
+rollup compiler, `vm2` and a network update check. Everything else, `Game`
+and `ActionRecord`, is `require`d from the pinned checkout unmodified beyond
+the two patches above.
+
+## Why bit-exactness is realistic in this year
+
+* **The arithmetic is INTEGER end to end.** Health, karbonite, fuel, damage,
+  capacities, radii, yields and costs are all integers. Exactly **two**
+  non-integer operations exist on any gameplay path —
+  `Math.ceil(Math.sqrt(r²))` over the finite domain 0…7938, and
+  `Math.floor(a/b)` in the reclaim over a finite domain — and **both are
+  tabled at build time** in `data/bc19/tables.json`. There is no `sqrt`, no
+  `pow`, no `exp` and no float64 accumulation at run time, so there is **no
+  float allowlist in the comparator because there are no floats**. (The two
+  one-decimal numbers in the *results* document,
+  `castle_separation_min`/`_max`, are Euclidean distances between two
+  squares — derived board descriptions computed after the game, read back
+  by nothing, and carried by no trace line.)
+* **There is no hash-ordered or sorted collection in the round loop.**
+  `this.robots` is a plain array, `robin` an index into it, `createItem`
+  appends and `_deleteRobot` splices; `isOver`, `getItem` and
+  `getGameStateDump` all read that one array.
+* **The RNG surface is ONE generator with ONE live draw site.** MT19937,
+  seeded with the map seed, and after the build-time map generation (V3) its
+  only live call site in the round loop is `createItem`'s id rejection loop
+  (plus at most one coin flip per game in `isOver`). **That is why the trace's
+  `G` line carries an FNV-1a fold of the whole 624-word MT state and `mti`
+  every round**: a single missed or extra id draw surfaces on the round it
+  happens instead of as a mystery three hundred rounds later, and it is by
+  far the most likely way this port can desynchronise.
+
+## What is NOT compared, and why
+
+* **The freeze branch of `processAction` (V1) is the one behaviour this
+  oracle cannot compare.** The engine's chess clock is driven by
+  `wallClock()`, so it is not reproducible between two runs of the engine
+  itself; the port replaces it with a `DecisionOps` clock whose per-turn
+  charge is the exact constant `TurnChargeOps = ChessExtraOps`, which makes
+  `chessOps` invariant and the freeze branch unreachable. Tier B′ proves both
+  halves of that separately: **(a)** the driver asserts, after every turn of
+  every compared game, that every live robot's `robot.time >= CHESS_INITIAL`
+  and exits **6** otherwise, so the engine's own freeze branch provably never
+  fired in any game this job compares; and **(b)** a **separate,
+  non-compared** run with `bc19slowbot`, whose `turn()` busy-loops for a
+  calibrated ~40 ms, asserts that the engine **does** freeze it at the turn
+  the formula `time_{n+1} = time_n + 20 − elapsed` predicts. Step (b)
+  compares nothing against the Nim side and exists so the port's *reading* of
+  the rule is proved rather than asserted.
+* **`robot.time` itself** is in neither the observation nor the trace (V7).
+* **The `visible` array's order** is normalised on BOTH sides by the engine
+  patch above (V2), so it is compared — but it is compared against a patched
+  engine, which is why the patch is named here.
+* **Three named per-pair LIVENESS waivers**, each of which relaxes only the
+  driver's own "this game did something" sanity check and **never** the
+  trace comparison. Every compared pair is still compared line for line.
+  1. `--allow-inert` on `examplefuncsplayer19` / **`seed-0017`** only.
+     `examplefuncsplayer19` builds a CRUSADER at the fixed offset `(1,1)`
+     and nothing else; on `seed-0017` **both** castles' `(x+1,y+1)` is
+     impassable, so the bot's only action is refused on every one of its
+     turns and the game is legitimately inert for a thousand rounds. The
+     driver would otherwise refuse to accept a game in which nothing
+     happened, which is the right default and the wrong answer here.
+     `seed-0017` stays in the pair set because it is the `castles_destroyed`
+     board and the other five bots exercise it.
+  2. `--allow-no-build` on `bc19scenariotrade`, whose whole script is the
+     barter: it proposes offers from its castles and never builds, so the
+     driver's "somebody built something" check does not apply.
+  3. `--expect-freeze` on `bc19slowbot`, which is the Tier B′(b) run above
+     and is asserted to freeze rather than to finish.
+  All three flags are passed **explicitly, per bot and per map**, in the
+  `parity-oracle-bc19` job, so a waiver cannot silently spread to a pair it
+  was not measured on.
+* **The `.bc19` byte replay, `coldbrew/vis.js`, `vm2`, `coldbrew/compiler.js`
+  and the Python/Java transpilers** (V5). No counterpart in the port.
+* **Tier A is deliberately SMALL in this year, and that is the single most
+  important difference between bc19 parity and bc16 parity.** In bc16 the
+  zombies are engine-side, so an idle player still exercises half the game.
+  **In bc19 nothing at all happens without a player action** — no NPCs, no
+  terrain change, no passive spawning. Tier A with `bc19idle` proves the
+  queue and `robin`, the round counter, the flat fuel trickle, the initial
+  castles' id draws off the committed MT state, the `isOver` evaluation
+  points and the round-1000 ladder; **the load-bearing tiers are A′ and A″.**
+
+## Status
+
+**RUN, AND GREEN, WITH AN EMPTY LEDGER.** The whole oracle is the
+`parity-oracle-bc19` job of `.github/workflows/ci.yml` (`timeout-minutes: 45`),
+which runs on every push. The first run taken as a verdict is
+**`34446572285`** — job `parity-oracle-bc19`, id `102772780365`, on
+`bc19-year-module` at `7aa8e6712c`, **conclusion `success`**, wall clock
+**1 m 57 s** (06:46:01Z → 06:47:58Z). Every tier named above ran in that one
+job and every tier passed:
+
+| tier | what it ran there | verdict |
+|---|---|---|
+| comparator self-test | `parity_tiers_bc19.py --self-test`: a one-line-longer oracle trace MUST be reported as a divergence, and the normaliser MUST be applied to both sides | pass |
+| **B** (whole domain, not a sample) | `JsBc19Tables.mjs --check` — all 7 939 `ceil(sqrt(r²))` values and the reclaim's integer division over its whole domain; `gen_maps_bc19.mjs --check` — all **22 committed boards byte-diffed** against the pinned engine's own `makeMap()`; and the **13 degenerate seeds refused BY NAME** (7, 20, 24, 83, 108, 127, 175, 211, 232, 267, 283, 348, 365), which proves V3's curation rather than trusting it | pass |
+| **A / A′ / A″ / B′(a) / C** | **54 whole-game pairs**: six trace bots (`bc19idle`, `examplefuncsplayer19`, `bc19scenario`, `bc19scenariotrade`, `bc19scenariokill`, `bc19scenariotie`) × the nine parity boards (`seed-0009`, `seed-0017`, `seed-0021`, `seed-0034`, `seed-0043`, `seed-0045`, `seed-0048`, `seed-0107`, `seed-0125`), 1000 rounds each, engine trace against Nim trace **line for line**, `--assert-clock` on every one of them (that is Tier B′(a): the driver exits 6 if any live robot's `robot.time` ever fell below `CHESS_INITIAL`, so the engine's freeze branch provably never fired in a game this job compares) | **54 of 54 BIT-EXACT, 0 failures** |
+| **A** (anti-vacuity, off the ORACLE trace) | the flat +25-fuel-a-team-a-round trickle with nothing else moving a store; `ids=4` on `seed-0043` and the pool NEVER growing in an idle game; `wc=1` on the last line (game.js:604's unconditional `win_condition = 1` overwrite); and **exactly ONE `A` line in round 1000**, because `isOver` runs before every turn | pass |
+| **A′** (anti-vacuity, off the union of the nine `bc19scenario` traces) | all five unit types on the board (`CASTLE`, `PILGRIM`, `CRUSADER`, `PROPHET`, `PREACHER`); all five forced action kinds (`BUILD`, `MOVE`, `ATTACK`, `MINE`, `GIVE`); the r² 7938 broadcast at its 90-fuel cost; castle talk from a mobile unit (`ct=77`); and a pilgrim carrying an unrefined load | pass |
+| **A′** (the CHURCH, D6.1) | a CHURCH raised **and its legal 0-damage `ATTACK` fired, on ALL NINE boards** — a CHURCH's `ATTACK_RADIUS` is the scalar `0`, so both range comparisons are against `undefined`, both are false, and the action is ACCEPTED for 0 fuel and 0 damage. It is the quirk this year is most likely to get wrong | pass |
+| **A′** (the three end rungs) | `wc=0` `castles_destroyed` on `seed-0017` (`bc19scenariokill`); `winner=RED wc=1` `more_unit_health` on `seed-0043` (`bc19scenariotie`); and the barter moving **both** stores in **opposite** directions on `seed-0043` (`bc19scenariotrade`), the only externally visible proof that `enactTrade` executed rather than merely recording an offer | pass |
+| **B′(b)** (separate, non-compared) | the `bc19slowbot` run: the engine **does** freeze a robot whose `turn()` busy-loops ~40 ms, at the turn `time_{n+1} = time_n + 20 − elapsed` predicts. It compares nothing and exists so the port's *reading* of V1 is proved rather than asserted | pass |
+
+**`tools/ci/parity_ledger_bc19.json` IS `[]` AND STAYED `[]`.** No pair
+diverged, so the comparator wrote no digest, so the job's
+`parity-bc19-digests` artifact **does not exist in run `34446572285`** — the
+upload is `if-no-files-found: ignore`, which makes that artifact's absence the
+positive evidence of an empty ledger rather than a gap in it.
+
+Root-cause-or-fail remains the standing rule: an unexplained Tier C divergence
+is a FAIL, not a ledger line, `tools/ci/parity_tiers_bc19.py` rejects a cause
+of "unknown", and diverging **earlier** than a ledger entry claims, or not
+diverging at all where one claims you should, are both failures too.
+
+The Nim halves of both differential bots are written to be mirrorable and must
+stay that way: `src/battlecode/years/bc19/chassis/scenario19.nim` makes every
+scenario decision a pure function of `me.unit`, `me.turn` and the squares
+immediately around the robot, with the adjacent-square scan order fixed in its
+`AdjacentScan` constant, and
+`src/battlecode/years/bc19/chassis/examplefuncsplayer19.nim` is the patched
+example bot statement for statement. An edit to either that is not mirrored on
+the other side is what Tier A′/A″ will catch, and it will catch it as a
+divergence rather than as a compile error.

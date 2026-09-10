@@ -1,0 +1,29 @@
+--- a/coldbrew/game.js
++++ b/coldbrew/game.js
+@@ -710,19 +710,19 @@
+         if (!is_castle || robot.team !== this.robots[i].team) delete r.castle_talk;
+ 
+         visible_robots.push(r);
+ 
+     }
+ 
+-    // Shuffle visible_robots in place
+-    for (var i = visible_robots.length - 1; i > 0; i--) {
+-        var j = Math.floor(Math.random() * (i + 1));
+-        var x = visible_robots[i];
+-        visible_robots[i] = visible_robots[j];
+-        visible_robots[j] = x;
+-    }
++    // V2 (docs/PARITY.md #bc19): the stock shuffle here drew from the
++    // GLOBAL, UNSEEDED Math.random(), not from this.random(). Measured:
++    // FIVE DISTINCT ORDERS IN SIX IDENTICAL RUNS of seed 1. There is
++    // nothing to be faithful to, so both sides order by ascending id --
++    // the port in years/bc19/vision.nim and the engine here -- and the
++    // normalisation is symmetric rather than applied to one trace alone.
++    visible_robots.sort(function (a, b) { return a.id - b.id; });
+ 
+     return 'robot._do_turn(' + JSON.stringify({
+         id: robot.id, 
+         shadow:shadow, 
+         visible:visible_robots, 
+         map:robot.turn===1?this.map:[[0],[0]], 

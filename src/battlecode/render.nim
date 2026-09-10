@@ -37,6 +37,9 @@ from years/bc22/units as u22 import nil
 from years/bc16/world as w16 import nil
 from years/bc16/constants as c16 import nil
 from years/bc16/units as u16 import nil
+from years/bc19/world as w19 import nil
+from years/bc19/constants as c19 import nil
+from years/bc19/units as u19 import nil
 
 const
   TileSize* = 16
@@ -157,6 +160,19 @@ const
   Bc16Bedrock = rgba(0x07, 0x07, 0x07, 255)       ## >= 10 000
   Bc16PartsColor = rgba(0xd8, 0xb0, 0x4a, 255)
   Bc16PartsGoneColor = rgba(0x4a, 0x3c, 0x22, 255)
+
+  ## bc19's palette is THE ENGINE'S OWN VISUALISER'S, not this repository's
+  ## taste: `coldbrew/vis.js:343,399` draws ground `#333` and rock `#eee`,
+  ## `:442` draws the radio line `#fd5f00`, and `:486` draws RED `#DD0048`
+  ## and BLUE plain `blue`. The upstream visualiser has NO DEPOT ART AT ALL,
+  ## so the karbonite and fuel pips below are `render.nim`'s own and are
+  ## credited to nobody.
+  Bc19Ground = rgba(0x33, 0x33, 0x33, 255)
+  Bc19Rock = rgba(0xee, 0xee, 0xee, 255)
+  Bc19Karbonite = rgba(0x3f, 0xd8, 0xe0, 255)
+  Bc19KarboniteWorked = rgba(0x8f, 0xff, 0xff, 255)
+  Bc19Fuel = rgba(0xe0, 0xa1, 0x3f, 255)
+  Bc19FuelWorked = rgba(0xff, 0xd0, 0x70, 255)
 
 type
   Atlas = ref object
@@ -1217,6 +1233,93 @@ proc buildBc16Packet(r: Renderer, w: w16.World, gameIndex, sideAslot: int,
   packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
   packet
 
+proc bc19UnitSprite(unit: w19.Robot): string =
+  ## The two team palettes the 2019 visualiser itself uses
+  ## (`coldbrew/vis.js:486`), cut into `data/atlas_bc19.*` by
+  ## `tools/build_sprite_atlas_bc19.py` from the client's own six unit icons.
+  let tint = (if unit.team == u19.tRed: "a_" else: "b_")
+  tint & u19.unitName(unit.unit)
+
+proc bc19TerrainStage(w: w19.World): int =
+  ## bc19's terrain NEVER CHANGES — there is no rubble, no flooding and no
+  ## paint in this year, and the only thing that moves on the board is a
+  ## robot. The depot pips DO change (hollow when unworked, filled while a
+  ## pilgrim stands on one), which is how a spectator sees an economy come
+  ## online, so the layer is re-cut on a four-round cadence.
+  w.round div 4
+
+proc renderBc19Terrain(r: Renderer, w: w19.World): Image =
+  result = newImage(w.width * TileSize, w.height * TileSize)
+  result.fill(Bc19Ground)
+  let ctx = newContext(result)
+  for y in 0 ..< w.height:
+    for x in 0 ..< w.width:
+      let px = float32(x * TileSize)
+      ## 2019's y axis grows SOUTH — `(0,0)` is top left (`game.js:24`) —
+      ## which is the same direction the canvas grows, so the row is NOT
+      ## flipped.
+      let py = float32(y * TileSize)
+      if not w19.isPassable(w, x, y):
+        ctx.fillStyle = Bc19Rock
+        ctx.fillRect(rect(px, py, float32(TileSize), float32(TileSize)))
+        continue
+      let cx = px + float32(TileSize) / 2.0
+      let cy = py + float32(TileSize) / 2.0
+      let occupied = w19.shadowAt(w, x, y) != 0
+      if w19.hasKarbonite(w, x, y):
+        ## A cyan diamond, HOLLOW when unworked and FILLED while a pilgrim
+        ## stands on it.
+        ctx.fillStyle = (if occupied: Bc19KarboniteWorked else: Bc19Karbonite)
+        let s0 = (if occupied: 5.0'f32 else: 3.0'f32)
+        ctx.fillRect(rect(cx - s0 / 2, cy - s0 / 2, s0, s0))
+      elif w19.hasFuel(w, x, y):
+        ## An amber pip, likewise.
+        ctx.fillStyle = (if occupied: Bc19FuelWorked else: Bc19Fuel)
+        let s0 = (if occupied: 5.0'f32 else: 3.0'f32)
+        ctx.fillRect(rect(cx - s0 / 2, cy - s0 / 2, s0, s0))
+
+proc buildBc19Packet(r: Renderer, w: w19.World, gameIndex, sideAslot: int,
+                     chrome: string): seq[uint8] =
+  var packet: seq[uint8]
+  let newGame = r.terrainGame != gameIndex
+  let stage = bc19TerrainStage(w)
+
+  if newGame:
+    r.terrainGame = gameIndex
+    r.terrainStage = -1
+    r.liveObjects.clear()
+    r.prevRobotSprite.clear()
+    packet.addClearObjects()
+    packet.addLayer(MapLayerId, MapLayerKind, ZoomableFlag)
+    packet.addViewport(MapLayerId, w.width * TileSize, w.height * TileSize)
+
+  if r.terrainStage != stage:
+    r.terrainStage = stage
+    let terrain = r.renderBc19Terrain(w)
+    packet.addSprite(TerrainSpriteId, terrain.width, terrain.height,
+      straightPixels(terrain), "terrain")
+    packet.addObject(1, 0, 0, -32768, MapLayerId, TerrainSpriteId)
+
+  ## Every live robot, IN QUEUE ORDER. Object ids are stable for a robot's
+  ## whole life, so the client's motion interpolation glides it between
+  ## rounds instead of teleporting it. A CASTLE draws above everything else,
+  ## because it is the only unit whose death ends the game.
+  var seen = initHashSet[int]()
+  for unit in w.robots:
+    let objectId = RobotObjectBase + (unit.id mod 20000)
+    seen.incl(objectId)
+    let sprite = r.spriteId(packet, bc19UnitSprite(unit))
+    r.addObj(packet, objectId, unit.x * TileSize, unit.y * TileSize,
+      (if unit.unit == c19.ukCastle: 6
+       elif unit.unit == c19.ukChurch: 4
+       else: 5), sprite)
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= RobotObjectBase and objectId notin seen:
+      r.dropObj(packet, objectId)
+
+  packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
+  packet
+
 proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   ## The ONE place the renderer branches on the year. `Session` is an object
   ## variant, so the compiler checks that a new year gets an arm here.
@@ -1229,3 +1332,4 @@ proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   of yBc23: r.buildBc23Packet(s.w23, s.gameIndex, s.sideAslot, chrome)
   of yBc22: r.buildBc22Packet(s.w22, s.gameIndex, s.sideAslot, chrome)
   of yBc16: r.buildBc16Packet(s.w16, s.gameIndex, s.sideAslot, chrome)
+  of yBc19: r.buildBc19Packet(s.w19, s.gameIndex, s.sideAslot, chrome)

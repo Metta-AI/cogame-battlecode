@@ -1,0 +1,23 @@
+{
+  "_note": [
+    "The bc19 map pools. Every board is PROCEDURALLY GENERATED from its seed by",
+    "the pinned 2019 engine (`coldbrew/game.js:76-361`) — bc19 ships no map",
+    "files upstream — so the NAME IS THE RECIPE: `seed-0043` is exactly what",
+    "`new Game(43, ...)` generates. `tools/gen_maps_bc19.mjs` runs the pinned",
+    "engine under the pinned Node and writes `data/maps/bc19/<name>.json`,",
+    "including the post-`makeMap` MT19937 state; the results are COMMITTED and",
+    "`parity-oracle-bc19` regenerates and byte-diffs them.",
+    "`mixed` is the bc19 variant's played pool; `small` is what the parity",
+    "oracle and the docker smoke run on; `large` is reserved for a later",
+    "variant and supplies one of the nine parity pairs."
+  ],
+  "small": ["seed-0009", "seed-0021", "seed-0034", "seed-0043", "seed-0048",
+            "seed-0107"],
+  "mixed": ["seed-0005", "seed-0017", "seed-0035", "seed-0039", "seed-0042",
+            "seed-0058", "seed-0060", "seed-0125", "seed-0001", "seed-0003"],
+  "large": ["seed-0013", "seed-0030", "seed-0045", "seed-0056", "seed-0077",
+            "seed-0117"],
+  "parity_pairs": ["seed-0009", "seed-0021", "seed-0034", "seed-0043",
+                   "seed-0048", "seed-0107", "seed-0017", "seed-0125",
+                   "seed-0045"]
+}
