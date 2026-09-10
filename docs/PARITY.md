@@ -2092,22 +2092,42 @@ the two patches above.
 
 ## Status
 
-**NOT YET RUN.** `tools/oracle/bc19/engine.lock`, `visible_order.patch` and
-`examplefuncsplayer19/determinism.patch` are committed; `bc19_trace.js`, the
-seven oracle bots, `tools/parity_trace_bc19.nim`,
-`tools/ci/parity_tiers_bc19.py`, `tools/ci/parity_ledger_bc19.json` and the
-`parity-oracle-bc19` job itself are the remaining work, tracked in
-`runs/2026-09-10-battlecode-2019/build-report.md` §M4. The Nim halves of both
-differential bots already exist and are written to be mirrorable:
-`src/battlecode/years/bc19/chassis/scenario19.nim` makes every scenario
-decision a pure function of `me.unit`, `me.turn` and the squares immediately
-around the robot, with the adjacent-square scan order fixed in its
+**RUN, AND GREEN, WITH AN EMPTY LEDGER.** The whole oracle is the
+`parity-oracle-bc19` job of `.github/workflows/ci.yml` (`timeout-minutes: 45`),
+which runs on every push. The first run taken as a verdict is
+**`34446572285`** — job `parity-oracle-bc19`, id `102772780365`, on
+`bc19-year-module` at `7aa8e6712c`, **conclusion `success`**, wall clock
+**1 m 57 s** (06:46:01Z → 06:47:58Z). Every tier named above ran in that one
+job and every tier passed:
+
+| tier | what it ran there | verdict |
+|---|---|---|
+| comparator self-test | `parity_tiers_bc19.py --self-test`: a one-line-longer oracle trace MUST be reported as a divergence, and the normaliser MUST be applied to both sides | pass |
+| **B** (whole domain, not a sample) | `JsBc19Tables.mjs --check` — all 7 939 `ceil(sqrt(r²))` values and the reclaim's integer division over its whole domain; `gen_maps_bc19.mjs --check` — all **22 committed boards byte-diffed** against the pinned engine's own `makeMap()`; and the **13 degenerate seeds refused BY NAME** (7, 20, 24, 83, 108, 127, 175, 211, 232, 267, 283, 348, 365), which proves V3's curation rather than trusting it | pass |
+| **A / A′ / A″ / B′(a) / C** | **54 whole-game pairs**: six trace bots (`bc19idle`, `examplefuncsplayer19`, `bc19scenario`, `bc19scenariotrade`, `bc19scenariokill`, `bc19scenariotie`) × the nine parity boards (`seed-0009`, `seed-0017`, `seed-0021`, `seed-0034`, `seed-0043`, `seed-0045`, `seed-0048`, `seed-0107`, `seed-0125`), 1000 rounds each, engine trace against Nim trace **line for line**, `--assert-clock` on every one of them (that is Tier B′(a): the driver exits 6 if any live robot's `robot.time` ever fell below `CHESS_INITIAL`, so the engine's freeze branch provably never fired in a game this job compares) | **54 of 54 BIT-EXACT, 0 failures** |
+| **A** (anti-vacuity, off the ORACLE trace) | the flat +25-fuel-a-team-a-round trickle with nothing else moving a store; `ids=4` on `seed-0043` and the pool NEVER growing in an idle game; `wc=1` on the last line (game.js:604's unconditional `win_condition = 1` overwrite); and **exactly ONE `A` line in round 1000**, because `isOver` runs before every turn | pass |
+| **A′** (anti-vacuity, off the union of the nine `bc19scenario` traces) | all five unit types on the board (`CASTLE`, `PILGRIM`, `CRUSADER`, `PROPHET`, `PREACHER`); all five forced action kinds (`BUILD`, `MOVE`, `ATTACK`, `MINE`, `GIVE`); the r² 7938 broadcast at its 90-fuel cost; castle talk from a mobile unit (`ct=77`); and a pilgrim carrying an unrefined load | pass |
+| **A′** (the CHURCH, D6.1) | a CHURCH raised **and its legal 0-damage `ATTACK` fired, on ALL NINE boards** — a CHURCH's `ATTACK_RADIUS` is the scalar `0`, so both range comparisons are against `undefined`, both are false, and the action is ACCEPTED for 0 fuel and 0 damage. It is the quirk this year is most likely to get wrong | pass |
+| **A′** (the three end rungs) | `wc=0` `castles_destroyed` on `seed-0017` (`bc19scenariokill`); `winner=RED wc=1` `more_unit_health` on `seed-0043` (`bc19scenariotie`); and the barter moving **both** stores in **opposite** directions on `seed-0043` (`bc19scenariotrade`), the only externally visible proof that `enactTrade` executed rather than merely recording an offer | pass |
+| **B′(b)** (separate, non-compared) | the `bc19slowbot` run: the engine **does** freeze a robot whose `turn()` busy-loops ~40 ms, at the turn `time_{n+1} = time_n + 20 − elapsed` predicts. It compares nothing and exists so the port's *reading* of V1 is proved rather than asserted | pass |
+
+**`tools/ci/parity_ledger_bc19.json` IS `[]` AND STAYED `[]`.** No pair
+diverged, so the comparator wrote no digest, so the job's
+`parity-bc19-digests` artifact **does not exist in run `34446572285`** — the
+upload is `if-no-files-found: ignore`, which makes that artifact's absence the
+positive evidence of an empty ledger rather than a gap in it.
+
+Root-cause-or-fail remains the standing rule: an unexplained Tier C divergence
+is a FAIL, not a ledger line, `tools/ci/parity_tiers_bc19.py` rejects a cause
+of "unknown", and diverging **earlier** than a ledger entry claims, or not
+diverging at all where one claims you should, are both failures too.
+
+The Nim halves of both differential bots are written to be mirrorable and must
+stay that way: `src/battlecode/years/bc19/chassis/scenario19.nim` makes every
+scenario decision a pure function of `me.unit`, `me.turn` and the squares
+immediately around the robot, with the adjacent-square scan order fixed in its
 `AdjacentScan` constant, and
 `src/battlecode/years/bc19/chassis/examplefuncsplayer19.nim` is the patched
-example bot statement for statement.
-
-**The ledger `tools/ci/parity_ledger_bc19.json` ships EMPTY, and the
-phase-30 exit condition is that Tiers A, A′, A″, B and B′ pass with it still
-empty.** Root-cause-or-fail is the standing rule: an unexplained Tier C
-divergence is a FAIL, not a ledger line, and a cause of "unknown" is not a
-cause.
+example bot statement for statement. An edit to either that is not mirrored on
+the other side is what Tier A′/A″ will catch, and it will catch it as a
+divergence rather than as a compile error.
