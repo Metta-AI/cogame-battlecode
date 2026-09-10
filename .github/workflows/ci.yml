@@ -191,12 +191,21 @@ jobs:
     # 2026-09-08), and the heaviest bc22 shards play whole 2000-round games
     # with every range check on -- its knob sweep plays seventy-two of them in
     # the debug pass alone.
+    # 240, not 180: the TENTH year module adds twenty-two shards, and every
+    # shard runs TWICE (debug and -d:release). bc17's are the heaviest in
+    # the repo per game -- 3000 rounds of CONTINUOUS SPACE, with every
+    # bullet resolved against every disc within reach -- and three of them
+    # play whole matches: its survival gate plays six 3000-round games and
+    # then RECOMPILES ITSELF with -d:bc17BrokenChassis and plays six more,
+    # its knob sweep plays thirty-three, and its perf gate plays the two
+    # tree-heaviest boards in the repository. Measured in phase 20 at
+    # 13 s / 18 s / 15 s in release; the debug pass is several times that.
     # 180, not 150: the NINTH year module adds twenty-seven shards, and every
     # shard runs TWICE (debug and -d:release). bc19's shards are the
     # LIGHTEST in the repo -- 1000 rounds against bc16's 3000 and a measured
     # 0.03-0.10 s for a whole mirror game -- but there are a lot of them and
     # its knob sweep plays seventy-eight games in the debug pass alone.
-    timeout-minutes: 180
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v5
 
@@ -581,6 +590,72 @@ jobs:
           # nothing else (NOTICE records the reasoning).
           python3 tools/build_sprite_atlas_bc19.py \
             --engine "$BC19_DIR" --out data --check
+
+      # The bc17 year module is generated from the PINNED ORACLE JAR and a
+      # pinned client checkout, and every generated artefact is re-generated
+      # here and byte-diffed: the constants table (JVM reflection is NOT
+      # needed for the check -- the generator's own reader walks the jar's
+      # class files), all twenty-two converted maps, and the sprite atlas
+      # cut from the 2017 client. A hand-edited generated file fails the
+      # build.
+      #
+      # `data/bc17/fdlibm_vectors.json` is NOT checked here and cannot be:
+      # it is written by `tools/JavaBc17Tables.java` under a JDK 8 running
+      # the jar's own `StrictMath`, and there is no JDK in this job.
+      # `tests/test_bc17_fdlibm.nim` recomputes every one of its 448
+      # boundary rows and all eleven 2 000 000-sample digests in Nim and
+      # compares them bit for bit, which is the check that matters.
+      - name: Fetch the pinned Battlecode 2017 jar and client
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bc17 /tmp/client17
+          curl -fsSL "${BC17_JAR_URL}" -o /tmp/bc17/battlecode-2017.jar
+          got_sha="$(sha256sum /tmp/bc17/battlecode-2017.jar | cut -d' ' -f1)"
+          got_bytes="$(stat -c%s /tmp/bc17/battlecode-2017.jar)"
+          echo "bc17 jar: ${got_bytes} bytes, sha256 ${got_sha}"
+          test "${got_sha}" = "${BC17_JAR_SHA256}" || {
+            echo "::error::the 2017 jar's sha256 is ${got_sha}, not the"
+            echo "::error::pinned ${BC17_JAR_SHA256} (tools/oracle/bc17/jar.lock)"
+            exit 1; }
+          test "${got_bytes}" = "${BC17_JAR_BYTES}" || {
+            echo "::error::the 2017 jar is ${got_bytes} bytes, not the pinned"
+            echo "::error::${BC17_JAR_BYTES} (tools/oracle/bc17/jar.lock)"
+            exit 1; }
+          # The pin in the lock file and the pin in this workflow's env must
+          # be the same two values, or one of them is decoration.
+          python3 - <<'PY'
+          import json, os
+          lock = json.load(open("tools/oracle/bc17/jar.lock"))
+          assert lock["sha256"] == os.environ["BC17_JAR_SHA256"], lock["sha256"]
+          assert str(lock["bytes"]) == os.environ["BC17_JAR_BYTES"], lock["bytes"]
+          assert lock["engine_commit"] == os.environ["BC17_COMMIT"]
+          assert lock["client_commit"] == os.environ["BC17_CLIENT_COMMIT"]
+          print("tools/oracle/bc17/jar.lock agrees with ci.yml's env")
+          PY
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode-client-17/archive/${BC17_CLIENT_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/client17
+          echo "BC17_JAR=/tmp/bc17/battlecode-2017.jar" >> "$GITHUB_ENV"
+          echo "BC17_CLIENT_DIR=/tmp/client17/battlecode-client-17-${BC17_CLIENT_COMMIT}" \
+            >> "$GITHUB_ENV"
+
+      - name: The bc17 generated files match the pinned 2017 jar
+        run: |
+          set -euo pipefail
+          python3 tools/convert_maps_bc17.py --jar "$BC17_JAR" \
+            --out data/maps/bc17 --check
+          python3 tools/build_sprite_atlas_bc17.py \
+            --client "$BC17_CLIENT_DIR" --out data --check
+          # And EVERY ONE of the 70 official `.map17` flatbuffers reads with
+          # the converter's own vtable walk, not only the 22 that are
+          # committed: a reader that only works on the maps we ship is a
+          # reader nobody can extend the pool with.
+          parsed="$(python3 tools/convert_maps_bc17.py --jar "$BC17_JAR" \
+            --parse-all 2>&1 >/dev/null | grep -oE '^[0-9]+' | head -1)"
+          echo "official .map17 files parsed: ${parsed}"
+          test "${parsed}" = "70" || {
+            echo "::error::expected all 70 .map17 files to parse, got ${parsed}"
+            exit 1; }
 
       - name: The GameVersion does not collide with main's
         if: github.ref != 'refs/heads/main'
@@ -4616,6 +4691,155 @@ jobs:
                  "wall=\(.result.wall_clock_seconds)s"' \
             dist/smoke/replay-bc19.json
 
+      # bc17, THE TENTH YEAR MODULE AND THE ONLY CONTINUOUS-SPACE ONE.
+      #
+      # 900 ROUNDS, AND NOT 400, for a reason that is this year's. On the
+      # pinned map (`HouseDivided`, 30x30, ONE archon a side, ARCHON
+      # SEPARATION 6.5 -- the smallest in the whole `small` pool -- and 41
+      # neutral trees of which 41 hold bullets and 6 hold a robot) a
+      # 400-round window shows the opening farm but not the payoff: a
+      # planted tree grows for EIGHTY-ONE rounds before it pays anything at
+      # all, and a built fighter is DORMANT for its first twenty. 900 rounds
+      # guarantees a mature farm, real tree income, first contact inside
+      # twenty rounds and a decided game. It also records ~20 s of playback,
+      # which comfortably outlasts the viewer smoke's 15 s soak (the ecos
+      # 2026-08-23 scar).
+      #
+      # THE SEED IS PINNED TO DRAW `HouseDivided`, and
+      # `tests/test_bc17_maps.nim` asserts that exact draw from the other
+      # side, so the smoke's map cannot drift silently.
+      #
+      # SMOKE_REQUIRE_STATS is the episode SUBSTANCE assertion (the LEARNINGS
+      # 2026-09-03 pin), enforced FOR BOTH SEATS by the script. THE FLOORS
+      # ARE MEASURED, NOT GUESSED: this exact episode -- seed 5,
+      # `HouseDivided`, 900 rounds, orchard against examplefuncsplayer17 --
+      # produces
+      #
+      #   seat 0 (orchard)                20 units built, 1196 moves, 805 damage
+      #   seat 1 (examplefuncsplayer17)    6 units built, 1860 moves, 368 damage
+      #
+      # and the committed floors are at or below HALF the weak seat's value.
+      # `damage_dealt` is floored at 0 PER SEAT deliberately: the weak floor
+      # fires at `robots[0]` and may legitimately never connect. PLANTING,
+      # WATERING, SHAKING, CHOPPING AND DONATING ARE NOT IN THIS SET, because
+      # they are not things BOTH seats do -- `examplefuncsplayer17` never
+      # plants, waters, shakes, chops or donates, and it MAY NOT GAIN
+      # BEHAVIOUR because it is one side of the differential parity oracle.
+      # They are asserted ACROSS the seats in the step below instead.
+      - name: Raw-Docker episode smoke (bc17, scripted vs scripted)
+        env:
+          SMOKE_SLUG: ${{ env.SLUG }}
+          SMOKE_EXPECT_YEAR: bc17
+          # The manifest declares exactly the two players the certification
+          # fixture seats, and `PLAYER_SCRIPTED` resolves per year: on bc17
+          # `awu` is orchard and `scaffold` is examplefuncsplayer17
+          # (src/battlecode/baselines.nim).
+          SMOKE_PLAYER_IDS: awu,scaffold
+          SMOKE_CONFIG_OVERRIDE: >-
+            {"year":"bc17","pool":"small","seed":5,"gamesPerMatch":1,
+             "maxRounds":900,"perGameBudgetSeconds":90,
+             "matchBudgetSeconds":100,"connectTimeoutMs":15000}
+          # `damage_dealt_tenths`, not `damage_dealt`: EVERY float quantity
+          # in this year's results document is an integer number of TENTHS
+          # (results.nim, bc17's optional list), because bullets, health and
+          # damage are all float32 and a raw float in a JSON results
+          # document is a formatter argument waiting to happen.
+          SMOKE_REQUIRE_STATS: >-
+            {"units_built":3,"moves":400,"damage_dealt_tenths":0}
+          SMOKE_REPLAY_OUT: ${{ github.workspace }}/dist/smoke/replay-bc17.json
+          SMOKE_CONTRACT_PROBE: "0"
+        run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
+
+      # THE ACROSS-THE-PAIR HALF. The signatures of 2017 -- planting a
+      # bullet tree, WATERING it so it does not wither at 0.5 a round,
+      # shaking a neutral tree for the bullets inside it, chopping one open
+      # and firing a shot -- are things only a seat playing WELL does, and
+      # `examplefuncsplayer17` does NONE of them. Asserting them per-seat
+      # would be asserting that the weak floor is not weak; asserting them
+      # across the pair makes an idle win machine-visible, which is exactly
+      # what the 2026-09-03 round-1 degenerate match lacked.
+      #
+      # IF `water_actions >= 200` OR `bullets_fired >= 1` EVER STOPS
+      # HOLDING, THE FIX IS TO RAISE THE SMOKE'S `maxRounds` UNTIL IT DOES
+      # -- never to drop the assertion. An episode of this year in which
+      # nobody ever watered a tree or fired a bullet is not this game being
+      # played.
+      #
+      # Measured on this exact episode (the numbers the floors are at or
+      # below half of): trees planted 5, water actions 1145, shakes 30,
+      # chops 80, bullets fired 951, tree income 1529 bullets, strikes 100.
+      - name: The bc17 episode really played bc17
+        run: |
+          set -euo pipefail
+          # Read from the REPLAY, whose `result` block is the results
+          # document verbatim: `dist/smoke/results.json` is overwritten by
+          # every episode in turn and naming it here would make this
+          # assertion depend on which episode happened to run last (the bc24
+          # fix).
+          sum() { jq -r "[.result.games[0].$1[]] | add" \
+            dist/smoke/replay-bc17.json; }
+          planted="$(sum trees_planted)"
+          water="$(sum water_actions)"
+          shakes="$(sum shake_actions)"
+          chops="$(sum chop_actions)"
+          fired="$(sum bullets_fired)"
+          income="$(sum bullets_earned_from_trees_tenths)"
+          strikes="$(sum strike_actions)"
+          echo "across the two seats: planted=${planted} water=${water}" \
+               "shakes=${shakes} chops=${chops} fired=${fired}" \
+               "tree_income_tenths=${income} strikes=${strikes}"
+          test "${planted}" -ge 2 || {
+            echo "::error::only ${planted} bullet trees were planted in the"
+            echo "::error::whole episode. A bullet tree is the ONLY real"
+            echo "::error::income in this year: the passive trickle is"
+            echo "::error::max(0, 2 - 0.01 x supply), which is EXACTLY ZERO"
+            echo "::error::at the 300 bullets both sides start with."
+            exit 1; }
+          test "${water}" -ge 200 || {
+            echo "::error::only ${water} water actions in the whole episode."
+            echo "::error::A bullet tree WITHERS at 0.5 health a round once"
+            echo "::error::it matures, so a farm nobody waters is a farm"
+            echo "::error::that dies. RAISE maxRounds until it fires; do NOT"
+            echo "::error::drop this."
+            exit 1; }
+          test "${income}" -ge 3000 || {
+            echo "::error::${income} tenths of a bullet were earned from"
+            echo "::error::trees in the whole episode. A mature tree pays"
+            echo "::error::health/50 a round -- 1 a round at full health --"
+            echo "::error::and 900 rounds is eleven times the 81-round"
+            echo "::error::maturity clock."
+            exit 1; }
+          test "${shakes}" -ge 5 || {
+            echo "::error::not one neutral tree was shaken. HouseDivided"
+            echo "::error::carries 41 of them and every one holds bullets;"
+            echo "::error::shake() is free and works for ANY robot."
+            exit 1; }
+          test "${fired}" -ge 20 || {
+            echo "::error::only ${fired} bullets were fired in the whole"
+            echo "::error::episode. On HouseDivided the two archons start"
+            echo "::error::6.5 apart, so first blood lands inside twenty"
+            echo "::error::rounds. RAISE maxRounds until it fires; do NOT"
+            echo "::error::drop this."
+            exit 1; }
+          test "${strikes}" -ge 10 || {
+            echo "::error::not one lumberjack strike landed in the whole"
+            echo "::error::episode. A strike is this year's only area"
+            echo "::error::attack and it damages TREES as well as robots."
+            exit 1; }
+
+      # THE PACING NUMBER phase 60 sizes its check-8 dispatch from, and the
+      # number that decided this year's own `--timeout 120 --soak 15`
+      # (docs/RULES-BC17.md, "Playback pacing, measured"). bc17 is 3000
+      # ROUNDS like bc16, and a 100 % seek re-simulates the whole of it in
+      # the Worker.
+      - name: Print the bc17 episode's simulated seconds per round
+        run: |
+          set -euo pipefail
+          jq -r '"bc17 smoke: sim_seconds=\(.result.sim_seconds) " +
+                 "rounds=\(.result.games[0].rounds_played) " +
+                 "wall=\(.result.wall_clock_seconds)s"' \
+            dist/smoke/replay-bc17.json
+
       # THE PACING NUMBER the next year module sizes its own probe from, and
       # the number that decided this year's own `--timeout 120 --soak 15`
       # (docs/RULES-BC16.md, "Playback pacing, measured").
@@ -4638,14 +4862,14 @@ jobs:
                  "wall=\(.result.wall_clock_seconds)s"' \
             dist/smoke/replay-bc22.json
 
-      - name: All NINE smoke replays are present and are different years
+      - name: All TEN smoke replays are present and are different years
         run: |
           set -euo pipefail
           for f in dist/smoke/replay.json dist/smoke/replay-bc20.json \
                    dist/smoke/replay-bc21.json dist/smoke/replay-bc24.json \
                    dist/smoke/replay-bc25.json dist/smoke/replay-bc23.json \
                    dist/smoke/replay-bc22.json dist/smoke/replay-bc16.json \
-                   dist/smoke/replay-bc19.json; do
+                   dist/smoke/replay-bc19.json dist/smoke/replay-bc17.json; do
             test -s "$f" || { echo "::error::$f is missing"; exit 1; }
           done
           y26="$(jq -r .year dist/smoke/replay.json)"
@@ -4657,8 +4881,10 @@ jobs:
           y22="$(jq -r .year dist/smoke/replay-bc22.json)"
           y16="$(jq -r .year dist/smoke/replay-bc16.json)"
           y19="$(jq -r .year dist/smoke/replay-bc19.json)"
+          y17="$(jq -r .year dist/smoke/replay-bc17.json)"
           echo "replay.json year=$y26  bc20=$y20  bc21=$y21  bc24=$y24" \
-               "bc25=$y25  bc23=$y23  bc22=$y22  bc16=$y16  bc19=$y19"
+               "bc25=$y25  bc23=$y23  bc22=$y22  bc16=$y16  bc19=$y19" \
+               "bc17=$y17"
           test "$y26" = "bc26" || { echo "::error::replay.json is not bc26"; exit 1; }
           test "$y20" = "bc20" || { echo "::error::replay-bc20.json is not bc20"; exit 1; }
           test "$y21" = "bc21" || { echo "::error::replay-bc21.json is not bc21"; exit 1; }
@@ -4668,9 +4894,10 @@ jobs:
           test "$y22" = "bc22" || { echo "::error::replay-bc22.json is not bc22"; exit 1; }
           test "$y16" = "bc16" || { echo "::error::replay-bc16.json is not bc16"; exit 1; }
           test "$y19" = "bc19" || { echo "::error::replay-bc19.json is not bc19"; exit 1; }
+          test "$y17" = "bc17" || { echo "::error::replay-bc17.json is not bc17"; exit 1; }
           if [ "$(printf '%s\n' "$y26" "$y20" "$y21" "$y24" "$y25" "$y23" \
-                  "$y22" "$y16" "$y19" | sort -u | wc -l)" -ne 9 ]; then
-            echo "::error::the nine smoke replays are not nine different years"
+                  "$y22" "$y16" "$y19" "$y17" | sort -u | wc -l)" -ne 10 ]; then
+            echo "::error::the ten smoke replays are not ten different years"
             exit 1
           fi
 
@@ -4780,7 +5007,7 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx --yes playwright@1.55.0 install --with-deps chromium
 
-      - name: Load the bundle in a real browser (ALL NINE years' replays)
+      - name: Load the bundle in a real browser (ALL TEN years' replays)
         run: |
           set -euo pipefail
           # A for-loop, not `ls … | head -1`: under `set -o pipefail` an unmatched
@@ -4794,7 +5021,8 @@ jobs:
                            dist/smoke/replay-bc23.json \
                            dist/smoke/replay-bc22.json \
                            dist/smoke/replay-bc16.json \
-                           dist/smoke/replay-bc19.json; do
+                           dist/smoke/replay-bc19.json \
+                           dist/smoke/replay-bc17.json; do
             if [ -f "${candidate}" ]; then replays="${replays} ${candidate}"; fi
           done
           test -n "${replays}" || {
@@ -4857,10 +5085,21 @@ jobs:
           # phase-60 check-8 dispatch for bc16 uses `settle=20000 soak=15`
           # for exactly the same reason. Decided here rather than discovered
           # at phase 60.
+          # bc17 GETS THE SAME LONGER LEASH, and for the same measured
+          # reason as bc16: it is 3000 ROUNDS, and a 100 % seek re-simulates
+          # the whole of it in the Worker. It is also the only
+          # CONTINUOUS-SPACE year here -- every body is a circle with a
+          # float32 centre and every bullet is a moving point resolved
+          # against every disc within reach -- so its per-round cost is the
+          # highest in the repository on the tree-heavy boards
+          # (docs/RULES-BC17.md, "Playback pacing, measured"). The phase-60
+          # check-8 dispatch for bc17 uses `settle=20000 soak=15` for the
+          # same reason. Decided here rather than discovered at phase 60.
           if [ "${replay}" = "dist/smoke/replay-bc24.json" ] || \
              [ "${replay}" = "dist/smoke/replay-bc25.json" ] || \
              [ "${replay}" = "dist/smoke/replay-bc22.json" ] || \
              [ "${replay}" = "dist/smoke/replay-bc16.json" ] || \
+             [ "${replay}" = "dist/smoke/replay-bc17.json" ] || \
              [ "${replay}" = "dist/smoke/replay-bc23.json" ]; then
             node tools/ci/viewer_smoke.mjs \
               --bundle dist/static-replay-viewer \
@@ -4931,7 +5170,7 @@ jobs:
       # The wasm module itself, under node: wasm32-only failures (int overflow
       # traps, address-space exhaustion) are invisible to the native tests --
       # and a brand-new year module is exactly where one would live.
-      - name: Smoke the emitted wasm module under node (all nine years)
+      - name: Smoke the emitted wasm module under node (all ten years)
         run: |
           set -euo pipefail
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
@@ -5009,6 +5248,24 @@ jobs:
             "${{ github.workspace }}/dist/smoke/replay-bc19.json"
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
             "${{ github.workspace }}/tests/fixtures/replay-bc19.json"
+          # bc17: the smoke episode this run produced, and the COMMITTED
+          # bc17 fixture -- which carries TWELVE OF THE THIRTEEN beat kinds
+          # (tests/test_bc17_beats.nim asserts emission, label and style
+          # against exactly these bytes, and records why `rout` is the
+          # thirteenth: four robots of one side never die in one round).
+          # bc17 IS THE ONLY CONTINUOUS-SPACE YEAR IN THIS REPOSITORY: every
+          # coordinate, radius, health and bullet speed is a FLOAT32, and
+          # every transcendental goes through the fdlibm port in
+          # src/battlecode/fdlibm.nim rather than the platform libm --
+          # precisely because glibc's `sin` and emscripten's are not the
+          # same function. A wasm32 divergence in ANY of that shows up here
+          # as a hash-chain mismatch and nowhere else. NOTE that this smoke
+          # steps 200 FRAMES, so its `mismatch_round: -1` covers the first
+          # 200 rounds only.
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/dist/smoke/replay-bc17.json"
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/tests/fixtures/replay-bc17.json"
 
       # The text the CI replay never carries. Every replay CI produces is
       # SCRIPTED, so its notes and motto are the short strings baselines.nim
