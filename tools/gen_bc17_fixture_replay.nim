@@ -17,19 +17,31 @@
 ## two sheets here are the league's own poles: the farm that buys the win
 ## against the lumberjack swarm that spends to its last bullet.
 ##
-## THE MAPS ARE CHOSEN SO THE RECORDING CARRIES EVERY BEAT KIND THE SIM CAN
-## EMIT, and that was MEASURED over the committed boards rather than hoped:
+## THE MAPS AND THE DOCTRINES ARE CHOSEN FOR BEAT COVERAGE, and the choice
+## was MEASURED over the committed boards rather than hoped. The recording
+## carries ELEVEN of the viewer's thirteen bc17 beat kinds:
 ##
+##   `Whirligig` (100x100, 476 radius-1 trees, 3 archons a side, separation
+##     26.1) is the long farming game: `tree_planted`, `farm_online`,
+##     `donation`, `shake` and -- with both seats spending to zero --
+##     `famine` and `volley`;
 ##   `GreenHouse` (58 neutral trees, **every one of them containing a robot**
-##     and 56 holding bullets) is the only board where `chop_reveal` and
-##     `shake` both fire early, and where a faction can grow by chopping;
-##   `HouseDivided` (**archon separation 6.5**, the `docker-smoke` map) is
-##     where first blood lands inside twenty rounds, so `strike`, `volley`,
-##     `rout`, `duel`, `gardener_lost` and `archon_lost` all reach the bytes;
-##   `CropCircles` (198 radius-0.5 trees on the smallest board, 190 of them
-##     holding bullets) is the farming game that runs to the round limit and
-##     supplies `tree_planted`, `farm_online`, `donation` and the `tiebreak`
-##     into `end`.
+##     and 56 holding bullets) is the chop-and-shake board, it runs to the
+##     round limit and supplies the `tiebreak` into `end` -- **and the seat
+##     that lost on `Whirligig` wins here, so the match does not clinch at
+##     two games and the third is really played**;
+##   `Interference` (100x100, 394 trees, 3 archons a side, **separation
+##     8.5**) is where the two rosters actually meet, so `strike`,
+##     `gardener_lost`, `archon_lost`, `tree_lost` and `duel` all reach the
+##     bytes.
+##
+## **ONE KIND IS NOT IN THE RECORDING AND THAT IS RECORDED, NOT HIDDEN.**
+## `rout` needs FOUR robots of one side to die in a single round, and over
+## every doctrine pair and board measured in phase 20 nothing produced it --
+## 2017 armies are small and its bullets are slow.
+## `tests/test_bc17_beats.nim` asserts the twelve kinds that ARE emitted and
+## names the one that is not, so a rules change that starts emitting it is a
+## visible change rather than a silent one.
 ##
 ## `tests/test_bc17_beats.nim` asserts the coverage FROM THESE BYTES, so if a
 ## rules change stops one kind being emitted the test fails rather than the
@@ -51,7 +63,7 @@ const
     ## under 200 kB while still passing the 81-round tree maturity, the
     ## 20-round dormancy and first contact -- the three clocks every beat
     ## kind hangs off.
-  Maps = ["HouseDivided", "CropCircles", "GreenHouse"]
+  Maps = ["Whirligig", "GreenHouse", "Interference"]
   SideAslots = [0, 1, 0]
     ## The sides alternate, exactly as an episode's do.
 
@@ -66,23 +78,25 @@ proc main() =
   config.perGameBudgetSeconds = 900
   config.matchBudgetSeconds = 3600
   let doctrines = [
-    parseReply("""{"sheet":{"opening":"tree_farm","gardener_count":4,
-      "farm_layout":"hex","soldier_tank_ratio":10,"lumberjack_share":20,
-      "scout_harass":20,"vp_donate_policy":"when_ahead",
+    parseReply("""{"sheet":{"opening":"tree_farm","gardener_count":8,
+      "farm_layout":"hex","soldier_tank_ratio":20,"lumberjack_share":10,
+      "scout_harass":10,"vp_donate_policy":"rush_1000",
       "shake_neutral_trees":"dedicated","chop_policy":"harvest",
-      "bullet_reserve":150,"defend_radius":14},
-      "notes":"the farm pole: four gardeners, a hex flower each, every
-      neutral tree shaken and every robot-bearing one chopped open, and the
-      surplus above a hundred and fifty bullets spent on points the moment it
-      appears","motto":"Plant, water, donate."}""", "bc17"),
-    parseReply("""{"sheet":{"opening":"tank_rush","gardener_count":2,
-      "farm_layout":"ring","soldier_tank_ratio":60,"lumberjack_share":40,
+      "bullet_reserve":0,"defend_radius":40},
+      "notes":"the purchase pole: eight gardeners, a hex flower each, every
+      neutral tree shaken and every robot-bearing one chopped open, and every
+      bullet above zero converted to victory points the moment it appears --
+      which is what puts this seat below one bullet again and again",
+      "motto":"Plant, water, donate."}""", "bc17"),
+    parseReply("""{"sheet":{"opening":"tank_rush","gardener_count":3,
+      "farm_layout":"hex","soldier_tank_ratio":60,"lumberjack_share":40,
       "scout_harass":40,"vp_donate_policy":"endgame_dump",
       "shake_neutral_trees":"opportunistic","chop_policy":"clear_path",
-      "bullet_reserve":20,"defend_radius":3},
-      "notes":"the swarm pole: two gardeners, a ring that keeps the spawn
-      lane open, half its army money on lumberjacks and a fifth
-      on tanks, nothing held back and nothing donated -- their farm dies or mine does",
+      "bullet_reserve":0,"defend_radius":40},
+      "notes":"the army pole: three gardeners packed six trees each, three
+      fifths of its army money on tanks and two fifths of the rest on
+      lumberjacks, nothing held back and nothing donated until the end --
+      their farm dies or mine does",
       "motto":"Arrive before the harvest."}""", "bc17")]
   var plan = buildPlan(config, doctrines, Seed)
   plan.chassis = Chassis

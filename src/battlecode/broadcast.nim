@@ -549,7 +549,9 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
     of "famine":
       label = e.fields{"alias"}.getStr().toUpperAscii() & " IS OUT OF " &
         e.fields{"resource"}.getStr().toUpperAscii() &
-        (if e.fields{"resource"}.getStr() == "fuel": " — nothing can move"
+        (case e.fields{"resource"}.getStr()
+         of "fuel": " — nothing can move"
+         of "bullets": " — nothing can be bought"
          else: " — nothing can be built") &
         ", game " & $(e.game + 1) & ", round " & $e.round
     of "trade":

@@ -125,8 +125,12 @@ const
   ScoutHarassHi* = 100
   BulletReserveLo* = 0
   BulletReserveHi* = 2000
-  DefendRadiusLo* = 1
-  DefendRadiusHi* = 40
+  DefendReachLo* = 1
+  DefendReachHi* = 40
+    ## The `defend_radius` bounds. NOT named `DefendRadius*`: bc19's knobs
+    ## already export those two symbols with different values, and a shard
+    ## that imports both years through the year-neutral sheet arm would see
+    ## an ambiguous identifier.
 
   GardenerPerArchonFloor* = 1
     ## The unconditional minimum, at EVERY knob setting.
@@ -208,7 +212,7 @@ proc applyKnobs17*(seen: Table[string, JsonNode],
   clampedIntKnob("bullet_reserve", result.bulletReserve,
                  BulletReserveLo, BulletReserveHi)
   clampedIntKnob("defend_radius", result.defendRadius,
-                 DefendRadiusLo, DefendRadiusHi)
+                 DefendReachLo, DefendReachHi)
 
 proc toJson17*(d: Doctrine17): JsonNode =
   %*{
@@ -333,7 +337,7 @@ proc bc17SheetSchema*(): JsonNode =
                                "above, so a faction sitting on 200 earns " &
                                "nothing from it while a faction at 100 " &
                                "earns 1 a round"},
-    "defend_radius": {"range": [DefendRadiusLo, DefendRadiusHi],
+    "defend_radius": {"range": [DefendReachLo, DefendReachHi],
                       "default": d.defendRadius,
                       "note": "the radius (in units, NOT squared -- 2017 " &
                               "sensing is a Euclidean distance) around a " &

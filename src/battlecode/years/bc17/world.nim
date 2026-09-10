@@ -282,6 +282,14 @@ type
     volleyBeats*: array[2, int]
     farmOnlineSeen*: array[2, array[3, bool]]
     famineSeen*: array[2, bool]
+    preTrickleSupply*: array[2, float32]
+      ## The bullet supply at the END OF SPENDING, i.e. BEFORE
+      ## `processEndOfRound` credits the archon trickle. The famine beat and
+      ## `rounds_below_one_bullet` are read off THIS and not off the live
+      ## supply, because the trickle is `max(0, 2 - 0.01 x supply)` and is
+      ## therefore EXACTLY 2.0 at a supply of zero -- a side that spends to
+      ## its last bullet is back above two before the round ends, so a check
+      ## on the live supply can never fire.
     firedThisRound*: array[2, int]
     lastShotShape*: array[2, ShotShape]
     ## The last enacted action, flattened for the parity trace. TELEMETRY

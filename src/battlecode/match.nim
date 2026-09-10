@@ -434,13 +434,14 @@ proc collectGameEvents(
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                     "skill": Bc24SkillNames[e.b], "level": e.c}))
     of "unit_milestone":
-      ## bc16 AND bc19. The first of each buildable type per side, so a
+      ## bc16, bc19 AND bc17. The first of each buildable type per side, so a
       ## spectator sees "Clan Ash commissions its first PREACHER" rather
-      ## than a census that moved. The two years have DIFFERENT unit
-      ## vocabularies -- twelve values against six -- so the table is chosen
+      ## than a census that moved. The three years have DIFFERENT unit
+      ## vocabularies -- twelve values, six and six -- so the table is chosen
       ## by the year on the replay header.
       let unitName =
         if plan.year == "bc19": Bc19UnitNames[max(0, min(5, e.b))]
+        elif plan.year == "bc17": Bc17UnitNames[max(0, min(5, e.b))]
         else: Bc16UnitNames[max(0, min(11, e.b))]
       events.add(ev("unit_milestone", game = gameIndex, round = e.round,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
@@ -630,9 +631,14 @@ proc collectGameEvents(
                     "x": e.b div 100, "y": e.b mod 100,
                     "worked": e.c}))
     of "famine":
+      ## bc19 runs out of one of TWO resources and bc17 of its only one, so
+      ## the resource name is chosen by the year on the replay header: a
+      ## bc17 spectator must never be told a faction is out of `karbonite`.
       events.add(ev("famine", game = gameIndex, round = e.round,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
-                    "resource": (if e.b == 0: "karbonite" else: "fuel")}))
+                    "resource":
+                      (if plan.year == "bc17": "bullets"
+                       elif e.b == 0: "karbonite" else: "fuel")}))
     of "trade":
       ## The barter's sign convention is the ENGINE's: POSITIVE MEANS THE
       ## RESOURCE MOVES RED TO BLUE. The event carries the raw signed pair

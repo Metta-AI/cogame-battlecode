@@ -498,7 +498,7 @@ block:
 block:
   let policies = parseJson(readFile("tools/ci/policies.json"))
   ## Four per year: two `PLAYER_PROMPT` champions and two scripted fillers.
-  checkEq("thirty-six policies ship — four per year", policies.len, 36)
+  checkEq("forty policies ship — four per year", policies.len, 40)
   var prompts = 0
   var scripted = 0
   var owned = 0
@@ -521,9 +521,9 @@ block:
         p["env"]["PLAYER_PROMPT"].getStr().len > 200)
     if p["env"].hasKey("PLAYER_SCRIPTED"): inc scripted
     if p.hasKey("player"): inc owned
-  checkEq("two LLM champions per year", prompts, 18)
-  checkEq("two scripted baselines per year", scripted, 18)
-  checkEq("each year's champion #2 carries its owning player", owned, 9)
+  checkEq("two LLM champions per year", prompts, 20)
+  checkEq("two scripted baselines per year", scripted, 20)
+  checkEq("each year's champion #2 carries its owning player", owned, 10)
   checkEq("bc26 champion #2 is the second prompt policy",
     policies[1]["player"].getStr(),
     "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
@@ -691,6 +691,32 @@ block:
     "saber,examplefuncsplayer19")
   check("and neither bc19 filler is a champion",
     not policies[34].hasKey("player") and not policies[35].hasKey("player"))
+  ## bc17's four are APPENDED after bc19's, so no existing index moved.
+  checkEq("bc17 champion #1 is the tree-farm doctrine",
+    policies[36]["name"].getStr(), "battlecode-bc17-orchard")
+  checkEq("bc17 champion #2 is the tank-rush doctrine",
+    policies[37]["name"].getStr(), "battlecode-bc17-tankrush")
+  checkEq("and bc17 champion #2 carries its owning player",
+    policies[37]["player"].getStr(),
+    "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
+  check("the two bc17 champion prompts differ",
+    policies[36]["env"]["PLAYER_PROMPT"].getStr() !=
+    policies[37]["env"]["PLAYER_PROMPT"].getStr())
+  check("bc17 champion #1 is the tree-farm / out-farm-them pole",
+    policies[36]["env"]["PLAYER_PROMPT"].getStr().contains(
+      "\"tree_farm\"") and
+    policies[36]["env"]["PLAYER_PROMPT"].getStr().contains(
+      "out-farm them"))
+  check("and champion #2 the kill-their-economy pole",
+    policies[37]["env"]["PLAYER_PROMPT"].getStr().contains("LUMBERJACK") and
+    policies[37]["env"]["PLAYER_PROMPT"].getStr().contains(
+      "THE CLOCK ON THE PRICE"))
+  checkEq("the bc17 fillers name the two published chassis",
+    policies[38]["env"]["PLAYER_SCRIPTED"].getStr() & "," &
+    policies[39]["env"]["PLAYER_SCRIPTED"].getStr(),
+    "orchard,examplefuncsplayer17")
+  check("and neither bc17 filler is a champion",
+    not policies[38].hasKey("player") and not policies[39].hasKey("player"))
 
 # --- compose.yaml service names are load-bearing ----------------------------
 block:

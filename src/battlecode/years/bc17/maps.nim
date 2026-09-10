@@ -139,7 +139,7 @@ proc parseMapSpec*(text: string): MapSpec =
       let radius = f32Of(row["radius"])
       result.bodies.add(MapBody(
         isRobot: false, id: row["id"].getInt(), team: tNeutral, loc: l,
-        radius: radius, health: f32Of(row["health"]),
+        radius: radius, health: neutralTreeHealthRate * radius,
         containedBullets: row["contained_bullets"].getInt(),
         containedRobot: contained))
       inc result.neutralTrees

@@ -197,7 +197,7 @@ func canExecuteCode*(r: Robot): bool =
   if isBuildable(r.kind): return r.roundsAlive >= DormancyRounds
   true
 
-proc processBeginningOfTurn(w: World, r: Robot) =
+proc processBeginningOfTurn*(w: World, r: Robot) =
   ## `InternalRobot.processBeginningOfTurn` (`:250-263`), in order.
   r.attackCount = 0
   r.moveCount = 0
@@ -308,13 +308,19 @@ proc runLadder(w: World) =
     w.setWinner(bestRobotTeam, RungHighestId)
   w.tiebreakRound = w.currentRound
 
-proc processEndOfRound(w: World) =
+proc processEndOfRound*(w: World) =
   ## `GameWorld.processEndOfRound` (`:251-327`).
   ## `eachRobot(processEndOfRound)` is replay-only; `eachTree` is replay-only
   ## **plus `roundsAlive++`**, which is the tree maturity clock.
   for id in w.treeKeys.forEachValue:
     if w.trees.hasKey(id):
       w.trees[id].roundsAlive += 1
+  ## What the side had left AFTER spending and BEFORE the trickle. The
+  ## famine beat reads this: the trickle is exactly 2.0 at a supply of zero,
+  ## so a side that spent to its last bullet is back above two by the time
+  ## `emitRoundBeats` runs.
+  for t in 0 .. 1:
+    w.preTrickleSupply[t] = w.bulletSupply[t]
   ## The round bullet income, A then B: `max(0, 2 - 0.01 * supply)` -- ZERO
   ## at any supply of 200 or more (measured).
   for team in [tA, tB]:
@@ -422,8 +428,10 @@ proc emitRoundBeats(w: World) =
         discard w.beat(BeatVolley, "volley", t, w.firedThisRound[t], 0,
                        $w.lastShotShape[t])
     w.firedThisRound[t] = 0
-    ## The famine beat: the first round a side's supply is below one bullet.
-    if w.bulletSupply[t] < 1'f32:
+    ## The famine beat: the first round a side SPENDS ITSELF below one
+    ## bullet -- measured before the trickle, for the reason
+    ## `preTrickleSupply` documents.
+    if w.preTrickleSupply[t] < 1'f32:
       w.stats.roundsBelowOneBullet[t] += 1
       if not w.famineSeen[t]:
         w.famineSeen[t] = true
