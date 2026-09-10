@@ -3736,19 +3736,27 @@ jobs:
               # A bc17 trace runs 1-300 MB a side (`Chess` is 2 804 066
               # lines); only the first 200 divergent lines and a gzipped
               # digest are uploaded.
+              # `bc=` comes off BOTH sides, exactly as the comparator's
+              # own `normalize()` takes it off both: stripping it from the
+              # Java side only leaves a 13 KB "diff" for a pair that is
+              # bit-exact, which is a diagnostic that lies.
               sed -E 's/ bc=[0-9]+//' "$j" > "/tmp/j.$$"
-              diff "/tmp/j.$$" "$n" | head -200 \
+              sed -E 's/ bc=[0-9]+//' "$n" > "/tmp/n.$$"
+              diff "/tmp/j.$$" "/tmp/n.$$" | head -200 \
                 > "/tmp/oracle17/upload/${BOT}.${MAP}.diff.txt" || true
               head -400 "$j" | gzip -9 \
                 > "/tmp/oracle17/upload/${BOT}.${MAP}.java.head.gz"
               head -400 "$n" | gzip -9 \
                 > "/tmp/oracle17/upload/${BOT}.${MAP}.nim.head.gz"
               cp "${BOT}.${MAP}.java.log" "/tmp/oracle17/upload/" || true
-              rm -f "/tmp/j.$$"
+              rm -f "/tmp/j.$$" "/tmp/n.$$"
             done
           done
           cp bc17slowbot.shrine.java.log /tmp/oracle17/upload/ || true
-          ls -la /tmp/oracle17/upload | head -20
+          # NOT `ls | head`: under `set -o pipefail` the SIGPIPE `head` sends
+          # `ls` fails the whole step after every tier has already passed.
+          echo "$(find /tmp/oracle17/upload -type f | wc -l) files," \
+               "$(du -sh /tmp/oracle17/upload | cut -f1) of evidence"
 
       - name: Upload the parity evidence
         if: always()

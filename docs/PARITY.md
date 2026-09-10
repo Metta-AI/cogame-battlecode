@@ -2181,12 +2181,15 @@ both sides.
 | **B′** | the metering divergence | **(a)** every compared bot asserts `Clock.getBytecodesLeft() > 5000` at the end of every turn, and the comparator independently reads the `bc=` column: the measured peak over all 54 pairs is **3 % of a limit** (`examplefuncsplayer17`), so the engine's pause-and-resume provably never fired in any game compared here. **(b)** the separate, NON-COMPARED `bc17slowbot` run: the engine paused it at **30 003 bytecodes against an ARCHON's 30 000 limit on round 1**, so the pause exists and fires where the rule says it does |
 | **C** | the first divergent round of every pair, against the ledger | **no pair diverges. `tools/ci/parity_ledger_bc17.json` is `{"entries": []}`** — empty, and not because anything was excused. Tier C is **not** gated on a subset of maps |
 
-**The measured wall clock in the phase-20 sandbox, which is what the
-90-minute budget is sized against — and the job prints its own measurement
-into the step summary on every CI run:** **168 seconds of JVM for all 54 whole games** (slowest pair
-`examplefuncsplayer17/Chess` at 13 s; `Chess` is 2 804 066 trace lines a
-side), 26 s for the comparator over all 54 pairs and 106 s for the trace
-assertions. **The Tier A″ fallback decided in phase 10 — cut the tier from
+**The measured wall clock, which is what the 90-minute budget is sized
+against — and the job prints its own measurement into the step summary on
+every CI run: 73 SECONDS OF JVM FOR ALL 54 WHOLE GAMES on a GitHub runner**
+(run 34526408262; the whole job, Nim toolchain and Tier B included, is about
+five minutes: 109 s to play the 54 pairs, 67 s for the trace assertions,
+19 s for the comparator and 4 s for the 2 000 000-sample fdlibm dump). In
+the phase-20 sandbox the same 54 games took **168 seconds of JVM** (slowest
+pair `examplefuncsplayer17/Chess` at 13 s; `Chess` is 2 804 066 trace lines
+a side). **The Tier A″ fallback decided in phase 10 — cut the tier from
 nine pairs to the six `small` pairs if the measurement passed 80 minutes —
 DID NOT FIRE and was not needed; all nine pairs run.** The job asserts the
 80-minute bound itself rather than trusting this paragraph.
