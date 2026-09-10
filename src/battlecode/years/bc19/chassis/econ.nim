@@ -94,8 +94,13 @@ proc canSpend*(w: World, s: Side, kCost, fCost: int,
   ## `seed-0048` in phase 20: 3 280 karbonite banked, four military units,
   ## zero damage. So the gate applies to MILITARY builds, attacks and
   ## military MOVEMENT; economy builds are funded whenever the order can pay
-  ## for them. `fuel_reserve`'s teeth are unchanged and are exactly the two
-  ## the knob test asserts: rounds at zero fuel down, attacks down.
+  ## for them. Of `fuel_reserve`'s two teeth the knob test asserts the first
+  ## as written — rounds ended with the fuel store at zero down, -49 %
+  ## against a 40 % threshold — and the second NORMALISED: raw attacks go UP,
+  ## 1 296 -> 2 331, because an order at reserve 0 cannot afford to BUILD the
+  ## soldiers either, so what is asserted is attacks per military unit built
+  ## down, -58 % against 20 %. `docs/RULES-BC19.md`'s `fuel_reserve` row
+  ## carries the reading.
   let t = ord(s.team)
   if w.karbonite[t] - s.committedK < kCost: return false
   if w.fuel[t] - s.committedF < fCost: return false
