@@ -294,5 +294,42 @@
       "PLAYER_SCRIPTED": "greenhorn",
       "PLAYER_POLICY_LABEL": "greenhorn"
     }
+  },
+  {
+    "name": "battlecode-bc19-saber",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a religious order in Battlecode 2019 'Crusade'. Every board is a mirror: on turn one every one of your robots is handed the whole terrain map, the whole karbonite map and the whole fuel map, so you already know where their castles are — they are the mirror image of yours. Karbonite builds units and fuel runs them, and the only free income in the game is 25 fuel a round. A PILGRIM costs 10 karbonite and 50 fuel and mines 2 karbonite or 10 fuel a turn while it stands on a depot; it must walk the load back to a castle or a church to make it spendable. A CHURCH costs 50 karbonite and 200 fuel, can only be built by a pilgrim, and is a second spawn point AND a second deposit point. Your doctrine: out-mine them, expand to the far depots, and win on castles at round 1000. Set opening \"pilgrim_eco\", pilgrim_curve 10-18, church_expansion \"early\", fuel_reserve 200-600, unit_mix high (60-90) because a PROPHET shoots from range-squared 16 to 64 and a lattice of them is very hard to walk into, preacher_share low (0-20), symmetry_wall \"screen\" or \"wall\", defend_radius 100-250, castle_talk_use \"census\" or \"full\". Set church_saber_round deliberately and say why: a pilgrim plus two escorts can build a CHURCH in THEIR half and spawn units inside their economy. Set trade_policy — a castle can barter karbonite for fuel with the enemy's castle, and one mining turn is worth 2 karbonite or 10 fuel, so five fuel to a karbonite is the fair rate; say which side of that trade you want. In notes, say which depot cluster you take first and what you do if their preachers arrive before round 200.",
+      "PLAYER_POLICY_LABEL": "saber"
+    }
+  },
+  {
+    "name": "battlecode-bc19-preachers",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_PROMPT": "You command a religious order in Battlecode 2019 'Crusade'. Everyone in 2019 built an economy. Two things nobody spent properly. First: the PREACHER. It costs 30 karbonite, has 60 health, and its attack puts 20 damage on EVERY OCCUPIED SQUARE within range-squared 3 of the square it targets — nine squares — WITH NO TEAM CHECK. A PILGRIM has 10 health and a PROPHET has 20, so one preacher shot deletes a mining line or a lattice. Its minimum range is 1, so if it fires at something adjacent it damages ITSELF and every friendly beside it — which means a dense wall of your own prophets is a liability against theirs. Second: the BARTER. A castle can propose a karbonite-for-fuel swap to the enemy's castle, and if the two standing offers match exactly the swap happens. Fuel trickles at 25 a round and karbonite does not trickle at all, so a fuel-rich order can buy an army from a karbonite-rich one. Your doctrine: set opening \"preacher_rush\" or \"pilgrim_eco\", preacher_share high (40-80), unit_mix low (0-30) because a CRUSADER moves range-squared 9 a turn — twice as far as anything else — and preachers need an escort that can keep up, symmetry_wall \"off\" or \"screen\" (never \"wall\": your own dense lattice is what their preachers are hoping for), pilgrim_curve 4-10, fuel_reserve low-to-middling (0-300) because a preacher move costs 3 fuel per range-squared and you would rather spend it than bank it, church_expansion \"never\" or \"mid\", defend_radius 1-100, castle_talk_use \"full\" so your castles know the moment one is under attack, and trade_policy \"offer_fuel\" or \"offer_karbonite\". In notes, say which of their castles your first preacher wave walks at and what you offer them in the barter and why.",
+      "PLAYER_POLICY_LABEL": "preachers"
+    },
+    "player": "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d"
+  },
+  {
+    "name": "battlecode-saber",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "saber",
+      "PLAYER_POLICY_LABEL": "saber"
+    }
+  },
+  {
+    "name": "battlecode-examplefuncsplayer19",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "examplefuncsplayer19",
+      "PLAYER_POLICY_LABEL": "examplefuncsplayer19"
+    }
   }
 ]

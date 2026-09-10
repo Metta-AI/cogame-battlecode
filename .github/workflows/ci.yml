@@ -20,12 +20,13 @@ name: CI
 
 on:
   push:
-    # `bc20-year-module` ... `bc25-year-module` and `bc16-year-module` are the
-    # branches the second through EIGHTH year modules land on. main's trigger
-    # semantics are untouched; this only adds branches.
-    branches: [ main, bc16-year-module, bc20-year-module, bc21-year-module,
-                bc22-year-module, bc23-year-module, bc24-year-module,
-                bc25-year-module ]
+    # `bc20-year-module` ... `bc25-year-module`, `bc16-year-module` and
+    # `bc19-year-module` are the branches the second through NINTH year
+    # modules land on. main's trigger semantics are untouched; this only
+    # adds branches.
+    branches: [ main, bc16-year-module, bc19-year-module, bc20-year-module,
+                bc21-year-module, bc22-year-module, bc23-year-module,
+                bc24-year-module, bc25-year-module ]
   pull_request:
   workflow_dispatch:
 
@@ -124,6 +125,33 @@ env:
   BC16_CLIENT_COMMIT: "317e1f3ff902ae568619c051813335ecdd72322c"
   BC16_JAR_URL: "https://s3.amazonaws.com/battlecode-releases-2016/releases/battlecode-2016.0.2.2.jar"
 
+  # --- bc19, the NINTH year module and THE FIRST WHOSE ENGINE IS JAVASCRIPT
+  # There is no jar and there is no JVM anywhere in this year: the 2019
+  # engine is `coldbrew/`, a handful of CommonJS files, and the parity
+  # oracle drives its `Game` and `ActionRecord` DIRECTLY under
+  # `actions/setup-node`. NO NODE, NO NPM, NO JS RUNTIME AND NO JDK EXISTS
+  # IN ANY IMAGE STAGE -- the year's JavaScript lives only in
+  # `parity-oracle-bc19` and in `tools/gen_maps_bc19.mjs`, which runs at
+  # build time.
+  #
+  # THE NODE VERSION IS A RULES PIN, NOT A PREFERENCE. `coldbrew/game.js:153`
+  # passes `regions.sort` a ONE-ARGUMENT, SIGN-CONSTANT COMPARATOR, so the
+  # map generator's output is V8-IMPLEMENTATION-DEFINED. The 22 committed
+  # boards were generated under exactly this version and
+  # `parity-oracle-bc19` byte-diffs them; if a future Node bump makes that
+  # diff fail, THE COMMITTED MAPS ARE THE RULES AND THE OLD NODE IS THE PIN
+  # (docs/PARITY.md section bc19).
+  #
+  # The oracle installs EXACTLY ONE npm package. The engine's own
+  # `package.json` pulls 404, including `vm2` (deprecated, known
+  # sandbox-escape CVEs) and `update-notifier` (a network call on every
+  # `cli/run.js` invocation); the trace driver needs `game.js`,
+  # `action_record.js`, `specs.json` and `mersenne-twister` and nothing else.
+  BC19_COMMIT: "80cf1cc535ec5a30559274aa1b49807ad4859925"
+  BC19_NODE_VERSION: "22.22.0"
+  BC19_MT_VERSION: "1.1.0"
+  BC19_MT_INTEGRITY: "sha1-+RZhjuQ9cXnvz2Qb7EUx65Zwl4o="
+
 jobs:
   # ---------------------------------------------------------------------
   # Native Nim tests. Same nimby recipe as the Dockerfile build stage, so a
@@ -143,7 +171,12 @@ jobs:
     # 2026-09-08), and the heaviest bc22 shards play whole 2000-round games
     # with every range check on -- its knob sweep plays seventy-two of them in
     # the debug pass alone.
-    timeout-minutes: 150
+    # 180, not 150: the NINTH year module adds twenty-seven shards, and every
+    # shard runs TWICE (debug and -d:release). bc19's shards are the
+    # LIGHTEST in the repo -- 1000 rounds against bc16's 3000 and a measured
+    # 0.03-0.10 s for a whole mirror game -- but there are a lot of them and
+    # its knob sweep plays seventy-eight games in the debug pass alone.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v5
 
@@ -498,6 +531,37 @@ jobs:
       # check_gameversion.sh has always been in the tree; until now nothing
       # ran it. Same number + same rule headline (the overwhelmingly common
       # case, every PR that does not touch the rules) is fine and exits 0.
+      # The bc19 year module is generated from a NINTH pinned checkout. Two
+      # of its four generated artefacts can be checked here -- the constants
+      # table and the sprite atlas -- and TWO CANNOT, because they need
+      # NODE: `data/maps/bc19/*.json` and `data/bc19/tables.json` are
+      # regenerated and byte-diffed in `parity-oracle-bc19` instead. Said
+      # explicitly so nobody looks in the wrong job.
+      - name: Fetch the pinned Battlecode 2019 sources
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/engine19
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode19/archive/${BC19_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/engine19
+          echo "BC19_DIR=/tmp/engine19/battlecode19-${BC19_COMMIT}" \
+            >> "$GITHUB_ENV"
+
+      - name: The bc19 generated files match the pinned 2019 sources
+        run: |
+          set -euo pipefail
+          # bc19's arm of the generator reads JSON (`coldbrew/specs.json`),
+          # not Java -- it is the simplest arm the tool has.
+          python3 tools/gen_year_constants.py --year bc19 \
+            --engine "$BC19_DIR" --check
+          # The six 40x40 client icons at the visualiser's own two team
+          # colours. THE LICENCE WAS VERIFIED BEFORE PINNING: the repository
+          # root LICENSE is GPL-3.0 and it is the ONLY licence file anywhere
+          # in the tree, so app/public/assets/img/** is covered by it and
+          # nothing else (NOTICE records the reasoning).
+          python3 tools/build_sprite_atlas_bc19.py \
+            --engine "$BC19_DIR" --out data --check
+
       - name: The GameVersion does not collide with main's
         if: github.ref != 'refs/heads/main'
         run: |
@@ -3869,6 +3933,158 @@ jobs:
             echo "::error::early."
             exit 1; }
 
+      # 600 ROUNDS, AND NOT 400, for a reason that is this year's. On the
+      # pinned map (`seed-0043`, 35x35, TWO castles a side, MINIMUM CASTLE
+      # SEPARATION 14, 89.4 % passable, 4 karbonite and 4 fuel depots a
+      # side) a 400-round window shows the opening economy but not the first
+      # military exchange, while 600 rounds guarantees a pilgrim on every
+      # near depot, at least one deposit at a castle, at least one military
+      # unit built on both sides, and FIRST CONTACT -- a crusader crosses 14
+      # squares in about five turns once built. 600 rounds also records
+      # ~15-20 s of playback, which comfortably outlasts the viewer smoke's
+      # 10 s soak (the ecos 2026-08-23 scar).
+      #
+      # THE SEED IS PINNED TO DRAW `seed-0043`, and
+      # `tests/test_bc19_maps.nim` asserts that exact draw from the other
+      # side, so the smoke's map cannot drift silently.
+      #
+      # SMOKE_REQUIRE_STATS is the episode SUBSTANCE assertion (the LEARNINGS
+      # 2026-09-03 pin), enforced FOR BOTH SEATS by the script. THE FLOORS
+      # ARE MEASURED, NOT GUESSED: this exact episode -- seed 13,
+      # `seed-0043`, 600 rounds, saber against examplefuncsplayer19 --
+      # produces
+      #
+      #   seat 0 (saber)                26 units built, 4622 moves, 160 damage
+      #   seat 1 (examplefuncsplayer19)  6 units built, 2003 moves,   0 damage
+      #
+      # and the committed floors are at or below HALF the weak seat's value.
+      # `damage_dealt` is floored at 0 PER SEAT deliberately: the weak floor
+      # never aims, so it may legitimately deal nothing. MINING, DEPOSITING,
+      # CHURCH EXPANSION, TRADING AND A PREACHER BLAST ARE NOT IN THIS SET,
+      # because they are not things BOTH seats do -- `examplefuncsplayer19`
+      # builds a crusader every tenth castle turn and moves it in a random
+      # direction, and does nothing else at all. They are asserted ACROSS
+      # the seats in the step below instead.
+      - name: Raw-Docker episode smoke (bc19, scripted vs scripted)
+        env:
+          SMOKE_SLUG: ${{ env.SLUG }}
+          SMOKE_EXPECT_YEAR: bc19
+          # The manifest declares exactly the two players the certification
+          # fixture seats, and `PLAYER_SCRIPTED` resolves per year: on bc19
+          # `awu` is saber and `scaffold` is examplefuncsplayer19
+          # (src/battlecode/baselines.nim).
+          SMOKE_PLAYER_IDS: awu,scaffold
+          SMOKE_CONFIG_OVERRIDE: >-
+            {"year":"bc19","pool":"small","seed":13,"gamesPerMatch":1,
+             "maxRounds":600,"perGameBudgetSeconds":60,
+             "matchBudgetSeconds":70,"connectTimeoutMs":15000}
+          SMOKE_REQUIRE_STATS: >-
+            {"units_built":3,"moves":40,"damage_dealt":0}
+          SMOKE_REPLAY_OUT: ${{ github.workspace }}/dist/smoke/replay-bc19.json
+          SMOKE_CONTRACT_PROBE: "0"
+        run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
+
+      # THE ACROSS-THE-PAIR HALF, and for this year it is the half that
+      # matters. The signatures of 2019 -- mining, walking the load home and
+      # DEPOSITING it, expanding to a church, bartering, landing a preacher
+      # blast -- are things only a seat playing WELL does, and
+      # `examplefuncsplayer19` does NONE of them, so asserting them per-seat
+      # would be asserting that the weak floor is not weak. Together they
+      # make an idle win machine-visible, which is exactly what the
+      # 2026-09-03 round-1 degenerate match lacked.
+      #
+      # IF `karbonite_deposited >= 30` OR `attacks >= 1` EVER STOPS HOLDING,
+      # THE FIX IS TO RAISE THE SMOKE'S `maxRounds` UNTIL IT DOES -- never
+      # to drop the assertion. An episode of this year in which nobody ever
+      # refined a load or fired a shot is not this game being played.
+      #
+      # Measured on this exact episode (the numbers the floors are at or
+      # below half of): units 32, karbonite mined 3382, fuel mined 15410,
+      # karbonite deposited 3322, pilgrims 10, attacks 16, damage 160, ids
+      # spent 36, queue length 32.
+      - name: The bc19 episode really played bc19
+        run: |
+          set -euo pipefail
+          # Read from the REPLAY, whose `result` block is the results
+          # document verbatim: `dist/smoke/results.json` is overwritten by
+          # every episode in turn and naming it here would make this
+          # assertion depend on which episode happened to run last (the bc24
+          # fix).
+          sum() { jq -r "[.result.games[0].$1[]] | add" \
+            dist/smoke/replay-bc19.json; }
+          scalar() { jq -r ".result.games[0].$1" \
+            dist/smoke/replay-bc19.json; }
+          built="$(sum units_built)"
+          kmined="$(sum karbonite_mined)"
+          fmined="$(sum fuel_mined)"
+          kdep="$(sum karbonite_deposited)"
+          pilgrims="$(sum pilgrims_built)"
+          attacks="$(sum attacks)"
+          damage="$(sum damage_dealt)"
+          ids="$(scalar ids_spent)"
+          queue="$(scalar queue_length_end)"
+          echo "across the two seats: units=${built} karbonite=${kmined}" \
+               "fuel=${fmined} deposited=${kdep} pilgrims=${pilgrims}" \
+               "attacks=${attacks} damage=${damage} ids=${ids}" \
+               "queue=${queue}"
+          test "${built}" -ge 8 || {
+            echo "::error::the bc19 smoke episode built ${built} robots"
+            echo "::error::between the two seats. A castle builds a 10/50"
+            echo "::error::PILGRIM on its first affordable turn and the weak"
+            echo "::error::floor builds a crusader every tenth turn."
+            exit 1; }
+          test "${kmined}" -ge 40 || {
+            echo "::error::only ${kmined} karbonite was mined. Karbonite has"
+            echo "::error::NO passive income in this year: an order that"
+            echo "::error::does not mine cannot build anything at all."
+            exit 1; }
+          test "${fmined}" -ge 100 || {
+            echo "::error::only ${fmined} fuel was mined. The only passive"
+            echo "::error::income is 25 a round and every move burns it."
+            exit 1; }
+          test "${kdep}" -ge 30 || {
+            echo "::error::only ${kdep} karbonite was ever DEPOSITED. Mined"
+            echo "::error::karbonite is UNREFINED and unspendable until a"
+            echo "::error::robot GIVEs it to an adjacent castle or church --"
+            echo "::error::an order that mines and never walks the load home"
+            echo "::error::has not played the game. RAISE maxRounds until it"
+            echo "::error::fires; do NOT drop this."
+            exit 1; }
+          test "${pilgrims}" -ge 2 || {
+            echo "::error::nobody built a PILGRIM. It is the only unit that"
+            echo "::error::can mine and the only one that can build a"
+            echo "::error::CHURCH."
+            exit 1; }
+          test "${attacks}" -ge 1 || {
+            echo "::error::not one shot was fired in the whole episode. On"
+            echo "::error::seed-0043 the two orders start 14 squares apart."
+            echo "::error::RAISE maxRounds until it fires; do NOT drop this."
+            exit 1; }
+          test "${damage}" -ge 10 || {
+            echo "::error::${damage} damage was dealt in the whole episode."
+            exit 1; }
+          test "${ids}" -ge 12 || {
+            echo "::error::only ${ids} ids were drawn. Every unit ever"
+            echo "::error::created draws one from the MT19937 stream and the"
+            echo "::error::pool is never refilled -- ${ids} means almost"
+            echo "::error::nothing was built."
+            exit 1; }
+          test "${queue}" -ge 6 || {
+            echo "::error::the turn queue ended with ${queue} robots."
+            exit 1; }
+
+      # THE PACING NUMBER phase 60 sizes its check-8 dispatch from, and the
+      # number that decided this year's `--timeout 90 --soak 10`
+      # (docs/RULES-BC19.md, "Playback pacing, measured"). If the measured
+      # value exceeds 3 ms/round, bc19 moves to the heavy set.
+      - name: Print the bc19 episode's simulated seconds per round
+        run: |
+          set -euo pipefail
+          jq -r '"bc19 smoke: sim_seconds=\(.result.sim_seconds) " +
+                 "rounds=\(.result.games[0].rounds_played) " +
+                 "wall=\(.result.wall_clock_seconds)s"' \
+            dist/smoke/replay-bc19.json
+
       # THE PACING NUMBER the next year module sizes its own probe from, and
       # the number that decided this year's own `--timeout 120 --soak 15`
       # (docs/RULES-BC16.md, "Playback pacing, measured").
@@ -3891,13 +4107,14 @@ jobs:
                  "wall=\(.result.wall_clock_seconds)s"' \
             dist/smoke/replay-bc22.json
 
-      - name: All EIGHT smoke replays are present and are different years
+      - name: All NINE smoke replays are present and are different years
         run: |
           set -euo pipefail
           for f in dist/smoke/replay.json dist/smoke/replay-bc20.json \
                    dist/smoke/replay-bc21.json dist/smoke/replay-bc24.json \
                    dist/smoke/replay-bc25.json dist/smoke/replay-bc23.json \
-                   dist/smoke/replay-bc22.json dist/smoke/replay-bc16.json; do
+                   dist/smoke/replay-bc22.json dist/smoke/replay-bc16.json \
+                   dist/smoke/replay-bc19.json; do
             test -s "$f" || { echo "::error::$f is missing"; exit 1; }
           done
           y26="$(jq -r .year dist/smoke/replay.json)"
@@ -3908,8 +4125,9 @@ jobs:
           y23="$(jq -r .year dist/smoke/replay-bc23.json)"
           y22="$(jq -r .year dist/smoke/replay-bc22.json)"
           y16="$(jq -r .year dist/smoke/replay-bc16.json)"
+          y19="$(jq -r .year dist/smoke/replay-bc19.json)"
           echo "replay.json year=$y26  bc20=$y20  bc21=$y21  bc24=$y24" \
-               "bc25=$y25  bc23=$y23  bc22=$y22  bc16=$y16"
+               "bc25=$y25  bc23=$y23  bc22=$y22  bc16=$y16  bc19=$y19"
           test "$y26" = "bc26" || { echo "::error::replay.json is not bc26"; exit 1; }
           test "$y20" = "bc20" || { echo "::error::replay-bc20.json is not bc20"; exit 1; }
           test "$y21" = "bc21" || { echo "::error::replay-bc21.json is not bc21"; exit 1; }
@@ -3918,9 +4136,10 @@ jobs:
           test "$y23" = "bc23" || { echo "::error::replay-bc23.json is not bc23"; exit 1; }
           test "$y22" = "bc22" || { echo "::error::replay-bc22.json is not bc22"; exit 1; }
           test "$y16" = "bc16" || { echo "::error::replay-bc16.json is not bc16"; exit 1; }
+          test "$y19" = "bc19" || { echo "::error::replay-bc19.json is not bc19"; exit 1; }
           if [ "$(printf '%s\n' "$y26" "$y20" "$y21" "$y24" "$y25" "$y23" \
-                  "$y22" "$y16" | sort -u | wc -l)" -ne 8 ]; then
-            echo "::error::the eight smoke replays are not eight different years"
+                  "$y22" "$y16" "$y19" | sort -u | wc -l)" -ne 9 ]; then
+            echo "::error::the nine smoke replays are not nine different years"
             exit 1
           fi
 
@@ -4030,7 +4249,7 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx --yes playwright@1.55.0 install --with-deps chromium
 
-      - name: Load the bundle in a real browser (ALL EIGHT years' replays)
+      - name: Load the bundle in a real browser (ALL NINE years' replays)
         run: |
           set -euo pipefail
           # A for-loop, not `ls … | head -1`: under `set -o pipefail` an unmatched
@@ -4043,7 +4262,8 @@ jobs:
                            dist/smoke/replay-bc25.json \
                            dist/smoke/replay-bc23.json \
                            dist/smoke/replay-bc22.json \
-                           dist/smoke/replay-bc16.json; do
+                           dist/smoke/replay-bc16.json \
+                           dist/smoke/replay-bc19.json; do
             if [ -f "${candidate}" ]; then replays="${replays} ${candidate}"; fi
           done
           test -n "${replays}" || {
