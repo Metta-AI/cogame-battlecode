@@ -133,6 +133,10 @@ type
     catState*: CatState
     catWaypoints*: seq[Loc]
     catTargetLoc*: Loc
+    catTargetSnapLoc*: Loc ## `RobotInfo.getLocation()` of `catTarget`: the
+                           ## target's tile when it was FIRST sighted. Survives
+                           ## an EXPLORE phase (which overwrites `catTargetLoc`
+                           ## with the waypoint) and is restored on re-find.
     hasCatTarget*: bool
     catTurns*: int
     catTargetId*: int

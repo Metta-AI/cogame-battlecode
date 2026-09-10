@@ -78,25 +78,54 @@ job so five maps of Java engine time fit the runner comfortably.
 
 ## The Tier C baseline
 
-Measured by the job at `GameVersion` GV01 against `engine.1.2.5`:
+Measured by the job at `GameVersion` GV14 against `engine.1.2.5`:
 
 | map | first divergent round (2000-round game) |
 | --- | --- |
 | `DefaultSmall` | none — identical for all 2000 rounds |
+| `arrows` | none — identical |
 | `closeup` | none — identical |
 | `toomuchcheese` | none — identical |
 | `cheesefarm` | none — identical |
-| `arrows` | 915 |
 
-and, measured locally on the sixth small-pool map, `dirtfulcat` diverges at
-round 453.
+and, measured locally on the sixth small-pool map, `dirtfulcat` is identical
+too.
 
-Four of the five gated maps re-derive an ENTIRE 2000-round game bit for bit —
-every robot, every field, every round, including ids. The ones that drift do
-so inside the cat state machine, hundreds of rounds in, and the divergence is
-a single cat choosing a different facing on one round. That is what Tier C
-exists to trend: a number that moves DOWN is visible in the job summary even
-though it does not fail the build.
+All six maps re-derive an ENTIRE 2000-round game bit for bit — every robot,
+every field, every round, including ids. Tier C exists to trend exactly this:
+a number that appears in the table is visible in the job summary even though
+it does not fail the build.
+
+### The divergence GV14 closed, root-caused: round + map + cause
+
+Through GV13 the table read `arrows` 915 and `dirtfulcat` 453. Both were one
+mechanism, found by taking the first divergent row of each Tier C diff and
+instrumenting the port's cat branch at that round:
+
+| map | round | what the engine did | what the port did |
+| --- | --- | --- | --- |
+| `arrows` | 915 | cat 4 scratched king 2 at (23,12) | cat 4 moved SOUTHEAST to (23,8) |
+| `dirtfulcat` | 453 | cat 4 moved SOUTH to (15,19) | cat 4 moved EAST to (16,20) |
+
+On the round before each, the cat had reached a patrol waypoint in EXPLORE
+and flipped to ATTACK (`InternalRobot.java:1228`), which is invisible in the
+trace. EXPLORE had already overwritten `catTargetLoc` with that waypoint
+(`InternalRobot.java:1232`) — but the engine keeps `catTarget`, the
+`RobotInfo` snapshot of a rat it had chased rounds earlier, across the whole
+EXPLORE phase. On the divergent round the cat re-sensed that rat and the
+engine's re-find branch restored `catTargetLoc` from the snapshot
+(`InternalRobot.java:1327`), so it attacked the rat's old tile (still under
+a corner of the 3x3 king on `arrows`) or BFS-pathed toward it. The port's
+re-find branch only `break`-ed: its target stayed the waypoint it was standing
+on, `getBfsDir` returned CENTER, `directionTo` returned CENTER, and the cat
+drew `rand.nextInt(8)` — a draw the engine never made, which is why the two
+random streams never re-converged afterwards.
+
+The fix is `catTargetSnapLoc` on the robot record, written when a new target
+is taken and copied back into `catTargetLoc` on re-find
+(`src/battlecode/years/bc26/cats.nim`). `tests/test_rules_combat.nim` pins
+it: a cat that re-finds its target after its target location was overwritten
+chases the snapshot tile, not the waypoint and not the rat's live tile.
 
 Every accepted divergence is listed in `docs/RULES.md` §Divergences with its
 reason.

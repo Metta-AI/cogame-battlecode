@@ -13,12 +13,28 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV13"
+  GameVersion* = "GV14"
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV14 — bc26 cats restore the target SNAPSHOT tile on re-find. The
+    ##        engine keeps `catTarget` (a `RobotInfo`) across an EXPLORE
+    ##        phase and only overwrites `catTargetLoc` with the waypoint, so a
+    ##        cat that reaches a waypoint, flips to ATTACK and re-sees a rat
+    ##        it targeted earlier attacks or paths toward that rat's OLD tile
+    ##        (`InternalRobot.java:1327`). The port kept the waypoint it was
+    ##        standing on instead, took `getBfsDir == CENTER`, and drew a
+    ##        random direction the engine never drew — the Tier C parity
+    ##        divergence on `arrows` (round 915) and `dirtfulcat` (round 453).
+    ##        With the snapshot restored all six `small`-pool maps re-derive
+    ##        the whole 2000-round game bit for bit. A cat's path after any
+    ##        such re-find changes, so a bc26 recording from GV04..GV13 is
+    ##        not re-derivable here and `parseReplay` refuses it through
+    ##        `Bc26ReplayCompatibleGameVersions`; the other years are
+    ##        untouched and keep `ReplayCompatibleGameVersions`.
     ##
     ## GV13 — the `bc17` year module: Battlecode 2017 "Robotic Wildlife
     ##        Fund" ported from battlecode-server-2017 at commit 165d8a8e
@@ -285,11 +301,19 @@ const
     ##        formation, squeaks, cats, backstab, float32-narrowed scoring.
 
   ReplayCompatibleGameVersions* = ["GV04", "GV05", "GV06", "GV07", "GV08",
-                                   "GV09", "GV10", "GV11", "GV12",
+                                   "GV09", "GV10", "GV11", "GV12", "GV13",
                                    GameVersion]
-    ## Versions whose recordings this build can still re-derive. A replay
-    ## carrying anything else is refused with a readable message rather than
-    ## silently re-simulated under different rules.
+    ## Versions whose recordings this build can still re-derive, for every
+    ## year EXCEPT bc26 (see below). A replay carrying anything else is
+    ## refused with a readable message rather than silently re-simulated
+    ## under different rules.
+
+  Bc26ReplayCompatibleGameVersions* = [GameVersion]
+    ## The bc26 list is SHORTER: GV14 changed how a cat resolves a re-found
+    ## target, so a bc26 game recorded at GV04..GV13 re-simulates
+    ## differently from the round of the first such re-find. Those recordings
+    ## are refused, not replayed wrong — the same call GV04 made for GV03.
+    ## The other years did not change and keep the longer list.
 
   ReplayFormat* = "cogame-battlecode-replay"
   ReplayFormatVersion* = 1

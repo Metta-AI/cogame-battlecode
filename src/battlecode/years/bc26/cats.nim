@@ -7,7 +7,15 @@
 ## * A cat that RE-FINDS its existing target chases the location stored in the
 ##   `RobotInfo` **snapshot** it took when it first saw the rat, not the rat's
 ##   live tile (`InternalRobot.java:1326`). It only refreshes when it picks a
-##   new target.
+##   new target. The snapshot (`catTarget`) is NOT cleared by an EXPLORE
+##   phase — only `catTargetLoc` is, overwritten with the waypoint
+##   (`InternalRobot.java:1232`) — so a cat that reaches a waypoint, flips to
+##   ATTACK and re-sees a rat it targeted many rounds ago restores
+##   `catTargetLoc` to that rat's OLD tile (`InternalRobot.java:1327`) and
+##   attacks or paths toward it. Not restoring it was the Tier C divergence
+##   on `arrows` (round 915) and `dirtfulcat` (round 453): the port kept the
+##   waypoint the cat was standing on, the BFS returned CENTER, and the cat
+##   drew a random direction the engine never drew.
 ## * The "look for a new target" loop has **no `break`**, so the LAST rat in
 ##   sense order wins — which is why `allLocationsInCone`'s chirality-reversed
 ##   sweep has to be exact.
@@ -168,6 +176,8 @@ proc runCatTurn*(w: World, r: Robot) =
         if other.id == r.catTargetId:
           sensedRat = true
           ## The SNAPSHOT location, deliberately: see the module doc comment.
+          r.catTargetLoc = r.catTargetSnapLoc
+          r.catTargetLocValid = true
           break
     if not sensedRat:
       r.catTargetId = -1
@@ -178,6 +188,7 @@ proc runCatTurn*(w: World, r: Robot) =
           sensedRat = true
           r.catTargetId = other.id
           r.catTargetLoc = other.loc
+          r.catTargetSnapLoc = other.loc
           r.catTargetLocValid = true
 
     if r.catTargetLocValid:
