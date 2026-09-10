@@ -3458,9 +3458,17 @@ jobs:
             --out data/maps/bc19 --check
           # AND THE THIRTEEN DEGENERATE SEEDS ARE REFUSED BY NAME, which
           # proves V3's curation rather than trusting it.
+          #
+          # THE `::error::` PREFIX IS STRIPPED HERE ON PURPOSE. This run is a
+          # DELIBERATE NEGATIVE TEST: the generator is supposed to refuse
+          # every one of these seeds and to say so on stderr, and its
+          # `::error::` lines would otherwise land in the run summary as
+          # ANNOTATIONS on a green job -- a reviewer reading a passing run
+          # as failing. The refusals are still asserted, by name, below.
           node tools/gen_maps_bc19.mjs --engine "$BC19_ENGINE" \
             --out /tmp/bc19curate --seeds 7 --assert-degenerate \
-            2>&1 | tee /tmp/bc19curate.txt || true
+            2>&1 | sed 's/^::error:://' \
+            | tee /tmp/bc19curate.txt || true
           for seed in 7 20 24 83 108 127 175 211 232 267 283 348 365; do
             grep -q "^refused ${seed}: " /tmp/bc19curate.txt || {
               echo "::error::seed ${seed} was expected to be REFUSED as an"
