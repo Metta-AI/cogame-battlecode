@@ -46,6 +46,10 @@ from years/bc19/rules as r19 import nil
 from years/bc19/constants as c19 import nil
 from years/bc19/units as u19 import nil
 from years/bc19/maps as m19 import nil
+from years/bc17/world as w17 import nil
+from years/bc17/rules as r17 import nil
+from years/bc17/constants as c17 import nil
+from years/bc17/units as u17 import nil
 from years/bc22/anomaly as a22 import nil
 from years/bc22/economy as e22 import nil
 from years/bc22/constants as c22 import nil
@@ -148,6 +152,14 @@ proc econFor(w: World, sideAslot: int): JsonNode =
       "dirt": w.teamInfo.dirtPlaced[t]
     })
 
+proc fmtTenths(value: int): string =
+  ## bc16 and bc17 record every float quantity in TENTHS as an integer, so
+  ## every spectator-facing number goes through one formatter and a raw
+  ## float32 can never reach a label. `234` renders as `23.4`.
+  let sign = (if value < 0: "-" else: "")
+  let v = abs(value)
+  sign & $(v div 10) & "." & $(v mod 10)
+
 proc permille(value: int): string =
   ## bc16's outbreak multiplier travels as an integer per-mille (1000, 1100,
   ## … 3000) so the replay stays float-free. Rendered as `1.1`, `3.0`.
@@ -166,6 +178,7 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
   let isBc22 = doc.year == "bc22"
   let isBc16 = doc.year == "bc16"
   let isBc19 = doc.year == "bc19"
+  let isBc17 = doc.year == "bc17"
   ## The bc23-only kinds below (`anchor_built`, `island_captured`,
   ## `island_lost`, `conquest_progress`, `well_transformed`, `well_upgraded`,
   ## `first_elixir_unit`, `boost_field`, `destabilize_hit`) need no
@@ -195,7 +208,8 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       of "drone_water_drop": "drop"
       of "hq_buried": "bury"
       of "hq_drowned": "drown"
-      of "first_action": (if isBc25 or isBc23 or isBc22 or isBc16 or isBc19:
+      of "first_action": (if isBc25 or isBc23 or isBc22 or isBc16 or
+                             isBc19 or isBc17:
                             "build"
                           else: "")
       of "tower_built": "tower"
@@ -204,7 +218,8 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       of "srp_completed", "srp_active", "srp_broken": "srp"
       of "coverage": "coverage"
       of "starved": "starve"
-      of "rout": (if isBc25 or isBc23 or isBc22 or isBc16 or isBc19: "rout"
+      of "rout": (if isBc25 or isBc23 or isBc22 or isBc16 or isBc19 or
+                     isBc17: "rout"
                   else: "")
       of "anchor_built": "anchor"
       of "island_captured", "island_lost": "island"
@@ -221,6 +236,18 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       of "anomaly_struck": "anomaly"
       of "anomaly_dodged": "dodge"
       of "archon_lost", "archon_relocated": "archon"
+      # The bc17-only kinds need no discriminator -- no other year emits
+      # those event names -- even though two of their beat kinds (`build`,
+      # `end`) are spelled the same as another year's, which is exactly why
+      # the CSS is scoped per year. `archon_lost` DOES need one: bc16 and
+      # bc22 both emit it with different fields, so bc17's LABEL tests the
+      # year below.
+      of "gardener_lost": "archon"
+      of "tree_planted", "tree_lost", "farm_online": "tree"
+      of "donation": "donate"
+      of "shake", "chop_reveal": "shake"
+      of "strike": "strike"
+      of "volley": "volley"
       of "unit_milestone": "build"
       # The bc19-only kinds need no discriminator: no other year emits those
       # event names. Two of their beat kinds (`build`, `end`) are spelled the
@@ -522,7 +549,9 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
     of "famine":
       label = e.fields{"alias"}.getStr().toUpperAscii() & " IS OUT OF " &
         e.fields{"resource"}.getStr().toUpperAscii() &
-        (if e.fields{"resource"}.getStr() == "fuel": " — nothing can move"
+        (case e.fields{"resource"}.getStr()
+         of "fuel": " — nothing can move"
+         of "bullets": " — nothing can be bought"
          else: " — nothing can be built") &
         ", game " & $(e.game + 1) & ", round " & $e.round
     of "trade":
@@ -567,6 +596,49 @@ proc beatsFor*(doc: ReplayDoc, frameOfGameRound: proc (g, r: int): int): JsonNod
       label = "ROUT — " & e.fields{"alias"}.getStr() & " loses " &
         $e.fields{"lost"}.getInt() & " robots, game " &
         $(e.game + 1) & ", round " & $e.round
+    of "tree_planted":
+      label = e.fields{"alias"}.getStr() & " plants a bullet tree (" &
+        $e.fields{"trees"}.getInt() & " standing) — game " & $(e.game + 1) &
+        ", round " & $e.round
+    of "tree_lost":
+      label = e.fields{"alias"}.getStr() & " loses a tree to a " &
+        e.fields{"cause"}.getStr().replace("_", " ") & " (" &
+        $e.fields{"trees"}.getInt() & " left) — game " & $(e.game + 1) &
+        ", round " & $e.round
+    of "farm_online":
+      label = e.fields{"alias"}.getStr() & "'s farm is online — " &
+        $e.fields{"mature_trees"}.getInt() & " mature trees paying " &
+        fmtTenths(e.fields{"income_tenths"}.getInt()) &
+        " bullets a round, game " & $(e.game + 1) & ", round " & $e.round
+    of "gardener_lost":
+      label = "GARDENER DOWN — " & e.fields{"alias"}.getStr() & " has " &
+        $e.fields{"gardeners_left"}.getInt() & " left, game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "donation":
+      label = e.fields{"alias"}.getStr() & " donates " &
+        fmtTenths(e.fields{"bullets_tenths"}.getInt()) & " bullets for " &
+        $e.fields{"vp_gained"}.getInt() & " points — " &
+        $max(0, 1000 - e.fields{"vp_total"}.getInt()) & " to go, game " &
+        $(e.game + 1) & ", round " & $e.round
+    of "shake":
+      label = e.fields{"alias"}.getStr() & " shakes " &
+        fmtTenths(e.fields{"bullets_tenths"}.getInt()) &
+        " bullets out of a neutral tree — game " & $(e.game + 1) &
+        ", round " & $e.round
+    of "chop_reveal":
+      label = e.fields{"alias"}.getStr() & " chops a tree open and a " &
+        e.fields{"unit"}.getStr() & " joins it — game " & $(e.game + 1) &
+        ", round " & $e.round
+    of "strike":
+      label = "Lumberjack strike — " & $e.fields{"enemy_hit"}.getInt() &
+        " of their units and " & $e.fields{"trees_hit"}.getInt() &
+        " trees, and " & $e.fields{"own_trees_hit"}.getInt() &
+        " of its own, game " & $(e.game + 1) & ", round " & $e.round
+    of "volley":
+      label = e.fields{"alias"}.getStr() & " fires " &
+        $e.fields{"bullets_fired"}.getInt() & " bullets in one round (" &
+        e.fields{"shape"}.getStr() & ") — game " & $(e.game + 1) &
+        ", round " & $e.round
     of "doctrine_received":
       label = "Doctrine read for " & aliasFor(e.fields{"slot"}.getInt()) &
         " (" & $e.fields{"latency_ms"}.getInt() & " ms)"
@@ -2224,6 +2296,247 @@ proc bc19ChromeJson*(
   }
   $node
 
+
+# ---------------------------------------------------------------------------
+#  bc17 -- Battlecode 2017 "Robotic Wildlife Fund"
+# ---------------------------------------------------------------------------
+
+proc bc17Vp(w: w17.World, sideAslot: int): JsonNode =
+  ## `#bc17-vp`: **THE HEADLINE READOUT AND THE YEAR'S WHOLE STORY** -- the
+  ## race to 1 000 victory points, the CURRENT PRICE of a point, and how many
+  ## bullets each side would still need at that price. It flashes on a
+  ## donation and goes solid gold the instant a side crosses 1 000, and it
+  ## keeps both bars, both numbers and the price AT EVERY WIDTH, because it
+  ## is the readout that makes the year make sense.
+  var orders = newJArray()
+  let price = w17.victoryPointCost(w)
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: w17.tA else: w17.tB)
+    let t = ord(team)
+    let need = max(0, c17.victoryPointsToWin - w.victoryPoints[t])
+    orders.add(%*{
+      "alias": aliasFor(slot),
+      "vp": w.victoryPoints[t],
+      "to_win": c17.victoryPointsToWin,
+      "bullets_needed_tenths": int(float32(need) * price * 10'f32),
+      "donated_tenths": int(w.stats.bulletsDonated[t] * 10'f32),
+      "donations": w.stats.donations[t]
+    })
+  %*{
+    "orders": orders,
+    "price_tenths": int(price * 10'f32),
+    "price_per_round_tenths": int(c17.vpIncreasePerRound * 10000'f32),
+    "round": w.currentRound,
+    "rounds": w.maxRounds - 1,
+    "note": "a victory point costs 7.5 bullets on round one and 19.996 on " &
+      "round 2999, and one thousand of them ends the game the instant the " &
+      "donation lands"
+  }
+
+proc bc17Bullets(w: w17.World, sideAslot: int): JsonNode =
+  ## `#bc17-bullets`: the year's SECOND signature readout -- bullets banked,
+  ## tree income this round, and **THE TRICKLE SHOWN SEPARATELY AND GREYED
+  ## OUT WHEN IT IS ZERO, WITH THE REASON IN PLAIN WORDS**. The trickle is
+  ## `max(0, 2 - 0.01 x bullets)`, which is exactly zero at 200 bullets or
+  ## more, and both sides start at 300 -- so for most of most games this
+  ## number is 0 and a spectator deserves to know why.
+  var orders = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: w17.tA else: w17.tB)
+    let t = ord(team)
+    let stock = w.bulletSupply[t]
+    let trickle = max(0'f32, c17.archonBulletIncome -
+      c17.bulletIncomeUnitPenalty * stock)
+    var income = 0'f32
+    for id, tree in w.trees:
+      if tree.team == team and tree.roundsAlive > c17.TreeGrowthRounds:
+        income = income + tree.health * c17.bulletTreeBulletProductionRate
+    orders.add(%*{
+      "alias": aliasFor(slot),
+      "bullets_tenths": int(stock * 10'f32),
+      "mature_trees": w17.matureTrees(w, team),
+      "trees": w17.treesAlive(w, team),
+      "tree_income_tenths": int(income * 10'f32),
+      "trickle_tenths": int(trickle * 10'f32),
+      "trickle_note": (if trickle <= 0'f32:
+                         "trickle 0 — you hold more than 200"
+                       else: "trickle pays while you hold under 200"),
+      "spent_units_tenths": int(w.stats.bulletsSpentOnUnits[t] * 10'f32),
+      "spent_trees_tenths": int(w.stats.bulletsSpentOnTrees[t] * 10'f32),
+      "spent_shots_tenths": int(w.stats.bulletsSpentOnShots[t] * 10'f32),
+      "spent_donations_tenths": int(w.stats.bulletsDonated[t] * 10'f32)
+    })
+  %*{"orders": orders, "round": w.currentRound, "rounds": w.maxRounds - 1}
+
+proc bc17Econ(w: w17.World, sideAslot: int): JsonNode =
+  ## `#bc17-econ`: per faction, trees planted / standing / mature / lost with
+  ## the CAUSE of each loss; bullets earned from trees, shaken and trickled,
+  ## each broken out; bullets spent on units, trees, shots and donations;
+  ## water, shake and chop actions; neutral trees felled and ROBOTS RELEASED
+  ## FROM THEM.
+  var orders = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: w17.tA else: w17.tB)
+    let t = ord(team)
+    orders.add(%*{
+      "alias": aliasFor(slot),
+      "trees_planted": w.stats.treesPlanted[t],
+      "trees_standing": w17.treesAlive(w, team),
+      "trees_mature": w17.matureTrees(w, team),
+      "trees_lost": w.stats.treesLost[t],
+      "trees_lost_to_strike": w.stats.treesLostToStrike[t],
+      "from_trees_tenths": int(w.stats.bulletsFromTrees[t] * 10'f32),
+      "shaken_tenths": int(w.stats.bulletsShaken[t] * 10'f32),
+      "trickled_tenths": int(w.stats.bulletsTrickled[t] * 10'f32),
+      "spent_units_tenths": int(w.stats.bulletsSpentOnUnits[t] * 10'f32),
+      "spent_trees_tenths": int(w.stats.bulletsSpentOnTrees[t] * 10'f32),
+      "spent_shots_tenths": int(w.stats.bulletsSpentOnShots[t] * 10'f32),
+      "donated_tenths": int(w.stats.bulletsDonated[t] * 10'f32),
+      "water_actions": w.stats.waterActions[t],
+      "shake_actions": w.stats.shakeActions[t],
+      "chop_actions": w.stats.chopActions[t],
+      "neutral_trees_felled": w.stats.neutralTreesFelled[t],
+      "robots_released": w.stats.robotsReleasedFromTrees[t],
+      "bullet_worth_tenths": int(w17.bulletWorth(w, team) * 10'f32)
+    })
+  %*{"orders": orders,
+     "neutral_trees_start": w.map.neutralTrees,
+     "neutral_trees_left": w.treeCount[ord(w17.tNeutral)]}
+
+proc bc17Units(w: w17.World, sideAslot: int): JsonNode =
+  ## `#bc17-units`: per faction, the six-type census with archons
+  ## emphasised, **UNITS STILL DORMANT SHOWN SEPARATELY** (a 20-turn dormant
+  ## fighter is not an army), units built and lost, BULLETS IN FLIGHT, and
+  ## **friendly-fire and own-tree damage as their own number** -- with
+  ## `lumberjack_share` high that is where the losses come from.
+  var orders = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: w17.tA else: w17.tB)
+    let t = ord(team)
+    var dormant = 0
+    var inFlight = 0
+    for id, robot in w.robots:
+      if robot.team == team and c17.isBuildable(robot.kind) and
+          robot.roundsAlive < c17.DormancyRounds:
+        inc dormant
+    for id, bullet in w.bullets:
+      if bullet.team == team: inc inFlight
+    orders.add(%*{
+      "alias": aliasFor(slot),
+      "archon": w17.unitCount(w, team, c17.rtArchon),
+      "gardener": w17.unitCount(w, team, c17.rtGardener),
+      "lumberjack": w17.unitCount(w, team, c17.rtLumberjack),
+      "soldier": w17.unitCount(w, team, c17.rtSoldier),
+      "tank": w17.unitCount(w, team, c17.rtTank),
+      "scout": w17.unitCount(w, team, c17.rtScout),
+      "dormant": dormant,
+      "bullets_in_flight": inFlight,
+      "built": w.stats.unitsBuilt[t],
+      "lost": w.stats.unitsLost[t],
+      "kills": w.stats.kills[t],
+      "damage_dealt_tenths": int(w.stats.damageDealt[t] * 10'f32),
+      "damage_taken_tenths": int(w.stats.damageTaken[t] * 10'f32),
+      "friendly_fire_tenths": int(w.stats.friendlyFireDamage[t] * 10'f32),
+      "own_trees_damaged_tenths": int(w.stats.ownTreesDamaged[t] * 10'f32),
+      "strikes": w.stats.strikeActions[t],
+      "body_attacks": w.stats.bodyAttacks[t],
+      "shots_fired": w.stats.bulletsFired[t],
+      "single_shots": w.stats.singleShots[t],
+      "triad_shots": w.stats.triadShots[t],
+      "pentad_shots": w.stats.pentadShots[t]
+    })
+  %*{"orders": orders}
+
+proc bc17Fund(w: w17.World, sideAslot: int): JsonNode =
+  ## `#bc17-fund`: the endcard panel. Per faction, the points bought AND WHAT
+  ## THEY COST (bullets donated over points gained, so a spectator sees who
+  ## bought cheap), the farm ledger, the war ledger, and **the tiebreak
+  ## ledger -- all four rungs with both sides' numbers and which one decided
+  ## it**. None of it is stored in the replay: the wasm sim re-derives every
+  ## round.
+  var orders = newJArray()
+  for slot in 0 .. 1:
+    let team = (if slot == sideAslot: w17.tA else: w17.tB)
+    let t = ord(team)
+    let vp = w.victoryPoints[t]
+    orders.add(%*{
+      "alias": aliasFor(slot),
+      "vp": vp,
+      "donated_tenths": int(w.stats.bulletsDonated[t] * 10'f32),
+      "price_paid_tenths": (if vp <= 0: 0
+                            else: int(w.stats.bulletsDonated[t] * 10'f32 /
+                                      float32(vp))),
+      "trees_planted": w.stats.treesPlanted[t],
+      "trees_mature": w17.matureTrees(w, team),
+      "trees_lost": w.stats.treesLost[t],
+      "units_built": w.stats.unitsBuilt[t],
+      "units_lost": w.stats.unitsLost[t],
+      "kills": w.stats.kills[t],
+      "damage_dealt_tenths": int(w.stats.damageDealt[t] * 10'f32),
+      "friendly_fire_tenths": int(w.stats.friendlyFireDamage[t] * 10'f32),
+      "own_trees_damaged_tenths": int(w.stats.ownTreesDamaged[t] * 10'f32),
+      "neutral_trees_felled": w.stats.neutralTreesFelled[t],
+      "robots_released": w.stats.robotsReleasedFromTrees[t],
+      "bullets_end_tenths": int(w.bulletSupply[t] * 10'f32),
+      "bullet_worth_tenths": int(w17.bulletWorth(w, team) * 10'f32)
+    })
+  %*{
+    "orders": orders,
+    "rung": w17.Bc17RungNames[w.domination],
+    "domination_factor": r17.DominationNames[w.domination],
+    "tiebreak_round": w.tiebreakRound
+  }
+
+proc bc17ChromeJson*(
+  doc: ReplayDoc, w: w17.World, view: ViewerState,
+  frame, totalFrames, gameIndex, sideAslot: int,
+  beats: JsonNode, gameChips: JsonNode, ended: bool
+): string =
+  ## One frame of bc17 chrome. `t` / `st` / `mx` / `mt` are the GENERIC
+  ## timeline keys `chrome_common.js` reads, unchanged, so the clock, the
+  ## transport and the scrubber are driven by the starter's own code; the
+  ## `bc17_*` keys are what the APPENDED bc17 game block draws.
+  let phase = if ended: "gameover" else: "playing"
+  let points = r17.gamePoints(w)
+  let node = %*{
+    "t": frame,
+    "st": 0,
+    "mx": max(1, totalFrames - 1),
+    "mt": 0,
+    "sp": view.speed,
+    "pl": view.playing,
+    "lp": view.loop,
+    "sk": view.skipLulls,
+    "ff": false,
+    "en": true,
+    "ph": phase,
+    "lob": 0,
+    "pov": -1,
+    "nim": GameVersion,
+    "year": "bc17",
+    "beats": beats,
+    "game": gameIndex + 1,
+    "games": doc.games.len,
+    "map": doc.plan.maps[min(gameIndex, doc.plan.maps.high)],
+    "round": w.currentRound,
+    "rounds": doc.plan.maxRounds - 1,
+    "aliases": [AliasA, AliasB],
+    "names": [doc.names[0], doc.names[1]],
+    "sides": [(if sideAslot == 0: "A" else: "B"),
+              (if sideAslot == 0: "B" else: "A")],
+    "points": [points[(if sideAslot == 0: 0 else: 1)],
+               points[(if sideAslot == 0: 1 else: 0)]],
+    "bc17_vp": bc17Vp(w, sideAslot),
+    "bc17_bullets": bc17Bullets(w, sideAslot),
+    "bc17_econ": bc17Econ(w, sideAslot),
+    "bc17_units": bc17Units(w, sideAslot),
+    "bc17_fund": bc17Fund(w, sideAslot),
+    "gamechips": gameChips,
+    "doctrines": doctrineWords(doc),
+    "result": doc.result
+  }
+  $node
+
 proc sessionChromeJson*(
   doc: ReplayDoc, s: Session, view: ViewerState,
   frame, totalFrames, gameIndex, sideAslot: int,
@@ -2256,4 +2569,7 @@ proc sessionChromeJson*(
       beats, gameChips, ended)
   of yBc19:
     bc19ChromeJson(doc, s.w19, view, frame, totalFrames, gameIndex, sideAslot,
+      beats, gameChips, ended)
+  of yBc17:
+    bc17ChromeJson(doc, s.w17, view, frame, totalFrames, gameIndex, sideAslot,
       beats, gameChips, ended)

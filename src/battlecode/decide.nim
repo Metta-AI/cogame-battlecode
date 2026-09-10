@@ -60,7 +60,7 @@ proc chassisForSeat*(year: string, seat: SeatPolicy): ScriptedChassis =
 
 proc chassisNameFor*(year: string, seat: SeatPolicy, sheet: Sheet): string =
   case yearIdOf(year)
-  of yBc20, yBc21, yBc22, yBc24, yBc25, yBc23, yBc16, yBc19:
+  of yBc20, yBc21, yBc22, yBc24, yBc25, yBc23, yBc16, yBc19, yBc17:
     (if seat.isLlm: $strongChassisFor(year)
      else: baselineName(baselineForSeat(year, seat)))
   of yBc26: $sheet.doctrine.chassis
@@ -760,6 +760,76 @@ is blind inside 16. A CRUSADER moves range-squared 9 a turn, twice as far as
 anything else in the game.
 """
 
+const Bc17Preamble* = """
+You command a faction of robots in Battlecode 2017, "Robotic Wildlife Fund":
+a two-faction war in CONTINUOUS 2D FLOAT SPACE on a symmetric board between
+30x30 and 100x100, 2999 rounds a game, best of three.
+
+You do not move a single robot. Before the war you write ONE DOCTRINE -- a
+JSON sheet of named knobs -- and a deterministic simulation then plays the
+whole match from it while you watch.
+
+THE WORLD IS NOT A GRID. Every body is a CIRCLE at float coordinates: an
+ARCHON and a TANK have body radius 2, every other robot 1, a bullet tree 1
+and a neutral tree 0.5 to 10. Distance is centre to centre, and "within
+distance 1 of a tree" means 1 beyond its radius.
+
+WINNING IS A PURCHASE
+- Any robot may `donate` bullets for VICTORY POINTS at 7.5 + round*(12.5/3000)
+  bullets each: 7.5 on round 1, 13.75 on round 1500, 19.996 on round 2999.
+- ONE THOUSAND POINTS ENDS THE GAME THE INSTANT THE DONATION LANDS. That is
+  about 13750 bullets at the average price -- roughly 40 mature trees paying
+  for 344 rounds.
+- The donation deducts the WHOLE amount and grants floor(bullets/price)
+  points, so THE REMAINDER IS DESTROYED: donate an exact multiple.
+- Losing your LAST ROBOT loses the game the same way. Trees do not count.
+- Otherwise the winner at round 2999 is decided by: more victory points, then
+  more bullet trees standing (a 10-health sapling counts as much as a mature
+  tree), then more bullets plus the bullet cost of your live robots (AN
+  ARCHON COUNTS MINUS ONE), then the team of the highest robot id.
+
+BULLETS ARE THE ONLY RESOURCE, AND THERE ARE ONLY THREE WAYS TO GET ONE
+1. TREES. A GARDENER plants a bullet tree for 50. It starts at 10 health,
+   grows 0.5 a round for its first 81 rounds AND PAYS NOTHING DURING THEM,
+   then pays health/50 bullets a round -- 1.0 a round at full 50 health --
+   and withers 0.5 a round for ever unless a gardener waters it for +5.
+2. SHAKING NEUTRAL TREES. Any robot, one tree a turn, at distance 1: you get
+   every bullet inside that tree. A board carries 0 to 1282 of them.
+3. THE FREE TRICKLE, WHICH IS A TRAP. It is max(0, 2 - 0.01 per bullet you
+   hold), EXACTLY ZERO at 200 bullets or more, and you start at 300. It pays
+   you NOTHING until you have spent below 200.
+
+BULLETS TRAVEL, AND THEY DO NOT CARE WHOSE THEY ARE
+A bullet is a point moving `bullet_speed` units a round in a straight line.
+Each round it sweeps from its old point to its new one and the FIRST body the
+segment crosses takes the damage and the bullet vanishes. IT DOES NOT CHECK
+TEAMS AND IT DOES NOT EXCLUDE THE ROBOT THAT FIRED IT. A soldier's bullet
+crosses 2 a round and a soldier strides 0.8, so shots CAN be walked out of --
+which is why volume beats aim.
+
+A triad is 4 bullets for three shots at +-20 degrees; a pentad is 6 for five
+at +-15; a single is 1. SCOUTS MAY FIRE ONLY SINGLES.
+
+A LUMBERJACK'S strike() puts 2 damage on EVERY ROBOT AND EVERY TREE within
+distance 2 of it WITH NO TEAM CHECK -- your own gardeners and your own farm
+included. Its chop() is 5 damage to one tree and THE ONLY ACTION THAT
+RELEASES a neutral tree's contents: a robot inside joins the chopping team.
+
+A TANK does 4 damage to a tree just by trying to walk onto it, and spends its
+move doing so.
+
+A BUILT FIGHTER APPEARS AT 20 % HEALTH AND DOES NOTHING FOR 20 TURNS while it
+heals 4 % a turn. It can be killed during them.
+
+BROADCASTING REVEALS YOUR POSITION. The 10000-channel array is free of
+bullets, but every robot that broadcast in round R has its location readable
+by BOTH teams in round R+1.
+
+BOTH FACTIONS' STARTING ARCHON POSITIONS ARE PUBLIC FROM ROUND 1, and every
+board is symmetric -- so there is no scouting problem for their BASE, only for
+what is standing in front of it.
+"""
+
 proc preambleFor*(year: string): string =
   case yearIdOf(year)
   of yBc20: Bc20Preamble
@@ -770,6 +840,7 @@ proc preambleFor*(year: string): string =
   of yBc22: Bc22Preamble
   of yBc16: Bc16Preamble
   of yBc19: Bc19Preamble
+  of yBc17: Bc17Preamble
   of yBc26: SystemPreamble
 
 proc briefFor*(
@@ -1381,6 +1452,117 @@ proc briefFor*(
               "worth is karbonite + fuel/5 + the build cost of every live " &
               "unit; the league ranks by ELO on match wins and " &
               "results.scores is dominated by the win bonus"
+    }
+  of yBc17:
+    payload["economy"] = %*{
+      "start_per_team": {"bullets": 300},
+      "passive_income": "max(0, 2 - 0.01 x bullets_you_hold) per round -- " &
+        "which is EXACTLY ZERO at 200 bullets or more, and you start at " &
+        "300. It only pays you once you have spent below 200.",
+      "trees": {"cost": 50, "planted_by": "a GARDENER only", "radius": 1.0,
+        "start_health": 10.0, "max_health": 50.0,
+        "growth": "+0.5 health a round for its first 81 rounds, and it " &
+          "produces NOTHING during them",
+        "income": "health / 50 bullets a round once mature -- 1.0 a round " &
+          "at full health",
+        "decay": "-0.5 health a round, always",
+        "water": "+5 health, one tree per GARDENER per turn, at distance " &
+          "1, and the clamp is applied AFTER the add so watering a 48-" &
+          "health tree wastes 3"},
+      "shake": "any robot, one tree per turn, at distance 1: you get every " &
+        "bullet inside that tree",
+      "chop": "a LUMBERJACK only, 5 damage to one tree at distance 1 -- " &
+        "and it is the ONLY way to release a robot from a neutral tree"
+    }
+    payload["victory"] = %*{
+      "points_to_win": 1000,
+      "price": "7.5 + round x (12.5/3000) bullets per point: 7.5 on round " &
+        "1, 13.75 on round 1500, 19.996 on round 2999",
+      "donate": "any robot, any number of times a turn: you spend the " &
+        "bullets you name and gain floor(bullets / price) points. THE " &
+        "REMAINDER IS DESTROYED, so donate an exact multiple of the price.",
+      "cost_estimate": "1000 points is about 13750 bullets at the average " &
+        "price -- roughly 40 mature trees paying for 344 rounds",
+      "instant": "reaching 1000 points ends the game the moment the " &
+        "donation lands; losing your LAST ROBOT (trees do not count) loses " &
+        "it the same way",
+      "at_the_round_limit": ["more victory points",
+        "more bullet trees alive (a sapling counts as much as a mature tree)",
+        "more bullets plus the bullet cost of your live robots (an ARCHON " &
+          "counts MINUS ONE)",
+        "the team of the highest robot id"]
+    }
+    payload["units"] = %*{
+      "archon": {"cost": "cannot be built", "hp": 400, "body_radius": 2.0,
+        "stride": 0.5, "sight": 10.0, "bullet_sight": 15.0,
+        "does": "hires GARDENERS for 100 bullets once every 10 turns; " &
+          "CANNOT attack at all; you start with one to three of them"},
+      "gardener": {"cost": 100, "hp": 40, "body_radius": 1.0, "stride": 0.5,
+        "sight": 7.0, "bullet_sight": 10.0,
+        "does": "the ONLY unit that can plant a bullet tree (50) or water " &
+          "one (+5); builds the four fighters; CANNOT attack. Born at full " &
+          "health, acts from its second round. Its 10-turn build cooldown " &
+          "is SHARED between planting and building."},
+      "lumberjack": {"cost": 100, "hp": 50, "body_radius": 1.0,
+        "stride": 0.75, "sight": 7.0, "attack_power": 2.0,
+        "does": "no bullets at all. chop() = 5 damage to ONE tree at " &
+          "distance 1. strike() = 2 damage to EVERY robot and EVERY tree " &
+          "within distance 2 of its centre, WITH NO TEAM CHECK -- " &
+          "including your own gardeners and your own farm."},
+      "soldier": {"cost": 100, "hp": 50, "body_radius": 1.0, "stride": 0.8,
+        "sight": 7.0, "bullet_speed": 2.0, "attack_power": 2.0,
+        "does": "single (1 bullet), triad (4 bullets, three shots at +/-20 " &
+          "degrees) or pentad (6 bullets, five shots at +/-15 degrees)"},
+      "tank": {"cost": 300, "hp": 200, "body_radius": 2.0, "stride": 0.5,
+        "sight": 7.0, "bullet_speed": 4.0, "attack_power": 5.0,
+        "does": "the same three shot shapes with 5 damage a bullet, AND a " &
+          "BODY ATTACK: trying to move onto a tree does 4 damage to the " &
+          "nearest overlapping tree instead of moving. It can body-attack " &
+          "and fire in the same turn."},
+      "scout": {"cost": 80, "hp": 10, "body_radius": 1.0, "stride": 1.25,
+        "sight": 14.0, "bullet_sight": 20.0, "bullet_speed": 1.5,
+        "attack_power": 0.5,
+        "does": "the fastest body and the widest eyes, single shots only, " &
+          "and THE ONLY BODY THAT MAY OVERLAP A TREE -- it can sit inside " &
+          "a neutral tree where nothing but a bullet can reach it."}
+    }
+    payload["combat"] = %*{
+      "bullets_travel": "a bullet is a point moving bullet_speed units a " &
+        "round in a straight line. Each round it sweeps from its old point " &
+        "to its new one and the FIRST body the segment crosses takes the " &
+        "damage and the bullet vanishes. It does not check teams and it " &
+        "does not exclude the robot that fired it.",
+      "dodging": "a soldier's bullet moves 2 a round and a soldier strides " &
+        "0.8, so bullets CAN be walked out of at range, which is why " &
+        "volume beats aim",
+      "spawn_hit": "a bullet that is spawned inside a body damages it " &
+        "immediately, before it ever moves",
+      "no_delays": "every robot may move once AND attack once every turn, " &
+        "in either order, and an attack originates from where the robot " &
+        "ends up",
+      "new_units": "a built fighter appears at 20 % health and does " &
+        "NOTHING for 20 turns while it heals 4 % a turn. It can be killed " &
+        "during them."
+    }
+    payload["comms"] = %*{
+      "array": {"channels": 10000, "cost": "free -- it costs no bullets",
+        "note": "one integer array per team, readable and writable by " &
+          "every robot of that team only, persistent until overwritten"},
+      "exposure": "BROADCASTING REVEALS YOUR POSITION. Every robot that " &
+        "broadcast in round R has its location readable by BOTH teams in " &
+        "round R+1 via senseBroadcastingRobotLocations()."
+    }
+    payload["sheet_schema"] = bc17SheetSchema()
+    payload["scoring"] = %*{
+      "weights": {"victory_points_share": 64, "bullet_trees_share": 24,
+                  "bullet_worth_share": 12},
+      "win_bonus_per_game": 200,
+      "games": plan.maps.len,
+      "note": "shares are float32; points truncate to an integer; bullet " &
+              "worth is your bullets plus the bullet cost of your live " &
+              "robots with an ARCHON counting MINUS ONE; the league ranks " &
+              "by ELO on match wins and results.scores is dominated by " &
+              "the win bonus"
     }
   of yBc26:
     payload["scoring"] = %*{

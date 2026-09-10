@@ -2132,3 +2132,174 @@ immediately around the robot, with the adjacent-square scan order fixed in its
 example bot statement for statement. An edit to either that is not mirrored on
 the other side is what Tier A′/A″ will catch, and it will catch it as a
 divergence rather than as a compile error.
+
+
+---
+
+# bc17 — Battlecode 2017 "Robotic Wildlife Fund"
+
+## The pins
+
+| what | value |
+|---|---|
+| engine | `battlecode/battlecode-server-2017` @ `165d8a8ef24f03e13a101bb8bc9f5b32dcb33c6c` (root `COPYING` = AGPL-3.0, the ONLY licence file in the tree) |
+| oracle artefact | `org.battlecode:battlecode:2017.1.6.2` |
+| sha256 | `9254e89268fd6efb72cafc037e3eded006aefd1d19aa44195c945b43ceb7bff9` — **downloaded and recomputed in phase 20**, not copied |
+| bytes | **14 576 275** — likewise measured |
+| `GameConstants.SPEC_VERSION` | `"1.0"` — a third independent pin, read by reflection (2016 had none) |
+| JDK | **Temurin 8, and that is not negotiable**: the jar bundles a 2017-era ASM 5.0.4 and the whole instrumenter is built for Java 8 class files. Under a modern JDK the instrumenter throws `IllegalArgumentException` inside `ClassReader.<init>` on every player class load, nothing is ever built, the game ends in one round and a job would exit 0 while proving nothing. |
+| scaffold | `battlecode/battlecode-scaffold-2017` @ `76e7b51e06088fdcce2f6a6b97aff21782ae20d0` (AGPL-3.0) |
+| client (sprites) | `battlecode/battlecode-client-17` @ `feb3e03820ba442ab233f05d2432b0dc2833aa98` (root `LICENSE` = AGPL-3.0; `package.json` says GPL-3.0 — the discrepancy is recorded in `NOTICE`) |
+
+**The jar is a FAT jar and needs no dependency resolution at all**: the
+published `.pom` carries no `<dependencies>` element, and the artefact bundles
+`gnu/trove`, `net/sf/jsi`, the Kotlin standard library, flatbuffers-java,
+Apache Commons, SLF4J, Java-WebSocket, ObjectWeb ASM **and all seventy
+`battlecode/world/resources/*.map17` map resources**. So there is no Gradle, no
+Maven list, no `deps.lock`, no shim and no `--map-dir` — and
+`tools/convert_maps_bc17.py` reads the maps straight out of it in pure Python
+**with no JVM**.
+
+## Status at the phase-20 exit — the oracle's real verdict
+
+**`parity-oracle-bc17` IS A CI JOB AND IT IS GREEN, AND THE VERDICT IS THAT
+ALL FIFTY-FOUR COMPARED PAIRS ARE BIT-EXACT FOR WHOLE 2 999-ROUND GAMES WITH
+AN EMPTY LEDGER.** Six bots — `bc17idle`, `examplefuncsplayer17`,
+`bc17scenario`, `bc17scenariotree`, `bc17scenariokill` and `bc17scenariotie` —
+against themselves on the nine parity maps `CropCircles`, `GreenHouse`,
+`HiddenTunnel`, `HouseDivided`, `OMGTree`, `shrine`, `Chess`, `Cramped` and
+`Alone`, compared line for line from round 1 to the engine's own
+`isRunning() == false`, with every float printed as its raw IEEE-754 bits on
+both sides.
+
+| tier | what ran | verdict |
+|---|---|---|
+| **A** | `bc17idle` (whose body is `while (true) Clock.yield();`) × 9 maps, whole games | **9/9 bit-exact.** Every game ran the full 2 999 rounds and ended `WON_BY_DUBIOUS_REASONS`; `bul=` never left the bits of `300.0f` (the income cliff), `rid=`/`bid=` never moved and `execlen` never left the initial body count — all asserted off the JAVA trace by `tools/ci/bc17_assert_trace.py` |
+| **A′** | `bc17scenario`, `bc17scenariotree`, `bc17scenariokill`, `bc17scenariotie` × 9 maps, whole games | **36/36 bit-exact.** The paths asserted off the Java traces: a `U` line for each of the six types, the 20-turn dormancy with its exact `0.04 × maxHealth` heal and no action during it, a triad and a pentad, the chop-only goodie release (a tree with `crob=SOLDIER` destroyed on a `CHOP` round followed by a new `U` line — `bc17scenario/HouseDivided`, round 310), a tree killed with no chop and no release, a `bul=` jump on a `SHAKE`, a `vp=` jump on a `DONATE` with `floor(spent / (7.5 + 0.0041666666 × round))` recomputed from the trace, and the `DominationFactor` set `{DESTROYED, PWNED, OWNED, BARELY_BEAT, WON_BY_DUBIOUS_REASONS}` |
+| **A″** | `examplefuncsplayer17` × 9 maps, whole games | **9/9 bit-exact**, which is what proves `src/battlecode/rng.nim` reproduces a per-robot `java.util.Random(rc.getID())` call for call **including the `&&` short-circuit that decides whether a draw happens at all**. Peak robots 7 (`Cramped`) to 78 (`Alone`); games ran 533–2 999 rounds and ended `DESTROYED` or `BARELY_BEAT` |
+| **B** | the jar's own constants, the fdlibm vectors and all 22 maps | **byte-clean** (the three steps in the job; the measurements are tabled below) |
+| **B′** | the metering divergence | **(a)** every compared bot asserts `Clock.getBytecodesLeft() > 5000` at the end of every turn, and the comparator independently reads the `bc=` column: the measured peak over all 54 pairs is **3 % of a limit** (`examplefuncsplayer17`), so the engine's pause-and-resume provably never fired in any game compared here. **(b)** the separate, NON-COMPARED `bc17slowbot` run: the engine paused it at **30 003 bytecodes against an ARCHON's 30 000 limit on round 1**, so the pause exists and fires where the rule says it does |
+| **C** | the first divergent round of every pair, against the ledger | **no pair diverges. `tools/ci/parity_ledger_bc17.json` is `{"entries": []}`** — empty, and not because anything was excused. Tier C is **not** gated on a subset of maps |
+
+**The measured wall clock, which is what the 90-minute budget is sized
+against — and the job prints its own measurement into the step summary on
+every CI run: 73 SECONDS OF JVM FOR ALL 54 WHOLE GAMES on a GitHub runner**
+(run 34526408262; the whole job, Nim toolchain and Tier B included, is about
+five minutes: 109 s to play the 54 pairs, 67 s for the trace assertions,
+19 s for the comparator and 4 s for the 2 000 000-sample fdlibm dump). In
+the phase-20 sandbox the same 54 games took **168 seconds of JVM** (slowest
+pair `examplefuncsplayer17/Chess` at 13 s; `Chess` is 2 804 066 trace lines
+a side). **The Tier A″ fallback decided in phase 10 — cut the tier from
+nine pairs to the six `small` pairs if the measurement passed 80 minutes —
+DID NOT FIRE and was not needed; all nine pairs run.** The job asserts the
+80-minute bound itself rather than trusting this paragraph.
+
+**Two defects in the port were found by writing this oracle**, which is the
+whole reason for having one: `chassis/examplefuncsplayer17.nim` drew from an
+**unseeded** `JavaRandom` (the lazy `weakRng(r)` accessor that seeds it from
+the robot's id was dead code — every robot shared one stream starting at raw
+state 0), and `actions.nim`'s `noteAction` recorded the LAST action of a turn
+where the engine's own action log cannot express one (see the `A` line note
+below). Both are fixed, and Tier A″ went from diverging at round 2 to
+bit-exact across nine whole games.
+
+**What was ALSO measured under the pinned jar and Temurin 8, and remains the
+evidence behind the tiers above:**
+
+| evidence | result |
+|---|---|
+| the jar's sha256 and byte size | recomputed, **both match the pin** (14 576 275 bytes) |
+| `GameConstants` + the whole six-row `RobotType` table, by REFLECTION | rendered into `src/battlecode/years/bc17/constants.nim` by `tools/JavaBc17Tables.java constants` + `tools/gen_year_constants.py --year bc17 --tables`, and the generator's own `--check` is byte-clean |
+| **all 22 committed maps against the JVM's own `LiveMap`** | `tools/JavaBc17Tables.java maps` and `tools/convert_maps_bc17.py --dump-bits` produce **5 204 canonical raw-bits lines each and they are byte-identical** — width, height, origin, seed, rounds and every initial body's id, team, type, float coordinates, radius, health, contained bullets and contained robot, in `getInitialBodies()` order. This is Tier B (iii) in full, measured. |
+| **the fdlibm port against the JVM's own `StrictMath`** | `data/bc17/fdlibm_vectors.json` — 440 boundary rows and **eleven expression-shape digests over 2 000 000 samples** drawn by `java.util.Random(20170101)` — reproduced **BIT FOR BIT** by `src/battlecode/fdlibm.nim` + `years/bc17/geom.nim` (`tests/test_bc17_fdlibm.nim`, 0 mismatches in 448 rows and 11/11 digests). This is Tier B (ii) in full, measured. |
+| **the two `IDGenerator` streams (D3)** | the first eight robot ids for map seed 98 are `13527, 10137, 10443, 12235, 13581, 11621, 11304, 11839` and the first eight bullet ids are `33728, 35734, 33147, 32964, 35666, 34517, 34646, 34056` — exactly the values measured on the live engine, including the bullet generator's **two-block head start** (`tests/test_bc17_ids.nim`) |
+| **the trove iteration order (D1)** | ids `{2,3,4,5}` walk `5 4 3 2` and `{14,15,16,17,34,35}` walk `17 16 15 14 35 34`, and `clear()` retains capacity 23 — the orders measured on the jar's own classes and cross-checked against the live engine's `eachRobot` |
+| **the income cliff** | `max(0, 2 − 0.01 × supply)` is exactly 0 at 200, and an idle 299-round game ends with the exact bits of `300.0` on both sides (`tests/test_bc17_economy.nim`) |
+
+## The three engine patches, and why each is legitimate
+
+All three are landed, applied by `tools/oracle/bc17/build_oracle.sh` with a
+`git apply --check` and a **post-condition assertion per patch**, and the
+build script counts the patch files and fails if there are not exactly three
+— so the job cannot quietly grow a fourth:
+
+1. **`strictmath.patch`** — the eleven `Math.{atan2,sin,cos,sqrt}` call sites
+   in `common/Direction.java`, `common/MapLocation.java` and
+   `world/InternalBullet.java` become `StrictMath`. Legitimate because every
+   one of those results is narrowed to `float32` before it reaches any state,
+   and at `float32` the patched and unpatched engines agree in every one of
+   20 000 000 measured samples: what the patch buys is that the residual — a
+   double-level 1-ulp difference straddling a float32 rounding boundary — becomes
+   **exactly zero**.
+2. **`rtree_order.patch`** — `ObjectInfo`'s six `net.sf.jsi` `nearestN`
+   queries become the same `(distanceSquared, id)` enumeration the Nim side
+   uses (D2). Legitimate because jsi's exact-tie order is an artefact of the
+   R-tree's insertion history and **is not stable even against itself in one
+   process** (measured: the same five points gave two different orders), so
+   there is nothing faithful to reproduce.
+3. **`examplefuncsplayer17/determinism.patch`** — the scaffold bot's global
+   RNG draws become a per-robot `java.util.Random(rc.getID())`, **with the
+   `&&` short-circuit draw order preserved exactly**. Legitimate because the
+   stock line draws from the wall-clock-seeded global generator and is not
+   reproducible even against itself. **MEASURED AND CORRECTED IN PHASE 20:
+   the design note says "three" call sites and the scaffold has FOUR** — the
+   archon's hire gate, the gardener's two build gates and `randomDirection()`
+   — and the patch rewrites all four, because `build_oracle.sh` asserts the
+   count of surviving global draws is **zero** and three of four would leave
+   the bot irreproducible. The committed copy at
+   `tools/oracle/bc17/examplefuncsplayer17/RobotPlayer.java` is
+   `battlecode-scaffold-2017@76e7b51e`'s own file BYTE FOR BYTE (the job
+   diffs it against the upstream tarball), so this patch is the entire
+   difference between what the scaffold shipped and what the oracle runs.
+
+## What is NOT compared
+
+**The only behaviour this oracle cannot compare is how much thinking each side
+got — and NO 2017 RULE READS IT.** `bytecodesUsed` is replay telemetry and
+`prevBytecodesUsed` is written and never read by any gameplay path, so the
+`DecisionOps` divergence (V1) has no observable consequence in the rules; on
+the engine side the metering can be proved never to have fired by asserting
+`Clock.getBytecodesLeft() > 5000` at the end of every turn of every compared
+bot. That assertion belongs to the outstanding job.
+
+`GameWorld.rand` (a third `Random(mapSeed)` the engine constructs and never
+reads), team memory (V4), `resign()` (V6) and the debug indicator APIs are not
+compared because they are not ported, and each is recorded rather than
+silently dropped.
+
+**Four narrower things are not compared either, each named here rather than
+left for a reader to discover:**
+
+1. **`BODY_ATTACK` is never exercised by Tier A′.** A tank costs 300 bullets
+   and the scripted gardener reaches one only on `GreenHouse` (round 395);
+   that tank then walks due east and reaches the map edge without its
+   destination circle ever overlapping a tree, so the branch is never taken
+   in any of the 54 games. The rule itself is covered from the other side by
+   `tests/test_bc17_actions.nim` and `tests/test_bc17_trees.nim`, which
+   assert the 4 damage, the spent move and the refusal to move while still
+   blocked; what is missing is *engine-side* evidence, and saying so is
+   cheaper than a scenario bot that steers.
+2. **`PHILANTROPIED` is not reachable and no bot tries.** It needs 1 000
+   victory points; the price is `7.5 + 0.0041666666 × round`, so 1 000 points
+   costs roughly 14 000 bullets while the richest scripted game earns a few
+   thousand. The other five `DominationFactor` values ARE all on the compared
+   set, and the assertion script requires them.
+3. **The `A` line is a PRIORITY MAXIMUM over the turn, not its last action**,
+   and that is forced rather than chosen: the engine records
+   FIRE/STRIKE/CHOP/SHAKE/WATER/PLANT/SPAWN_UNIT in `MatchMaker`'s action log
+   and records a MOVE, a BROADCAST and a DONATE **nowhere at all**, so their
+   order relative to the logged ones cannot be recovered on the Java side.
+   Both emitters therefore reduce a turn to one action by the same fixed
+   priority (`Bc17Trace.java`'s header and `actions.nim`'s `actRank` carry
+   the identical table), the `tgt` column carries the engine's own target
+   where the engine has one and zero everywhere else — a BROADCAST's channel
+   is NOT compared for exactly this reason — and the `arg` column is
+   reserved and printed as zero on both sides. Inventing a value on one side
+   only is the bc23 mistake.
+4. **`data/bc17/fdlibm_vectors.json`'s `"jdk"` line is provenance, not a
+   vector.** It records which Temurin 8 build wrote the file (`1.8.0_504`);
+   `actions/setup-java` moves that string every few months while
+   `StrictMath` is required to reproduce fdlibm bit for bit on every
+   conforming JVM, so Tier B byte-diffs every other line absolutely and
+   prints both build strings. Measured in phase 20 under `1.8.0_462`: the
+   two files differ **in that line and nowhere else**.

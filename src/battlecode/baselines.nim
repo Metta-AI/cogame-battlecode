@@ -35,6 +35,8 @@ type
     blGreenhorn = "greenhorn"
     blSaber = "saber"
     blExamplefuncsplayer19 = "examplefuncsplayer19"
+    blOrchard = "orchard"
+    blExamplefuncsplayer17 = "examplefuncsplayer17"
 
 proc defaultBaselineFor*(year: string): Baseline =
   ## A seat that says nothing useful plays the year's STRONG published
@@ -48,6 +50,7 @@ proc defaultBaselineFor*(year: string): Baseline =
   of yBc22: blWololo
   of yBc16: blBulwark
   of yBc19: blSaber
+  of yBc17: blOrchard
   of yBc26: blAwu
 
 proc baselineFor*(year, name: string): Baseline =
@@ -101,6 +104,15 @@ proc baselineFor*(year, name: string): Baseline =
     of "scaffold", "example", "examplefuncsplayer", "examplefuncsplayer19":
       blExamplefuncsplayer19
     else: blSaber
+  of yBc17:
+    ## `awu`, `orchard` or anything unrecognised is the STRONG doctrine
+    ## chassis and the champions' chassis; `scaffold`, `example`,
+    ## `examplefuncsplayer` and `examplefuncsplayer17` are the deliberately
+    ## weak floor and the parity oracle's other side.
+    case key
+    of "scaffold", "example", "examplefuncsplayer", "examplefuncsplayer17":
+      blExamplefuncsplayer17
+    else: blOrchard
   of yBc26:
     case key
     of "scaffold", "examplefuncsplayer", "example": blScaffold
@@ -143,6 +155,8 @@ proc baselineChassis*(kind: Baseline): ScriptedChassis =
   of blGreenhorn: scGreenhorn
   of blSaber: scSaber
   of blExamplefuncsplayer19: scExamplefuncsplayer19
+  of blOrchard: scOrchard
+  of blExamplefuncsplayer17: scExamplefuncsplayer17
   of blAwu: scAwu
 
 proc baselineReply*(kind: Baseline): string =
@@ -248,6 +262,19 @@ proc baselineReply*(kind: Baseline): string =
                  "neutral_activation":"opportunistic","retreat_hp":35,
                  "rubble_clear":"paths","infection_policy":"quarantine"},
         "notes":"default bulwark doctrine","motto":"The wall holds."}"""
+  of blOrchard, blExamplefuncsplayer17:
+    ## The all-defaults bc17 sheet, which is ALSO the fallback sheet
+    ## §Decisions prints verbatim. `examplefuncsplayer17` reads no knob, so
+    ## it answers with the same sheet: the chassis, not the sheet, is what
+    ## makes it the weak floor (D0).
+    """{"sheet":{"opening":"tree_farm","gardener_count":3,
+                 "farm_layout":"hex","soldier_tank_ratio":25,
+                 "lumberjack_share":20,"scout_harass":15,
+                 "vp_donate_policy":"when_ahead",
+                 "shake_neutral_trees":"opportunistic",
+                 "chop_policy":"clear_path","bullet_reserve":200,
+                 "defend_radius":12},
+        "notes":"default orchard doctrine","motto":"Plant, water, donate."}"""
   of blSaber, blExamplefuncsplayer19:
     ## The all-defaults bc19 sheet, which is ALSO the fallback sheet
     ## §Decisions prints verbatim. `examplefuncsplayer19` reads no knob, so

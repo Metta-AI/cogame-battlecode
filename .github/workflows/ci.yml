@@ -24,9 +24,9 @@ on:
     # `bc19-year-module` are the branches the second through NINTH year
     # modules land on. main's trigger semantics are untouched; this only
     # adds branches.
-    branches: [ main, bc16-year-module, bc19-year-module, bc20-year-module,
-                bc21-year-module, bc22-year-module, bc23-year-module,
-                bc24-year-module, bc25-year-module ]
+    branches: [ main, bc16-year-module, bc17-year-module, bc19-year-module,
+                bc20-year-module, bc21-year-module, bc22-year-module,
+                bc23-year-module, bc24-year-module, bc25-year-module ]
   pull_request:
   workflow_dispatch:
 
@@ -152,6 +152,34 @@ env:
   BC19_MT_VERSION: "1.1.0"
   BC19_MT_INTEGRITY: "sha1-+RZhjuQ9cXnvz2Qb7EUx65Zwl4o="
 
+  # --- bc17, the TENTH year module and THE ONLY CONTINUOUS-SPACE ONE ------
+  # 2017 is the float32 year: coordinates, radii, strides, bullet speeds,
+  # attack powers, health and the whole tree economy are Java `float`, every
+  # gameplay class is `strictfp`, and the transcendental surface is exactly
+  # {sin, cos, atan2} -- ported from fdlibm into src/battlecode/fdlibm.nim
+  # and pinned against the JVM's own StrictMath by
+  # data/bc17/fdlibm_vectors.json (docs/RULES-BC17.md F1-F5).
+  #
+  # THE MAPS AND THE CONSTANTS COME OUT OF THE PINNED ORACLE JAR ITSELF, not
+  # out of a source checkout: the jar is a FAT jar that carries all seventy
+  # `battlecode/world/resources/*.map17` flatbuffers, so
+  # tools/convert_maps_bc17.py reads them with `zipfile` and NO JVM at all.
+  # The jar is pinned by URL, SIZE and SHA256 in tools/oracle/bc17/jar.lock.
+  # There is no JDK, no JRE, no Java and no Node in any image stage.
+  BC17_COMMIT: "165d8a8ef24f03e13a101bb8bc9f5b32dcb33c6c"
+  BC17_CLIENT_COMMIT: "feb3e03820ba442ab233f05d2432b0dc2833aa98"
+  BC17_JAR_URL: "http://battlecode-maven.s3-website-us-east-1.amazonaws.com/org/battlecode/battlecode/2017.1.6.2/battlecode-2017.1.6.2.jar"
+  BC17_JAR_SHA256: "9254e89268fd6efb72cafc037e3eded006aefd1d19aa44195c945b43ceb7bff9"
+  BC17_JAR_BYTES: "14576275"
+  # The 2017 SCAFFOLD, AGPL-3.0, whose `src/examplefuncsplayer/RobotPlayer.java`
+  # is committed VERBATIM at tools/oracle/bc17/examplefuncsplayer17/ and is
+  # both the league's deliberately weak filler and one side of the
+  # differential oracle. `parity-oracle-bc17` diffs the committed copy
+  # against this commit's own file, so the ONLY difference between what the
+  # scaffold shipped and what the oracle compiles is the committed
+  # determinism.patch (NOTICE records the attribution).
+  BC17_SCAFFOLD_COMMIT: "76e7b51e06088fdcce2f6a6b97aff21782ae20d0"
+
 jobs:
   # ---------------------------------------------------------------------
   # Native Nim tests. Same nimby recipe as the Dockerfile build stage, so a
@@ -171,12 +199,21 @@ jobs:
     # 2026-09-08), and the heaviest bc22 shards play whole 2000-round games
     # with every range check on -- its knob sweep plays seventy-two of them in
     # the debug pass alone.
+    # 240, not 180: the TENTH year module adds twenty-two shards, and every
+    # shard runs TWICE (debug and -d:release). bc17's are the heaviest in
+    # the repo per game -- 3000 rounds of CONTINUOUS SPACE, with every
+    # bullet resolved against every disc within reach -- and three of them
+    # play whole matches: its survival gate plays six 3000-round games and
+    # then RECOMPILES ITSELF with -d:bc17BrokenChassis and plays six more,
+    # its knob sweep plays thirty-three, and its perf gate plays the two
+    # tree-heaviest boards in the repository. Measured in phase 20 at
+    # 13 s / 18 s / 15 s in release; the debug pass is several times that.
     # 180, not 150: the NINTH year module adds twenty-seven shards, and every
     # shard runs TWICE (debug and -d:release). bc19's shards are the
     # LIGHTEST in the repo -- 1000 rounds against bc16's 3000 and a measured
     # 0.03-0.10 s for a whole mirror game -- but there are a lot of them and
     # its knob sweep plays seventy-eight games in the debug pass alone.
-    timeout-minutes: 180
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v5
 
@@ -561,6 +598,72 @@ jobs:
           # nothing else (NOTICE records the reasoning).
           python3 tools/build_sprite_atlas_bc19.py \
             --engine "$BC19_DIR" --out data --check
+
+      # The bc17 year module is generated from the PINNED ORACLE JAR and a
+      # pinned client checkout, and every generated artefact is re-generated
+      # here and byte-diffed: the constants table (JVM reflection is NOT
+      # needed for the check -- the generator's own reader walks the jar's
+      # class files), all twenty-two converted maps, and the sprite atlas
+      # cut from the 2017 client. A hand-edited generated file fails the
+      # build.
+      #
+      # `data/bc17/fdlibm_vectors.json` is NOT checked here and cannot be:
+      # it is written by `tools/JavaBc17Tables.java` under a JDK 8 running
+      # the jar's own `StrictMath`, and there is no JDK in this job.
+      # `tests/test_bc17_fdlibm.nim` recomputes every one of its 448
+      # boundary rows and all eleven 2 000 000-sample digests in Nim and
+      # compares them bit for bit, which is the check that matters.
+      - name: Fetch the pinned Battlecode 2017 jar and client
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bc17 /tmp/client17
+          curl -fsSL "${BC17_JAR_URL}" -o /tmp/bc17/battlecode-2017.jar
+          got_sha="$(sha256sum /tmp/bc17/battlecode-2017.jar | cut -d' ' -f1)"
+          got_bytes="$(stat -c%s /tmp/bc17/battlecode-2017.jar)"
+          echo "bc17 jar: ${got_bytes} bytes, sha256 ${got_sha}"
+          test "${got_sha}" = "${BC17_JAR_SHA256}" || {
+            echo "::error::the 2017 jar's sha256 is ${got_sha}, not the"
+            echo "::error::pinned ${BC17_JAR_SHA256} (tools/oracle/bc17/jar.lock)"
+            exit 1; }
+          test "${got_bytes}" = "${BC17_JAR_BYTES}" || {
+            echo "::error::the 2017 jar is ${got_bytes} bytes, not the pinned"
+            echo "::error::${BC17_JAR_BYTES} (tools/oracle/bc17/jar.lock)"
+            exit 1; }
+          # The pin in the lock file and the pin in this workflow's env must
+          # be the same two values, or one of them is decoration.
+          python3 - <<'PY'
+          import json, os
+          lock = json.load(open("tools/oracle/bc17/jar.lock"))
+          assert lock["sha256"] == os.environ["BC17_JAR_SHA256"], lock["sha256"]
+          assert str(lock["bytes"]) == os.environ["BC17_JAR_BYTES"], lock["bytes"]
+          assert lock["engine_commit"] == os.environ["BC17_COMMIT"]
+          assert lock["client_commit"] == os.environ["BC17_CLIENT_COMMIT"]
+          print("tools/oracle/bc17/jar.lock agrees with ci.yml's env")
+          PY
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode-client-17/archive/${BC17_CLIENT_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/client17
+          echo "BC17_JAR=/tmp/bc17/battlecode-2017.jar" >> "$GITHUB_ENV"
+          echo "BC17_CLIENT_DIR=/tmp/client17/battlecode-client-17-${BC17_CLIENT_COMMIT}" \
+            >> "$GITHUB_ENV"
+
+      - name: The bc17 generated files match the pinned 2017 jar
+        run: |
+          set -euo pipefail
+          python3 tools/convert_maps_bc17.py --jar "$BC17_JAR" \
+            --out data/maps/bc17 --check
+          python3 tools/build_sprite_atlas_bc17.py \
+            --client "$BC17_CLIENT_DIR" --out data --check
+          # And EVERY ONE of the 70 official `.map17` flatbuffers reads with
+          # the converter's own vtable walk, not only the 22 that are
+          # committed: a reader that only works on the maps we ship is a
+          # reader nobody can extend the pool with.
+          parsed="$(python3 tools/convert_maps_bc17.py --jar "$BC17_JAR" \
+            --parse-all 2>&1 >/dev/null | grep -oE '^[0-9]+' | head -1)"
+          echo "official .map17 files parsed: ${parsed}"
+          test "${parsed}" = "70" || {
+            echo "::error::expected all 70 .map17 files to parse, got ${parsed}"
+            exit 1; }
 
       - name: The GameVersion does not collide with main's
         if: github.ref != 'refs/heads/main'
@@ -3251,6 +3354,422 @@ jobs:
   # ---------------------------------------------------------------------
 
   # ---------------------------------------------------------------------
+  # parity-oracle-bc17: the 2017 Java engine as a CI-only oracle.
+  #
+  # THE TENTH YEAR AND THE ONLY CONTINUOUS-SPACE ONE. Coordinates, radii,
+  # strides, bullet speeds, attack powers, health and the whole tree economy
+  # are Java `float`, every gameplay class is `strictfp`, and the
+  # transcendental surface is exactly {sin, cos, atan2}.
+  #
+  # **EVERY FLOAT IN THIS TRACE IS PRINTED AS ITS RAW IEEE-754 BITS IN HEX
+  # ON BOTH SIDES**, which is bc17's one deliberate departure from every
+  # sibling year: a float32 needs nine significant decimal digits to
+  # round-trip and a formatter mismatch between Java's `%.9g` and Nim's
+  # `formatFloat` would masquerade as a divergence for a week. bc16 manages
+  # that with a `%.6f` convention plus a per-field float allowlist in the
+  # comparator; bc17 removes the problem instead, so
+  # `tools/ci/parity_tiers_bc17.py` needs NO float allowlist at all.
+  #
+  # THE ORACLE RUNS ON TEMURIN 8 AND THAT IS NOT NEGOTIABLE: the jar bundles
+  # a 2017-era ASM 5.0.4 and the whole instrumenter is built for Java 8 class
+  # files, so under a modern JDK it throws IllegalArgumentException inside
+  # ClassReader.<init> on EVERY player class load, no robot is ever built,
+  # the game ends in one round and THE JOB WOULD EXIT 0 WHILE PROVING
+  # NOTHING. The first step asserts `java -version` really is 1.8 AND that
+  # `javac --release 8` FAILS (the bc21 lesson: `--release` arrived in JDK 9
+  # and dies with "invalid flag" on a JDK-8 javac); `Bc17Trace.java` asserts
+  # it again from the other side by exiting 3 when nothing ever happened;
+  # and `tools/ci/bc17_assert_trace.py` asserts it a third time by requiring
+  # every game to have reached round 2 900 or ended DECIDED.
+  #
+  # THE JAR IS A FAT JAR and nothing else is downloaded to run it: 10 210
+  # entries, every battlecode class, `org/objectweb/asm`, `gnu/trove`,
+  # `net/sf/jsi`, `com/google/flatbuffers` and all 70
+  # `battlecode/world/resources/*.map17` resources -- so there is no Gradle,
+  # no Maven resolution, no deps.lock, no jsi shim and no `--map-dir`. The
+  # PINNED ENGINE SOURCES are fetched only because the two engine patches
+  # need four files of them; everything else is loaded out of the jar.
+  #
+  # 90 minutes: bc17's games run to 2 999 rounds with real ballistics and
+  # there are 54 compared pairs plus one uncompared metering run. MEASURED
+  # in the phase-20 sandbox: 168 seconds of JVM for all 54 games, 26 seconds
+  # for the comparator and 106 seconds for the trace assertions, so the
+  # budget is roughly twenty times the measurement (docs/PARITY.md section
+  # bc17). Tier A" is NINE pairs and was NOT reduced.
+  #
+  # There is no JDK, no JRE and no Java in ANY runtime image stage.
+  # ---------------------------------------------------------------------
+  parity-oracle-bc17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache nimby toolchain and nimcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nimby
+            ~/.cache/nim
+          key: nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-${{ hashFiles('nimby.lock') }}
+          restore-keys: |
+            nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-
+
+      - name: Install nimby and Nim
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/nimby" \
+            "https://github.com/treeform/nimby/releases/download/${NIMBY_VERSION}/nimby-Linux-X64"
+          chmod +x "$HOME/.local/bin/nimby"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/nimby" use "$NIM_VERSION"
+
+      - name: Sync Nim dependencies
+        run: nimby --global sync nimby.lock
+
+      - name: Regenerate nim.cfg from the synced package tree
+        run: |
+          set -euo pipefail
+          rm -f nim.cfg
+          for pkg in "$HOME"/.nimby/pkgs/*; do
+            [ -e "$pkg" ] || continue
+            if [ -d "$pkg/src" ]; then
+              echo "--path:\"$pkg/src\"" >> nim.cfg
+            else
+              echo "--path:\"$pkg\"" >> nim.cfg
+            fi
+          done
+          echo '--path:"src"' >> nim.cfg
+
+      # TEMURIN 8. NOT NEGOTIABLE. See the job comment.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+
+      - name: The JDK really is 8
+        run: |
+          set -euo pipefail
+          java -version 2>&1 | tee /tmp/javaver17
+          javac -version 2>&1 | tee -a /tmp/javaver17
+          grep -q '1\.8\.' /tmp/javaver17 || {
+            echo "::error::this oracle MUST run on Temurin 8: the jar bundles"
+            echo "::error::a 2017-era ASM 5.0.4 and under a newer JDK the"
+            echo "::error::instrumenter throws inside ClassReader.<init> on"
+            echo "::error::every player class load, nothing is ever built,"
+            echo "::error::the game ends in one round and this job would be"
+            echo "::error::green while proving nothing"
+            echo "::error::(docs/PARITY.md section bc17)."
+            exit 1; }
+          # And `--release` must NOT be used: it arrived in JDK 9 and dies
+          # with "invalid flag" here in seconds (the bc21 lesson). This
+          # asserts the trap rather than trusting a comment.
+          if javac --release 8 -version >/dev/null 2>&1; then
+            echo "::error::this javac accepts --release, so it is not 8"
+            exit 1
+          fi
+          echo "javac rejects --release, as a JDK-8 javac must"
+
+      - name: Fetch the published 2017 jar and the pinned engine sources
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle17 /tmp/engine17
+          curl -fsSL -o /tmp/oracle17/battlecode2017.jar "${BC17_JAR_URL}"
+          # The two ENGINE patches need four source files; everything else --
+          # every class and all 70 map resources -- is loaded out of the jar.
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode-server-2017/archive/${BC17_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/engine17
+          echo "BC17_DIR=/tmp/engine17/battlecode-server-2017-${BC17_COMMIT}" \
+            >> "$GITHUB_ENV"
+
+      # THE COMMITTED WEAK FLOOR IS UPSTREAM'S FILE, BYTE FOR BYTE. The
+      # `determinism.patch` hunks are the ONLY difference between what the
+      # 2017 scaffold shipped and what this job compiles, and this step
+      # proves it rather than trusting the patch header.
+      - name: The committed examplefuncsplayer17 is the scaffold's own file
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/scaffold17
+          curl -fsSL \
+            "https://github.com/battlecode/battlecode-scaffold-2017/archive/${BC17_SCAFFOLD_COMMIT}.tar.gz" \
+            | tar xz -C /tmp/scaffold17
+          up="/tmp/scaffold17/battlecode-scaffold-2017-${BC17_SCAFFOLD_COMMIT}/src/examplefuncsplayer/RobotPlayer.java"
+          diff -u "$up" tools/oracle/bc17/examplefuncsplayer17/RobotPlayer.java
+          python3 - <<'PY'
+          import json, os
+          lock = json.load(open("tools/oracle/bc17/jar.lock"))
+          assert lock["scaffold_commit"] == os.environ["BC17_SCAFFOLD_COMMIT"], \
+              lock["scaffold_commit"]
+          print("tools/oracle/bc17/jar.lock agrees with ci.yml's scaffold pin")
+          PY
+          echo "the committed bot is battlecode-scaffold-2017@${BC17_SCAFFOLD_COMMIT} verbatim (AGPL-3.0, see NOTICE)"
+
+      - name: Build the oracle (jar sha256, size AND SPEC_VERSION verified, three patches, JDK 8)
+        run: |
+          set -euo pipefail
+          ./tools/oracle/bc17/build_oracle.sh \
+            /tmp/oracle17/battlecode2017.jar "$BC17_DIR" /tmp/oracle17/build
+
+      # Tier B, part 1 (BLOCKING): EVERY `GameConstants` FIELD AND THE WHOLE
+      # SIX-ROW `RobotType` TABLE, printed from the jar's own classes by
+      # REFLECTION -- 2017's `GameConstants` is an INTERFACE, so its fields
+      # are implicitly `public static final` and reflection sees all of them
+      # -- and the generated `constants.nim` regenerated from that dump and
+      # BYTE-DIFFED. A hand-edited constant fails here.
+      - name: Tier B (BLOCKING) — the jar's own constants and RobotType table
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle17/tables
+          javac -nowarn -encoding UTF-8 \
+            -cp /tmp/oracle17/battlecode2017.jar \
+            -d /tmp/oracle17/tables tools/JavaBc17Tables.java
+          timeout 600 java -cp \
+            "/tmp/oracle17/battlecode2017.jar:/tmp/oracle17/tables" \
+            JavaBc17Tables constants > /tmp/oracle17/constants.json
+          head -3 /tmp/oracle17/constants.json
+          python3 tools/gen_year_constants.py --year bc17 \
+            --tables /tmp/oracle17/constants.json --check
+
+      # Tier B, part 2 (BLOCKING): THE fdlibm PIN. Every boundary vector
+      # value-for-value and eleven expression-shape digests over a
+      # 2 000 000-point sample of the engine's own argument domains, drawn by
+      # a recipe BOTH SIDES RUN (`java.util.Random(20170101)`), regenerated
+      # here under the pinned JDK 8 and byte-diffed against the committed
+      # file. The `"jdk"` line is PROVENANCE, not a vector: it records which
+      # Temurin 8 build wrote the file, and `actions/setup-java` moves that
+      # string every few months while `StrictMath` is required to reproduce
+      # fdlibm bit for bit on every conforming JVM. Everything else is an
+      # absolute byte-diff.
+      - name: Tier B (BLOCKING) — the fdlibm vectors, regenerated and byte-diffed
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          timeout 900 java -cp \
+            "/tmp/oracle17/battlecode2017.jar:/tmp/oracle17/tables" \
+            JavaBc17Tables fdlibm > /tmp/oracle17/fdlibm.json
+          echo "JavaBc17Tables fdlibm took $(( $(date +%s) - start ))s"
+          echo "committed: $(grep '\"jdk\"' data/bc17/fdlibm_vectors.json)"
+          echo "this run : $(grep '\"jdk\"' /tmp/oracle17/fdlibm.json)"
+          grep -v '"jdk"' data/bc17/fdlibm_vectors.json > /tmp/oracle17/fd.want
+          grep -v '"jdk"' /tmp/oracle17/fdlibm.json > /tmp/oracle17/fd.got
+          if ! diff -u /tmp/oracle17/fd.want /tmp/oracle17/fd.got | head -40; then
+            echo "::error::data/bc17/fdlibm_vectors.json is not what the"
+            echo "::error::jar's own StrictMath emits under JDK 8."
+            exit 1
+          fi
+          diff -q /tmp/oracle17/fd.want /tmp/oracle17/fd.got
+          rows="$(grep -c '"bits"' data/bc17/fdlibm_vectors.json || true)"
+          echo "Tier B: the committed fdlibm table IS the JVM's own output"
+
+      # Tier B, part 3 (BLOCKING): ALL 22 COMMITTED MAPS' `LiveMap` FIELDS --
+      # width, height, origin, seed, rounds and every initial body's id,
+      # team, type, float coordinates, radius, health, contained bullets and
+      # contained robot IN `getInitialBodies()` ORDER -- from the JVM's own
+      # loader, byte-diffed against the same dump taken from the committed
+      # JSON. This is what PROVES `tools/convert_maps_bc17.py`'s pure-Python
+      # flatbuffer walk rather than trusting it.
+      - name: Tier B (BLOCKING) — the 22 maps' LiveMap fields, from the JVM
+        run: |
+          set -euo pipefail
+          MAPS="Aligned Alone Barrier Blitzkrieg Chess Cramped CropCircles
+                DenseForest GiantForest GreenHouse HiddenTunnel HouseDivided
+                Hurdle Interference LineOfFire Maniple OMGTree Snowflake
+                TreeFarm Waves Whirligig shrine"
+          timeout 600 java -cp \
+            "/tmp/oracle17/battlecode2017.jar:/tmp/oracle17/tables" \
+            JavaBc17Tables maps ${MAPS} > /tmp/oracle17/maps.jvm
+          python3 tools/convert_maps_bc17.py \
+            --jar /tmp/oracle17/battlecode2017.jar --dump-bits \
+            --only ${MAPS} > /tmp/oracle17/maps.ours
+          wc -l /tmp/oracle17/maps.jvm /tmp/oracle17/maps.ours
+          if ! diff -u /tmp/oracle17/maps.jvm /tmp/oracle17/maps.ours \
+               | head -40; then
+            echo "::error::the committed data/maps/bc17/*.json are not what"
+            echo "::error::the JVM's own LiveMap loader reads out of the jar."
+            exit 1
+          fi
+          diff -q /tmp/oracle17/maps.jvm /tmp/oracle17/maps.ours
+          echo "Tier B: 22 maps, byte-identical to the JVM's own LiveMap"
+
+      - name: Build the six Nim trace emitters (Tiers A, A′ and A″)
+        run: |
+          set -euo pipefail
+          # One binary per bot, exactly as bc16's and bc19's are: the bot is
+          # a COMPILE-TIME define in `rules.runControllerFor`, so a bot
+          # cannot leak into another tier's build.
+          nim c --hints:off -d:release -d:bc17Idle --path:src \
+            -o:/tmp/oracle17/pt_bc17idle tools/parity_trace_bc17.nim
+          nim c --hints:off -d:release --path:src \
+            -o:/tmp/oracle17/pt_examplefuncsplayer17 tools/parity_trace_bc17.nim
+          nim c --hints:off -d:release -d:bc17Scenario --path:src \
+            -o:/tmp/oracle17/pt_bc17scenario tools/parity_trace_bc17.nim
+          nim c --hints:off -d:release -d:bc17Scenario -d:bc17ScenarioTree \
+            --path:src -o:/tmp/oracle17/pt_bc17scenariotree \
+            tools/parity_trace_bc17.nim
+          nim c --hints:off -d:release -d:bc17Scenario -d:bc17ScenarioKill \
+            --path:src -o:/tmp/oracle17/pt_bc17scenariokill \
+            tools/parity_trace_bc17.nim
+          nim c --hints:off -d:release -d:bc17Scenario -d:bc17ScenarioTie \
+            --path:src -o:/tmp/oracle17/pt_bc17scenariotie \
+            tools/parity_trace_bc17.nim
+
+      # WHOLE GAMES, round 1 to the engine's own `isRunning() == false`, on
+      # the NINE parity pairs, for all SIX compared bots -- 54 pairs. Every
+      # `java` invocation is wrapped in `timeout 900`, because the sandboxed
+      # player threads are NON-DAEMON and a driver that throws without
+      # `System.exit()` hangs for ever (measured on four sibling years).
+      - name: Run both engines on fifty-four pairs (whole games)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle17/traces
+          total=0
+          for BOT in bc17idle examplefuncsplayer17 bc17scenario \
+                     bc17scenariotree bc17scenariokill bc17scenariotie; do
+            for MAP in CropCircles GreenHouse HiddenTunnel HouseDivided \
+                       OMGTree shrine Chess Cramped Alone; do
+              start=$(date +%s)
+              timeout 900 java -Xmx2g -XX:+UseSerialGC \
+                -cp "/tmp/oracle17/build/classes:/tmp/oracle17/battlecode2017.jar" \
+                battlecode.world.Bc17Trace "$MAP" 3000 "$BOT" \
+                /tmp/oracle17/build/bots \
+                > "/tmp/oracle17/traces/${BOT}.${MAP}.java" \
+                2> "/tmp/oracle17/traces/${BOT}.${MAP}.java.log"
+              jvm=$(( $(date +%s) - start ))
+              total=$(( total + jvm ))
+              tail -1 "/tmp/oracle17/traces/${BOT}.${MAP}.java.log"
+              "/tmp/oracle17/pt_${BOT}" "$MAP" 3000 \
+                > "/tmp/oracle17/traces/${BOT}.${MAP}.nim" \
+                2> "/tmp/oracle17/traces/${BOT}.${MAP}.nim.log"
+              tail -1 "/tmp/oracle17/traces/${BOT}.${MAP}.nim.log"
+              echo "${BOT}/${MAP}: ${jvm}s JVM," \
+                   "java $(wc -l < "/tmp/oracle17/traces/${BOT}.${MAP}.java") lines," \
+                   "nim $(wc -l < "/tmp/oracle17/traces/${BOT}.${MAP}.nim") lines"
+            done
+          done
+          echo "TOTAL JVM WALL CLOCK OVER THE 54 PAIRS: ${total}s"
+          echo "bc17 parity: ${total}s of JVM over 54 whole games" \
+            >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          # THE Tier A" FALLBACK, DECIDED IN PHASE 10 AND BOUNDED: if this
+          # ever exceeds 80 minutes the tier is cut to the six `small` pairs
+          # and the cut is recorded in docs/PARITY.md with the measurement.
+          # It has not fired: the phase-20 measurement was 168 seconds.
+          test "${total}" -le 4800 || {
+            echo "::error::the 54 pairs took ${total}s of JVM, past the"
+            echo "::error::80-minute bound. docs/PARITY.md section bc17"
+            echo "::error::records the decided fallback: cut Tier A\" to the"
+            echo "::error::six \`small\` pairs and RECORD THE CUT."
+            exit 1; }
+
+      # TIER B' (b) (BLOCKING, AND NOT COMPARED AGAINST THE PORT): the bot
+      # that is MEANT to be paused. `bc17slowbot` burns ~20 000 instrumented
+      # bytecodes a turn and the engine must pause it; the port has no
+      # bytecode counter at all and meters a fixed DecisionOps budget
+      # instead (V1), so nothing here is compared -- this run exists so the
+      # port's READING of the metering rule is proved rather than asserted.
+      - name: Tier B′ (BLOCKING) — the engine really does pause a slow bot
+        run: |
+          set -euo pipefail
+          timeout 900 java -Xmx2g -XX:+UseSerialGC \
+            -cp "/tmp/oracle17/build/classes:/tmp/oracle17/battlecode2017.jar" \
+            battlecode.world.Bc17Trace shrine 60 bc17slowbot \
+            /tmp/oracle17/build/bots \
+            > /tmp/oracle17/traces/bc17slowbot.shrine.java \
+            2> /tmp/oracle17/traces/bc17slowbot.shrine.java.log
+          tail -1 /tmp/oracle17/traces/bc17slowbot.shrine.java.log
+
+      # EVERY GAME REALLY RAN, AND EVERY PATH THE TIER CLAIMS REALLY FIRED.
+      # This is the step that stops a bit-exact tier from being vacuous, and
+      # it reads the ENGINE'S OWN trace, never the port's.
+      - name: Every game really ran (the ASM trap and the anti-vacuity gate)
+        run: |
+          set -euo pipefail
+          python3 tools/ci/bc17_assert_trace.py \
+            --dir /tmp/oracle17/traces \
+            --maps CropCircles GreenHouse HiddenTunnel HouseDivided OMGTree \
+                   shrine Chess Cramped Alone \
+            --scenario-bots bc17scenario bc17scenariotree bc17scenariokill \
+                            bc17scenariotie \
+            --slowbot-trace /tmp/oracle17/traces/bc17slowbot.shrine.java
+
+      - name: Tiers A, A′, A″ and C (all BLOCKING)
+        run: |
+          set -euo pipefail
+          # The comparator's own negative control first: a `bc=` column on
+          # one side only, a trace pair that differs only in LENGTH (in both
+          # directions), a zero-padded fold that is the same fold, a
+          # zero-padded RAW-BIT float that is the same float, ONE ULP that is
+          # not, and a ledger entry whose cause is "unknown".
+          python3 tools/ci/parity_tiers_bc17.py --selftest
+          python3 tools/ci/parity_tiers_bc17.py \
+            --dir /tmp/oracle17/traces \
+            --maps CropCircles GreenHouse HiddenTunnel HouseDivided OMGTree \
+                   shrine Chess Cramped Alone \
+            --bots bc17idle examplefuncsplayer17 bc17scenario \
+                   bc17scenariotree bc17scenariokill bc17scenariotie \
+            --ledger tools/ci/parity_ledger_bc17.json \
+            --summary "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+      - name: Upload the traces (first 200 divergent lines and a digest)
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oracle17/upload
+          # `if: always()` means this runs after an EARLIER step failed too,
+          # in which case the traces were never produced. Reporting nothing
+          # is correct there; failing the job a second time for a missing
+          # directory only hides the real error.
+          if [ ! -d /tmp/oracle17/traces ]; then
+            echo "no traces were produced; an earlier step failed"
+            exit 0
+          fi
+          cd /tmp/oracle17/traces
+          for BOT in bc17idle examplefuncsplayer17 bc17scenario \
+                     bc17scenariotree bc17scenariokill bc17scenariotie; do
+            for MAP in CropCircles GreenHouse HiddenTunnel HouseDivided \
+                       OMGTree shrine Chess Cramped Alone; do
+              j="${BOT}.${MAP}.java"
+              n="${BOT}.${MAP}.nim"
+              [ -f "$j" ] && [ -f "$n" ] || continue
+              # A bc17 trace runs 1-300 MB a side (`Chess` is 2 804 066
+              # lines); only the first 200 divergent lines and a gzipped
+              # digest are uploaded.
+              # `bc=` comes off BOTH sides, exactly as the comparator's
+              # own `normalize()` takes it off both: stripping it from the
+              # Java side only leaves a 13 KB "diff" for a pair that is
+              # bit-exact, which is a diagnostic that lies.
+              sed -E 's/ bc=[0-9]+//' "$j" > "/tmp/j.$$"
+              sed -E 's/ bc=[0-9]+//' "$n" > "/tmp/n.$$"
+              diff "/tmp/j.$$" "/tmp/n.$$" | head -200 \
+                > "/tmp/oracle17/upload/${BOT}.${MAP}.diff.txt" || true
+              head -400 "$j" | gzip -9 \
+                > "/tmp/oracle17/upload/${BOT}.${MAP}.java.head.gz"
+              head -400 "$n" | gzip -9 \
+                > "/tmp/oracle17/upload/${BOT}.${MAP}.nim.head.gz"
+              cp "${BOT}.${MAP}.java.log" "/tmp/oracle17/upload/" || true
+              rm -f "/tmp/j.$$" "/tmp/n.$$"
+            done
+          done
+          cp bc17slowbot.shrine.java.log /tmp/oracle17/upload/ || true
+          # NOT `ls | head`: under `set -o pipefail` the SIGPIPE `head` sends
+          # `ls` fails the whole step after every tier has already passed.
+          echo "$(find /tmp/oracle17/upload -type f | wc -l) files," \
+               "$(du -sh /tmp/oracle17/upload | cut -f1) of evidence"
+
+      - name: Upload the parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-bc17
+          path: /tmp/oracle17/upload
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ---------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------
   # parity-oracle-bc19: the 2019 JAVASCRIPT engine as a CI-only oracle.
   #
   # THE FIRST YEAR IN THIS REPOSITORY WHOSE ENGINE IS NOT JAVA. There is no
@@ -4596,6 +5115,155 @@ jobs:
                  "wall=\(.result.wall_clock_seconds)s"' \
             dist/smoke/replay-bc19.json
 
+      # bc17, THE TENTH YEAR MODULE AND THE ONLY CONTINUOUS-SPACE ONE.
+      #
+      # 900 ROUNDS, AND NOT 400, for a reason that is this year's. On the
+      # pinned map (`HouseDivided`, 30x30, ONE archon a side, ARCHON
+      # SEPARATION 6.5 -- the smallest in the whole `small` pool -- and 41
+      # neutral trees of which 41 hold bullets and 6 hold a robot) a
+      # 400-round window shows the opening farm but not the payoff: a
+      # planted tree grows for EIGHTY-ONE rounds before it pays anything at
+      # all, and a built fighter is DORMANT for its first twenty. 900 rounds
+      # guarantees a mature farm, real tree income, first contact inside
+      # twenty rounds and a decided game. It also records ~20 s of playback,
+      # which comfortably outlasts the viewer smoke's 15 s soak (the ecos
+      # 2026-08-23 scar).
+      #
+      # THE SEED IS PINNED TO DRAW `HouseDivided`, and
+      # `tests/test_bc17_maps.nim` asserts that exact draw from the other
+      # side, so the smoke's map cannot drift silently.
+      #
+      # SMOKE_REQUIRE_STATS is the episode SUBSTANCE assertion (the LEARNINGS
+      # 2026-09-03 pin), enforced FOR BOTH SEATS by the script. THE FLOORS
+      # ARE MEASURED, NOT GUESSED: this exact episode -- seed 5,
+      # `HouseDivided`, 900 rounds, orchard against examplefuncsplayer17 --
+      # produces
+      #
+      #   seat 0 (orchard)                20 units built, 1196 moves, 805 damage
+      #   seat 1 (examplefuncsplayer17)    6 units built, 1860 moves, 368 damage
+      #
+      # and the committed floors are at or below HALF the weak seat's value.
+      # `damage_dealt` is floored at 0 PER SEAT deliberately: the weak floor
+      # fires at `robots[0]` and may legitimately never connect. PLANTING,
+      # WATERING, SHAKING, CHOPPING AND DONATING ARE NOT IN THIS SET, because
+      # they are not things BOTH seats do -- `examplefuncsplayer17` never
+      # plants, waters, shakes, chops or donates, and it MAY NOT GAIN
+      # BEHAVIOUR because it is one side of the differential parity oracle.
+      # They are asserted ACROSS the seats in the step below instead.
+      - name: Raw-Docker episode smoke (bc17, scripted vs scripted)
+        env:
+          SMOKE_SLUG: ${{ env.SLUG }}
+          SMOKE_EXPECT_YEAR: bc17
+          # The manifest declares exactly the two players the certification
+          # fixture seats, and `PLAYER_SCRIPTED` resolves per year: on bc17
+          # `awu` is orchard and `scaffold` is examplefuncsplayer17
+          # (src/battlecode/baselines.nim).
+          SMOKE_PLAYER_IDS: awu,scaffold
+          SMOKE_CONFIG_OVERRIDE: >-
+            {"year":"bc17","pool":"small","seed":5,"gamesPerMatch":1,
+             "maxRounds":900,"perGameBudgetSeconds":90,
+             "matchBudgetSeconds":100,"connectTimeoutMs":15000}
+          # `damage_dealt_tenths`, not `damage_dealt`: EVERY float quantity
+          # in this year's results document is an integer number of TENTHS
+          # (results.nim, bc17's optional list), because bullets, health and
+          # damage are all float32 and a raw float in a JSON results
+          # document is a formatter argument waiting to happen.
+          SMOKE_REQUIRE_STATS: >-
+            {"units_built":3,"moves":400,"damage_dealt_tenths":0}
+          SMOKE_REPLAY_OUT: ${{ github.workspace }}/dist/smoke/replay-bc17.json
+          SMOKE_CONTRACT_PROBE: "0"
+        run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
+
+      # THE ACROSS-THE-PAIR HALF. The signatures of 2017 -- planting a
+      # bullet tree, WATERING it so it does not wither at 0.5 a round,
+      # shaking a neutral tree for the bullets inside it, chopping one open
+      # and firing a shot -- are things only a seat playing WELL does, and
+      # `examplefuncsplayer17` does NONE of them. Asserting them per-seat
+      # would be asserting that the weak floor is not weak; asserting them
+      # across the pair makes an idle win machine-visible, which is exactly
+      # what the 2026-09-03 round-1 degenerate match lacked.
+      #
+      # IF `water_actions >= 200` OR `bullets_fired >= 1` EVER STOPS
+      # HOLDING, THE FIX IS TO RAISE THE SMOKE'S `maxRounds` UNTIL IT DOES
+      # -- never to drop the assertion. An episode of this year in which
+      # nobody ever watered a tree or fired a bullet is not this game being
+      # played.
+      #
+      # Measured on this exact episode (the numbers the floors are at or
+      # below half of): trees planted 5, water actions 1145, shakes 30,
+      # chops 80, bullets fired 951, tree income 1529 bullets, strikes 100.
+      - name: The bc17 episode really played bc17
+        run: |
+          set -euo pipefail
+          # Read from the REPLAY, whose `result` block is the results
+          # document verbatim: `dist/smoke/results.json` is overwritten by
+          # every episode in turn and naming it here would make this
+          # assertion depend on which episode happened to run last (the bc24
+          # fix).
+          sum() { jq -r "[.result.games[0].$1[]] | add" \
+            dist/smoke/replay-bc17.json; }
+          planted="$(sum trees_planted)"
+          water="$(sum water_actions)"
+          shakes="$(sum shake_actions)"
+          chops="$(sum chop_actions)"
+          fired="$(sum bullets_fired)"
+          income="$(sum bullets_earned_from_trees_tenths)"
+          strikes="$(sum strike_actions)"
+          echo "across the two seats: planted=${planted} water=${water}" \
+               "shakes=${shakes} chops=${chops} fired=${fired}" \
+               "tree_income_tenths=${income} strikes=${strikes}"
+          test "${planted}" -ge 2 || {
+            echo "::error::only ${planted} bullet trees were planted in the"
+            echo "::error::whole episode. A bullet tree is the ONLY real"
+            echo "::error::income in this year: the passive trickle is"
+            echo "::error::max(0, 2 - 0.01 x supply), which is EXACTLY ZERO"
+            echo "::error::at the 300 bullets both sides start with."
+            exit 1; }
+          test "${water}" -ge 200 || {
+            echo "::error::only ${water} water actions in the whole episode."
+            echo "::error::A bullet tree WITHERS at 0.5 health a round once"
+            echo "::error::it matures, so a farm nobody waters is a farm"
+            echo "::error::that dies. RAISE maxRounds until it fires; do NOT"
+            echo "::error::drop this."
+            exit 1; }
+          test "${income}" -ge 3000 || {
+            echo "::error::${income} tenths of a bullet were earned from"
+            echo "::error::trees in the whole episode. A mature tree pays"
+            echo "::error::health/50 a round -- 1 a round at full health --"
+            echo "::error::and 900 rounds is eleven times the 81-round"
+            echo "::error::maturity clock."
+            exit 1; }
+          test "${shakes}" -ge 5 || {
+            echo "::error::not one neutral tree was shaken. HouseDivided"
+            echo "::error::carries 41 of them and every one holds bullets;"
+            echo "::error::shake() is free and works for ANY robot."
+            exit 1; }
+          test "${fired}" -ge 20 || {
+            echo "::error::only ${fired} bullets were fired in the whole"
+            echo "::error::episode. On HouseDivided the two archons start"
+            echo "::error::6.5 apart, so first blood lands inside twenty"
+            echo "::error::rounds. RAISE maxRounds until it fires; do NOT"
+            echo "::error::drop this."
+            exit 1; }
+          test "${strikes}" -ge 10 || {
+            echo "::error::not one lumberjack strike landed in the whole"
+            echo "::error::episode. A strike is this year's only area"
+            echo "::error::attack and it damages TREES as well as robots."
+            exit 1; }
+
+      # THE PACING NUMBER phase 60 sizes its check-8 dispatch from, and the
+      # number that decided this year's own `--timeout 120 --soak 15`
+      # (docs/RULES-BC17.md, "Playback pacing, measured"). bc17 is 3000
+      # ROUNDS like bc16, and a 100 % seek re-simulates the whole of it in
+      # the Worker.
+      - name: Print the bc17 episode's simulated seconds per round
+        run: |
+          set -euo pipefail
+          jq -r '"bc17 smoke: sim_seconds=\(.result.sim_seconds) " +
+                 "rounds=\(.result.games[0].rounds_played) " +
+                 "wall=\(.result.wall_clock_seconds)s"' \
+            dist/smoke/replay-bc17.json
+
       # THE PACING NUMBER the next year module sizes its own probe from, and
       # the number that decided this year's own `--timeout 120 --soak 15`
       # (docs/RULES-BC16.md, "Playback pacing, measured").
@@ -4618,14 +5286,14 @@ jobs:
                  "wall=\(.result.wall_clock_seconds)s"' \
             dist/smoke/replay-bc22.json
 
-      - name: All NINE smoke replays are present and are different years
+      - name: All TEN smoke replays are present and are different years
         run: |
           set -euo pipefail
           for f in dist/smoke/replay.json dist/smoke/replay-bc20.json \
                    dist/smoke/replay-bc21.json dist/smoke/replay-bc24.json \
                    dist/smoke/replay-bc25.json dist/smoke/replay-bc23.json \
                    dist/smoke/replay-bc22.json dist/smoke/replay-bc16.json \
-                   dist/smoke/replay-bc19.json; do
+                   dist/smoke/replay-bc19.json dist/smoke/replay-bc17.json; do
             test -s "$f" || { echo "::error::$f is missing"; exit 1; }
           done
           y26="$(jq -r .year dist/smoke/replay.json)"
@@ -4637,8 +5305,10 @@ jobs:
           y22="$(jq -r .year dist/smoke/replay-bc22.json)"
           y16="$(jq -r .year dist/smoke/replay-bc16.json)"
           y19="$(jq -r .year dist/smoke/replay-bc19.json)"
+          y17="$(jq -r .year dist/smoke/replay-bc17.json)"
           echo "replay.json year=$y26  bc20=$y20  bc21=$y21  bc24=$y24" \
-               "bc25=$y25  bc23=$y23  bc22=$y22  bc16=$y16  bc19=$y19"
+               "bc25=$y25  bc23=$y23  bc22=$y22  bc16=$y16  bc19=$y19" \
+               "bc17=$y17"
           test "$y26" = "bc26" || { echo "::error::replay.json is not bc26"; exit 1; }
           test "$y20" = "bc20" || { echo "::error::replay-bc20.json is not bc20"; exit 1; }
           test "$y21" = "bc21" || { echo "::error::replay-bc21.json is not bc21"; exit 1; }
@@ -4648,9 +5318,10 @@ jobs:
           test "$y22" = "bc22" || { echo "::error::replay-bc22.json is not bc22"; exit 1; }
           test "$y16" = "bc16" || { echo "::error::replay-bc16.json is not bc16"; exit 1; }
           test "$y19" = "bc19" || { echo "::error::replay-bc19.json is not bc19"; exit 1; }
+          test "$y17" = "bc17" || { echo "::error::replay-bc17.json is not bc17"; exit 1; }
           if [ "$(printf '%s\n' "$y26" "$y20" "$y21" "$y24" "$y25" "$y23" \
-                  "$y22" "$y16" "$y19" | sort -u | wc -l)" -ne 9 ]; then
-            echo "::error::the nine smoke replays are not nine different years"
+                  "$y22" "$y16" "$y19" "$y17" | sort -u | wc -l)" -ne 10 ]; then
+            echo "::error::the ten smoke replays are not ten different years"
             exit 1
           fi
 
@@ -4760,7 +5431,7 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx --yes playwright@1.55.0 install --with-deps chromium
 
-      - name: Load the bundle in a real browser (ALL NINE years' replays)
+      - name: Load the bundle in a real browser (ALL TEN years' replays)
         run: |
           set -euo pipefail
           # A for-loop, not `ls … | head -1`: under `set -o pipefail` an unmatched
@@ -4774,7 +5445,8 @@ jobs:
                            dist/smoke/replay-bc23.json \
                            dist/smoke/replay-bc22.json \
                            dist/smoke/replay-bc16.json \
-                           dist/smoke/replay-bc19.json; do
+                           dist/smoke/replay-bc19.json \
+                           dist/smoke/replay-bc17.json; do
             if [ -f "${candidate}" ]; then replays="${replays} ${candidate}"; fi
           done
           test -n "${replays}" || {
@@ -4837,10 +5509,21 @@ jobs:
           # phase-60 check-8 dispatch for bc16 uses `settle=20000 soak=15`
           # for exactly the same reason. Decided here rather than discovered
           # at phase 60.
+          # bc17 GETS THE SAME LONGER LEASH, and for the same measured
+          # reason as bc16: it is 3000 ROUNDS, and a 100 % seek re-simulates
+          # the whole of it in the Worker. It is also the only
+          # CONTINUOUS-SPACE year here -- every body is a circle with a
+          # float32 centre and every bullet is a moving point resolved
+          # against every disc within reach -- so its per-round cost is the
+          # highest in the repository on the tree-heavy boards
+          # (docs/RULES-BC17.md, "Playback pacing, measured"). The phase-60
+          # check-8 dispatch for bc17 uses `settle=20000 soak=15` for the
+          # same reason. Decided here rather than discovered at phase 60.
           if [ "${replay}" = "dist/smoke/replay-bc24.json" ] || \
              [ "${replay}" = "dist/smoke/replay-bc25.json" ] || \
              [ "${replay}" = "dist/smoke/replay-bc22.json" ] || \
              [ "${replay}" = "dist/smoke/replay-bc16.json" ] || \
+             [ "${replay}" = "dist/smoke/replay-bc17.json" ] || \
              [ "${replay}" = "dist/smoke/replay-bc23.json" ]; then
             node tools/ci/viewer_smoke.mjs \
               --bundle dist/static-replay-viewer \
@@ -4911,7 +5594,7 @@ jobs:
       # The wasm module itself, under node: wasm32-only failures (int overflow
       # traps, address-space exhaustion) are invisible to the native tests --
       # and a brand-new year module is exactly where one would live.
-      - name: Smoke the emitted wasm module under node (all nine years)
+      - name: Smoke the emitted wasm module under node (all ten years)
         run: |
           set -euo pipefail
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
@@ -4989,6 +5672,24 @@ jobs:
             "${{ github.workspace }}/dist/smoke/replay-bc19.json"
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
             "${{ github.workspace }}/tests/fixtures/replay-bc19.json"
+          # bc17: the smoke episode this run produced, and the COMMITTED
+          # bc17 fixture -- which carries TWELVE OF THE THIRTEEN beat kinds
+          # (tests/test_bc17_beats.nim asserts emission, label and style
+          # against exactly these bytes, and records why `rout` is the
+          # thirteenth: four robots of one side never die in one round).
+          # bc17 IS THE ONLY CONTINUOUS-SPACE YEAR IN THIS REPOSITORY: every
+          # coordinate, radius, health and bullet speed is a FLOAT32, and
+          # every transcendental goes through the fdlibm port in
+          # src/battlecode/fdlibm.nim rather than the platform libm --
+          # precisely because glibc's `sin` and emscripten's are not the
+          # same function. A wasm32 divergence in ANY of that shows up here
+          # as a hash-chain mismatch and nowhere else. NOTE that this smoke
+          # steps 200 FRAMES, so its `mismatch_round: -1` covers the first
+          # 200 rounds only.
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/dist/smoke/replay-bc17.json"
+          node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
+            "${{ github.workspace }}/tests/fixtures/replay-bc17.json"
 
       # The text the CI replay never carries. Every replay CI produces is
       # SCRIPTED, so its notes and motto are the short strings baselines.nim

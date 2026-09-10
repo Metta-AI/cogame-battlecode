@@ -1,0 +1,238 @@
+diff --git a/battlecode/world/ObjectInfo.java b/battlecode/world/ObjectInfo.java
+index 24dea7d..a3f7ed5 100644
+--- a/battlecode/world/ObjectInfo.java
++++ b/battlecode/world/ObjectInfo.java
+@@ -325,118 +325,144 @@ public strictfp class ObjectInfo {
+     // *** PLAYER METHODS *********
+     // ****************************
+ 
+-    public InternalTree[] getAllTreesWithinRadius(MapLocation center, float radius){
++    // ***********************************************************************
++    // *** rtree_order.patch -- THE CANDIDATE ORDER IS NORMALISED, NOT THE ***
++    // *** CANDIDATE SET.  ONE OF EXACTLY THREE PLACES THIS ORACLE IS NOT  ***
++    // *** THE PUBLISHED ENGINE (docs/PARITY.md section bc17, D2).         ***
++    // ***********************************************************************
++    //
++    // Every spatial query below went through
++    // `SpatialIndex`'s nearest-N query (point, procedure,
++    // Integer.MAX_VALUE, radius).
++    // MEASURED: `nearest-N` delivers entries in ascending distance from the
++    // query point -- but FOR EXACT TIES the order is an artefact of the
++    // R-tree's node layout and of the priority queue's heapify, and it is
++    // not even stable under a delete-and-re-add of the same point set (the
++    // same five points gave two different orders in one process).
++    // Reproducing that means porting jsi's R-tree AND jsi's PriorityQueue
++    // and then depending on both for ever.
++    //
++    // So both sides enumerate the SAME candidate set -- the engine's own
++    // `isWithinDistance` filter, unchanged, below -- and order it by
++    // `(distanceSquaredTo(query) ascending, id ascending)`, computed with
++    // `MapLocation.distanceSquaredTo`'s exact float32 expression.
++    // `src/battlecode/years/bc17/index.nim` does exactly this and nothing
++    // else; the normalisation is SYMMETRIC and neither trace is massaged
++    // alone. The three `SpatialIndex` fields are still maintained above so
++    // that this patch stays one hunk in one file; nothing reads them.
++    //
++    // The jsi search radius the engine passed (`radius + 10` for trees,
++    // `radius + 2` for robots) was redundant against the procedure's own
++    // filter, because no tree radius exceeds NEUTRAL_TREE_MAX_RADIUS and no
++    // body radius exceeds MAX_ROBOT_RADIUS -- the filter IS the whole of the
++    // rule, and it is kept verbatim. `getAllBulletsWithinRadius` had no
++    // procedure-side filter at all (the jsi cut WAS the rule), so the cut is
++    // written out as the same `isWithinDistance` test.
++
++    /** One candidate, ordered by `(distanceSquaredTo(query), id)`. */
++    private static strictfp final class Candidate
++            implements Comparable<Candidate> {
++        final int id;
++        final float distSq;
++
++        Candidate(int id, float distSq) {
++            this.id = id;
++            this.distSq = distSq;
++        }
+ 
+-        float searchRadius = radius + GameConstants.NEUTRAL_TREE_MAX_RADIUS;
++        public int compareTo(Candidate o) {
++            if (this.distSq < o.distSq) return -1;
++            if (this.distSq > o.distSq) return 1;
++            if (this.id < o.id) return -1;
++            if (this.id > o.id) return 1;
++            return 0;
++        }
++    }
+ 
+-        ArrayList<InternalTree> returnTrees = new ArrayList<InternalTree>();
++    public InternalTree[] getAllTreesWithinRadius(MapLocation center, float radius){
+ 
+-        treeIndex.nearestN(
+-                new Point(center.x,center.y),   // Search from center
+-                new TIntProcedure() {          // Add each to a list
+-                    public boolean execute(int i) {
+-                        InternalTree potentialTree = getTreeByID(i);
+-                        if (potentialTree.getLocation().isWithinDistance(center,potentialTree.getRadius()+radius))
+-                            returnTrees.add(potentialTree);
+-                        return true;    // Keep searching for results
+-                    }
+-                },
+-                Integer.MAX_VALUE,
+-                searchRadius
+-        );
++        final ArrayList<Candidate> found = new ArrayList<Candidate>();
+ 
+-        return returnTrees.toArray(new InternalTree[returnTrees.size()]);
++        gameTreesByID.forEachValue(new TObjectProcedure<InternalTree>() {
++            public boolean execute(InternalTree potentialTree) {
++                if (potentialTree.getLocation().isWithinDistance(center,potentialTree.getRadius()+radius))
++                    found.add(new Candidate(potentialTree.getID(),
++                            potentialTree.getLocation().distanceSquaredTo(center)));
++                return true;
++            }
++        });
++
++        java.util.Collections.sort(found);
++        InternalTree[] returnTrees = new InternalTree[found.size()];
++        for (int i = 0; i < returnTrees.length; i++) {
++            returnTrees[i] = getTreeByID(found.get(i).id);
++        }
++        return returnTrees;
+     }
+-    
+-    public InternalRobot[] getAllRobotsWithinRadius(MapLocation center, float radius){
+ 
+-        float searchRadius = radius + GameConstants.MAX_ROBOT_RADIUS;
++    public InternalRobot[] getAllRobotsWithinRadius(MapLocation center, float radius){
+ 
+-        ArrayList<InternalRobot> returnRobots = new ArrayList<InternalRobot>();
++        final ArrayList<Candidate> found = new ArrayList<Candidate>();
+ 
+-        robotIndex.nearestN(
+-                new Point(center.x,center.y),   // Search from center
+-                new TIntProcedure() {           // Add each to a list
+-                    public boolean execute(int i) {
+-                        InternalRobot potentialRobot = getRobotByID(i);
+-                        if (potentialRobot.getLocation().isWithinDistance(center,potentialRobot.getType().bodyRadius+radius))
+-                            returnRobots.add(potentialRobot);
+-                        return true;   // Keep searching for results
+-                    }
+-                },
+-                Integer.MAX_VALUE,
+-                searchRadius
+-        );
++        gameRobotsByID.forEachValue(new TObjectProcedure<InternalRobot>() {
++            public boolean execute(InternalRobot potentialRobot) {
++                if (potentialRobot.getLocation().isWithinDistance(center,potentialRobot.getType().bodyRadius+radius))
++                    found.add(new Candidate(potentialRobot.getID(),
++                            potentialRobot.getLocation().distanceSquaredTo(center)));
++                return true;
++            }
++        });
+ 
+-        return returnRobots.toArray(new InternalRobot[returnRobots.size()]);
++        java.util.Collections.sort(found);
++        InternalRobot[] returnRobots = new InternalRobot[found.size()];
++        for (int i = 0; i < returnRobots.length; i++) {
++            returnRobots[i] = getRobotByID(found.get(i).id);
++        }
++        return returnRobots;
+     }
+-    
++
+     public InternalBullet[] getAllBulletsWithinRadius(MapLocation center, float radius){
+ 
+-        ArrayList<InternalBullet> returnBullets = new ArrayList<InternalBullet>();
++        final ArrayList<Candidate> found = new ArrayList<Candidate>();
+ 
+-        // Add each to a list
+-        bulletIndex.nearestN(
+-                new Point(center.x,center.y),   // Search from center
+-                i -> {
+-                    returnBullets.add(getBulletByID(i));
+-                    return true;
+-                },
+-                Integer.MAX_VALUE,
+-                radius
+-        );
++        gameBulletsByID.forEachValue(new TObjectProcedure<InternalBullet>() {
++            public boolean execute(InternalBullet potentialBullet) {
++                if (potentialBullet.getLocation().isWithinDistance(center,radius))
++                    found.add(new Candidate(potentialBullet.getID(),
++                            potentialBullet.getLocation().distanceSquaredTo(center)));
++                return true;
++            }
++        });
+ 
+-        return returnBullets.toArray(new InternalBullet[returnBullets.size()]);
++        java.util.Collections.sort(found);
++        InternalBullet[] returnBullets = new InternalBullet[found.size()];
++        for (int i = 0; i < returnBullets.length; i++) {
++            returnBullets[i] = getBulletByID(found.get(i).id);
++        }
++        return returnBullets;
+     }
+-    
++
+     public InternalTree getTreeAtLocation(MapLocation loc){
+ 
+-        // even though it only contains one element, arraylist is required to be accessed from inside TIntProcedure
+-        ArrayList<InternalTree> returnTrees = new ArrayList<InternalTree>();
+-
+-        treeIndex.nearestN(
+-                new Point(loc.x,loc.y),
+-                i -> {
+-                    InternalTree potentialTree = getTreeByID(i);
+-                    if (potentialTree.getLocation().isWithinDistance(loc,potentialTree.getRadius())) {
+-                        returnTrees.add(potentialTree);
+-                        return false;
+-                    }
+-                    return true;   // keep looking for results
+-                },
+-                Integer.MAX_VALUE,
+-                GameConstants.NEUTRAL_TREE_MAX_RADIUS  // Furthest distance
+-        );
+-
+-        if(returnTrees.size() > 0)
+-            return returnTrees.get(0);
++        // The engine returned the FIRST candidate whose circle contains the
++        // point, in nearest-N's order; the normative answer is the
++        // `(distanceSquaredTo, id)`-minimal one, which is element 0 of the
++        // enumeration above with a radius of zero -- `dist <= radius + 0` IS
++        // "the point is inside the circle".
++        InternalTree[] trees = getAllTreesWithinRadius(loc, 0);
++
++        if(trees.length > 0)
++            return trees[0];
+         else
+             return null;
+     }
+ 
+     public InternalRobot getRobotAtLocation(MapLocation loc){
+ 
+-        // even though it only contains one element, arraylist is required to be accessed from inside TIntProcedure
+-        ArrayList<InternalRobot> returnRobots = new ArrayList<InternalRobot>();
+-
+-        robotIndex.nearestN(
+-                new Point(loc.x,loc.y),
+-                new TIntProcedure() {
+-                    public boolean execute(int i) {
+-                        InternalRobot potentialRobot = getRobotByID(i);
+-                        if (potentialRobot.getLocation().isWithinDistance(loc,potentialRobot.getType().bodyRadius)) {
+-                            returnRobots.add(potentialRobot);
+-                            return false;
+-                        }
+-                        return true;   // keep looking for results
+-                    }
+-                },
+-                Integer.MAX_VALUE,
+-                GameConstants.MAX_ROBOT_RADIUS  // Furthest distance
+-        );
+-
+-        if(returnRobots.size() > 0)
+-            return returnRobots.get(0);
++        InternalRobot[] robots = getAllRobotsWithinRadius(loc, 0);
++
++        if(robots.length > 0)
++            return robots[0];
+         else
+             return null;
+     }

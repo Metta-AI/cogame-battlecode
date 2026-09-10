@@ -153,6 +153,59 @@ proc collectGameEvents(
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                     "x": e.b div 100, "y": e.b mod 100,
                     "victims": 1, "damage": e.c}))
+    of "tree_planted":
+      events.add(ev("tree_planted", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": float(e.b div 100000) / 10.0,
+                    "y": float(e.b mod 100000) / 10.0,
+                    "trees": e.c}))
+    of "tree_lost":
+      events.add(ev("tree_lost", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": float(e.b div 100000) / 10.0,
+                    "y": float(e.b mod 100000) / 10.0,
+                    "trees": e.c, "cause": e.s}))
+    of "farm_online":
+      events.add(ev("farm_online", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "mature_trees": e.b, "income_tenths": e.c}))
+    of "gardener_lost":
+      events.add(ev("gardener_lost", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": float(e.b div 100000) / 10.0,
+                    "y": float(e.b mod 100000) / 10.0,
+                    "gardeners_left": e.c}))
+    of "donation":
+      events.add(ev("donation", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "bullets_tenths": e.b,
+                    "vp_gained": e.c div 100000,
+                    "vp_total": e.c mod 100000,
+                    "price_tenths": intOrZero(e.s)}))
+    of "shake":
+      events.add(ev("shake", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "bullets_tenths": e.b,
+                    "x": float(e.c div 100000) / 10.0,
+                    "y": float(e.c mod 100000) / 10.0}))
+    of "chop_reveal":
+      events.add(ev("chop_reveal", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "x": float(e.b div 100000) / 10.0,
+                    "y": float(e.b mod 100000) / 10.0,
+                    "unit": e.s}))
+    of "strike":
+      events.add(ev("strike", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "enemy_hit": e.b div 1000,
+                    "friendly_hit": e.b mod 1000,
+                    "trees_hit": e.c div 1000,
+                    "own_trees_hit": e.c mod 1000,
+                    "at": e.s}))
+    of "volley":
+      events.add(ev("volley", game = gameIndex, round = e.round,
+        fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
+                    "bullets_fired": e.b, "shape": e.s}))
     of "duel":
       ## `lost` is a 2-array in TEAM order (A then B), mapped to seat order by
       ## the game's own side assignment.
@@ -346,6 +399,7 @@ proc collectGameEvents(
         elif plan.year == "bc22": Bc22ActionNames[e.b]
         elif plan.year == "bc16": Bc16ActionNames[e.b]
         elif plan.year == "bc19": Bc19ActionNames[max(0, min(7, e.b))]
+        elif plan.year == "bc17": Bc17ActionNames[max(0, min(15, e.b))]
         else: Bc24ActionNames[e.b]
       events.add(ev("first_action", game = gameIndex, round = e.c,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
@@ -380,13 +434,14 @@ proc collectGameEvents(
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
                     "skill": Bc24SkillNames[e.b], "level": e.c}))
     of "unit_milestone":
-      ## bc16 AND bc19. The first of each buildable type per side, so a
+      ## bc16, bc19 AND bc17. The first of each buildable type per side, so a
       ## spectator sees "Clan Ash commissions its first PREACHER" rather
-      ## than a census that moved. The two years have DIFFERENT unit
-      ## vocabularies -- twelve values against six -- so the table is chosen
+      ## than a census that moved. The three years have DIFFERENT unit
+      ## vocabularies -- twelve values, six and six -- so the table is chosen
       ## by the year on the replay header.
       let unitName =
         if plan.year == "bc19": Bc19UnitNames[max(0, min(5, e.b))]
+        elif plan.year == "bc17": Bc17UnitNames[max(0, min(5, e.b))]
         else: Bc16UnitNames[max(0, min(11, e.b))]
       events.add(ev("unit_milestone", game = gameIndex, round = e.round,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
@@ -576,9 +631,14 @@ proc collectGameEvents(
                     "x": e.b div 100, "y": e.b mod 100,
                     "worked": e.c}))
     of "famine":
+      ## bc19 runs out of one of TWO resources and bc17 of its only one, so
+      ## the resource name is chosen by the year on the replay header: a
+      ## bc17 spectator must never be told a faction is out of `karbonite`.
       events.add(ev("famine", game = gameIndex, round = e.round,
         fields = %*{"alias": plan.aliasOfTeam(gameIndex, e.a),
-                    "resource": (if e.b == 0: "karbonite" else: "fuel")}))
+                    "resource":
+                      (if plan.year == "bc17": "bullets"
+                       elif e.b == 0: "karbonite" else: "fuel")}))
     of "trade":
       ## The barter's sign convention is the ENGINE's: POSITIVE MEANS THE
       ## RESOURCE MOVES RED TO BLUE. The event carries the raw signed pair
@@ -698,7 +758,14 @@ func winBonusFor*(year: string): float =
   ## against 36 available below, so its `points` can favour the LOSER too
   ## (docs/RULES-BC19.md, Scoring; `tests/test_bc19_scoring.nim` asserts
   ## that case explicitly rather than leaving it to be found).
-  if yearIdOf(year) in {yBc25, yBc23, yBc22, yBc16, yBc19}: 200.0 else: 100.0
+  ## bc17 pays 200 for EXACTLY that reason a fifth time: its 64/24/12 weights
+  ## read the engine's own three deciding rungs, and a 501-to-499
+  ## victory-point margin is `501/1000 - 499/1000 = 0.002` of 64 = 0.128 of a
+  ## point against 36 available below, so its `points` can favour the LOSER
+  ## too (docs/RULES-BC17.md, Scoring; `tests/test_bc17_scoring.nim` asserts
+  ## that case explicitly rather than leaving it to be found).
+  if yearIdOf(year) in {yBc25, yBc23, yBc22, yBc16, yBc19, yBc17}: 200.0
+  else: 100.0
 
 proc scoresFor*(games: seq[GameOutcome],
                 year = "bc26"): array[2, float] =

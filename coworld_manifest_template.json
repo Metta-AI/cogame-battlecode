@@ -9,7 +9,7 @@
   "episode_timeout_minutes": 20,
   "game": {
     "name": "battlecode",
-    "description": "Battlecode, played by doctrine. Two cogs each write one sealed JSON strategy sheet and a deterministic Nim port of an official Battlecode rule set plays the whole match from those two sheets. Variant `bc26` is 2026 \"Uneasy Alliances\" — rat clans allied against NPC cats until one of them betrays. Variant `bc20` is 2020 \"Soup\" — the water rises every round, and a team either terraforms its way above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt. Variant `bc21` is 2021 \"Campaign\" — Enlightenment Centers bid influence for votes and spend it on politicians, slanderers and muckrakers, and the election is decided at round 1500. Variant `bc24` is 2024 \"Breadwars\" — 50 identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off. Variant `bc25` is 2025 “Chromatic Conflict” — paint robots colour a grid, build money, paint and defense towers by painting exact patterns onto ruins, and win by owning 70 % of the map. Variant `bc23` is 2023 “Tempest” — carriers mine adamantium and mana from sky wells, launchers fight the only real war, and a faction wins by ferrying reality anchors onto 75 % of the sky islands. Variant `bc22` is 2022 “Mutation” — miners dig lead out of a map that only regenerates the squares you do not empty, laboratories turn lead into gold at a price that rises with company, and anomalies strike every two hundred rounds until the Singularity takes the weaker side at round 2000. Variant `bc16` is 2016 \"Zombie Invasion\" — archons build soldiers, guards, vipers, turrets and scouts and collect parts while zombie dens spawn escalating waves on a public schedule, every kill by a zombie stands the victim back up on the horde's side, and every uninfected corpse becomes a wall; win by destroying the enemy's last archon, or by having more of them at round 2999. Variant `bc19` is 2019 “Crusade” — castles and churches build pilgrims that mine karbonite and fuel, crusaders, prophets and preachers; every action burns fuel and the only free income is twenty-five fuel a round; the board is a mirror so both sides know where the other's castles are from round one; a preacher's blast hits nine squares with no team check; the two orders may barter karbonite for fuel with each other; and a side wins by destroying every enemy castle, or by holding more of them at round one thousand.",
+    "description": "Battlecode, played by doctrine. Two cogs each write one sealed JSON strategy sheet and a deterministic Nim port of an official Battlecode rule set plays the whole match from those two sheets. Variant `bc26` is 2026 \"Uneasy Alliances\" \u2014 rat clans allied against NPC cats until one of them betrays. Variant `bc20` is 2020 \"Soup\" \u2014 the water rises every round, and a team either terraforms its way above the flood, walls its HQ in, or buries the enemy's under fifty units of dirt. Variant `bc21` is 2021 \"Campaign\" \u2014 Enlightenment Centers bid influence for votes and spend it on politicians, slanderers and muckrakers, and the election is decided at round 1500. Variant `bc24` is 2024 \"Breadwars\" \u2014 50 identical ducks a side, three flags each, an impassable dam for 200 rounds, and traps you cannot see until they go off. Variant `bc25` is 2025 \u201cChromatic Conflict\u201d \u2014 paint robots colour a grid, build money, paint and defense towers by painting exact patterns onto ruins, and win by owning 70\u202f% of the map. Variant `bc23` is 2023 \u201cTempest\u201d \u2014 carriers mine adamantium and mana from sky wells, launchers fight the only real war, and a faction wins by ferrying reality anchors onto 75\u202f% of the sky islands. Variant `bc22` is 2022 \u201cMutation\u201d \u2014 miners dig lead out of a map that only regenerates the squares you do not empty, laboratories turn lead into gold at a price that rises with company, and anomalies strike every two hundred rounds until the Singularity takes the weaker side at round 2000. Variant `bc16` is 2016 \"Zombie Invasion\" \u2014 archons build soldiers, guards, vipers, turrets and scouts and collect parts while zombie dens spawn escalating waves on a public schedule, every kill by a zombie stands the victim back up on the horde's side, and every uninfected corpse becomes a wall; win by destroying the enemy's last archon, or by having more of them at round 2999. Variant `bc19` is 2019 \u201cCrusade\u201d \u2014 castles and churches build pilgrims that mine karbonite and fuel, crusaders, prophets and preachers; every action burns fuel and the only free income is twenty-five fuel a round; the board is a mirror so both sides know where the other's castles are from round one; a preacher's blast hits nine squares with no team check; the two orders may barter karbonite for fuel with each other; and a side wins by destroying every enemy castle, or by holding more of them at round one thousand. Variant `bc17` is 2017 \"Robotic Wildlife Fund\" -- the continuous-space year: archons hire gardeners who plant bullet trees; soldiers, tanks, scouts and lumberjacks fight with travelling bullets in float coordinates; a victory point costs seven and a half bullets on round one and twenty on round two thousand nine hundred and ninety-nine; and a side wins by buying one thousand of them, by killing every enemy robot, or by holding more of them at the round limit.",
     "owner": "daveey@gmail.com",
     "replay_viewer": {
       "bundle": "static-replay-viewer"
@@ -48,7 +48,7 @@
         },
         {
           "id": "rules-bc21.md",
-          "title": "Battlecode 2021 “Campaign”: rules, knobs and divergences",
+          "title": "Battlecode 2021 \u201cCampaign\u201d: rules, knobs and divergences",
           "content": {
             "type": "uri",
             "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/RULES-BC21.md"
@@ -64,7 +64,7 @@
         },
         {
           "id": "rules-bc25.md",
-          "title": "Battlecode 2025 “Chromatic Conflict”: rules, knobs and divergences",
+          "title": "Battlecode 2025 \u201cChromatic Conflict\u201d: rules, knobs and divergences",
           "content": {
             "type": "uri",
             "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/RULES-BC25.md"
@@ -72,7 +72,7 @@
         },
         {
           "id": "rules-bc23.md",
-          "title": "Battlecode 2023 “Tempest”: rules, knobs and divergences",
+          "title": "Battlecode 2023 \u201cTempest\u201d: rules, knobs and divergences",
           "content": {
             "type": "uri",
             "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/RULES-BC23.md"
@@ -80,7 +80,7 @@
         },
         {
           "id": "rules-bc22.md",
-          "title": "Battlecode 2022 “Mutation”: rules, knobs and divergences",
+          "title": "Battlecode 2022 \u201cMutation\u201d: rules, knobs and divergences",
           "content": {
             "type": "uri",
             "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/RULES-BC22.md"
@@ -96,7 +96,7 @@
         },
         {
           "id": "rules-bc19.md",
-          "title": "Battlecode 2019 “Crusade”: rules, knobs and divergences",
+          "title": "Battlecode 2019 \u201cCrusade\u201d: rules, knobs and divergences",
           "content": {
             "type": "uri",
             "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/RULES-BC19.md"
@@ -116,6 +116,14 @@
           "content": {
             "type": "uri",
             "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/PARITY.md"
+          }
+        },
+        {
+          "id": "rules-bc17.md",
+          "title": "Battlecode 2017 \"Robotic Wildlife Fund\": rules, knobs and divergences",
+          "content": {
+            "type": "uri",
+            "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/docs/RULES-BC17.md"
           }
         }
       ]
@@ -149,7 +157,8 @@
             "bc23",
             "bc22",
             "bc16",
-            "bc19"
+            "bc19",
+            "bc17"
           ]
         },
         "pool": {
@@ -374,7 +383,12 @@
                   "more_parts_net_worth",
                   "castles_destroyed",
                   "more_castles",
-                  "more_unit_health"
+                  "more_unit_health",
+                  "victory_points_reached",
+                  "all_robots_destroyed",
+                  "more_victory_points",
+                  "more_bullet_trees",
+                  "more_bullet_worth"
                 ]
               },
               "cooperation_at_end": {
@@ -2703,6 +2717,391 @@
               },
               "castle_separation_max": {
                 "type": "number"
+              },
+              "gardeners_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "gardeners_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "gardeners_lost": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "lumberjacks_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "tanks_built": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "victory_points": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "bullets_end_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "bullets_earned_from_trees_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "bullets_shaken_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "bullets_donated_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "bullets_spent_on_units_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "bullets_spent_on_trees_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "bullets_spent_on_shots_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "bullets_trickled_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "bullet_worth_end_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "trees_planted": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "trees_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "trees_lost": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "trees_mature_end": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "water_actions": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "shake_actions": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "chop_actions": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "neutral_trees_felled": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "robots_released_from_trees": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "bullets_fired": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "single_shots": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "triad_shots": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "pentad_shots": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "damage_dealt_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "damage_taken_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "friendly_fire_damage_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "own_trees_damaged_tenths": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "strike_actions": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "body_attacks": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "tanks_built_by_600": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "lumberjacks_built_by_600": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "scouts_built_by_600": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "enemy_gardeners_killed": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "enemy_trees_felled": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "trees_alive_at_1500": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "mature_trees_by_600": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "rounds_below_one_bullet": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "trees_lost_to_strike": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "board_width_tenths": {
+                "type": "integer"
+              },
+              "board_height_tenths": {
+                "type": "integer"
+              },
+              "neutral_trees_start": {
+                "type": "integer"
+              },
+              "neutral_trees_with_bullets": {
+                "type": "integer"
+              },
+              "neutral_trees_with_robots": {
+                "type": "integer"
+              },
+              "archon_separation_min_tenths": {
+                "type": "integer"
+              },
+              "archon_separation_max_tenths": {
+                "type": "integer"
+              },
+              "robot_ids_issued": {
+                "type": "integer"
+              },
+              "bullet_ids_issued": {
+                "type": "integer"
+              },
+              "peak_bullets_in_flight": {
+                "type": "integer"
+              },
+              "broadcasts": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "domination_factor": {
+                "type": "string"
               }
             }
           }
@@ -2802,7 +3201,7 @@
       "id": "awu",
       "name": "awu",
       "type": "player",
-      "description": "the strong published baseline of whichever year the variant selects — distilled-awubot on bc26, Bowl of Chowder on bc20, California Roll on bc21, Gone Sharkin' on bc24, SPAARK on bc25, lemonade on bc23, wololo on bc22, bulwark on bc16, saber on bc19.",
+      "description": "the strong published baseline of whichever year the variant selects \u2014 distilled-awubot on bc26, Bowl of Chowder on bc20, California Roll on bc21, Gone Sharkin' on bc24, SPAARK on bc25, lemonade on bc23, wololo on bc22, bulwark on bc16, saber on bc19, orchard on bc17.",
       "image": "{{PLAYER_IMAGE}}",
       "run": [
         "/bin/battlecode-player"
@@ -2825,7 +3224,7 @@
       "id": "scaffold",
       "name": "scaffold",
       "type": "player",
-      "description": "the weak scaffold baseline of whichever year the variant selects — the ported example bot (examplefuncsplayer on bc20, examplefuncsplayer21 on bc21), examplefuncsplayer24 on bc24, examplefuncsplayer25 on bc25, examplefuncsplayer23 on bc23, examplefuncsplayer22 on bc22, greenhorn on bc16, examplefuncsplayer19 on bc19.",
+      "description": "the weak scaffold baseline of whichever year the variant selects \u2014 the ported example bot (examplefuncsplayer on bc20, examplefuncsplayer21 on bc21), examplefuncsplayer24 on bc24, examplefuncsplayer25 on bc25, examplefuncsplayer23 on bc23, examplefuncsplayer22 on bc22, greenhorn on bc16, examplefuncsplayer19 on bc19, examplefuncsplayer17 on bc17.",
       "image": "{{PLAYER_IMAGE}}",
       "run": [
         "/bin/battlecode-player"
@@ -2848,7 +3247,7 @@
   "variants": [
     {
       "id": "bc26",
-      "name": "Battlecode 2026 — Uneasy Alliances (2 seats)",
+      "name": "Battlecode 2026 \u2014 Uneasy Alliances (2 seats)",
       "description": "Best of three on the mixed pool. Both clans start allied against the cats; either can betray at any moment, and the points formula swings when they do.",
       "game_config": {
         "year": "bc26",
@@ -2875,7 +3274,7 @@
     },
     {
       "id": "bc20",
-      "name": "Battlecode 2020 — Soup (2 seats)",
+      "name": "Battlecode 2020 \u2014 Soup (2 seats)",
       "description": "Best of three on the mixed pool. The water rises every round and every HQ starts below it: a team either walls its HQ in, terraforms above the flood, or buries the enemy's HQ under fifty units of dirt before the sea gets to its own.",
       "game_config": {
         "year": "bc20",
@@ -2902,8 +3301,8 @@
     },
     {
       "id": "bc21",
-      "name": "Battlecode 2021 — Campaign (2 seats)",
-      "description": "Best of three on the mixed pool. Every round auctions one citizen's vote; influence buys units, buys votes, and is what an enemy politician takes when it converts your Enlightenment Center. Turtle and print money, spam muckrakers and kill the money, or take the neutral Centers first — 1500 rounds decide it.",
+      "name": "Battlecode 2021 \u2014 Campaign (2 seats)",
+      "description": "Best of three on the mixed pool. Every round auctions one citizen's vote; influence buys units, buys votes, and is what an enemy politician takes when it converts your Enlightenment Center. Turtle and print money, spam muckrakers and kill the money, or take the neutral Centers first \u2014 1500 rounds decide it.",
       "game_config": {
         "year": "bc21",
         "pool": "mixed",
@@ -2929,8 +3328,8 @@
     },
     {
       "id": "bc24",
-      "name": "Battlecode 2024 — Breadwars (2 seats)",
-      "description": "Best of three on the mixed pool. Fifty identical ducks a side and three flags each. A dam splits the map for 200 rounds while both flocks dig, fill, hide traps and choose where their flags will stand; then it falls, and the only way to end the game early is to carry all three enemy flags home. Ducks level up by attacking, healing or building — 2 000 rounds decide it.",
+      "name": "Battlecode 2024 \u2014 Breadwars (2 seats)",
+      "description": "Best of three on the mixed pool. Fifty identical ducks a side and three flags each. A dam splits the map for 200 rounds while both flocks dig, fill, hide traps and choose where their flags will stand; then it falls, and the only way to end the game early is to carry all three enemy flags home. Ducks level up by attacking, healing or building \u2014 2\u202f000 rounds decide it.",
       "game_config": {
         "year": "bc24",
         "pool": "mixed",
@@ -2956,8 +3355,8 @@
     },
     {
       "id": "bc25",
-      "name": "Battlecode 2025 — Chromatic Conflict (2 seats)",
-      "description": "Best of three on the mixed pool. Two clans of paint robots colour a grid. Soldiers paint one tile at a time, splashers repaint a blast radius including the enemy's ground, and moppers wipe it back to bare. Towers are built by painting an exact 5×5 pattern onto a ruin, and a Special Resource Pattern pays every mining tower you own — if it survives fifty rounds. Paint 70 % of the map, destroy everything they have, or be ahead on colour at round 2 000.",
+      "name": "Battlecode 2025 \u2014 Chromatic Conflict (2 seats)",
+      "description": "Best of three on the mixed pool. Two clans of paint robots colour a grid. Soldiers paint one tile at a time, splashers repaint a blast radius including the enemy's ground, and moppers wipe it back to bare. Towers are built by painting an exact 5\u00d75 pattern onto a ruin, and a Special Resource Pattern pays every mining tower you own \u2014 if it survives fifty rounds. Paint 70\u202f% of the map, destroy everything they have, or be ahead on colour at round 2\u202f000.",
       "game_config": {
         "year": "bc25",
         "pool": "mixed",
@@ -2983,8 +3382,8 @@
     },
     {
       "id": "bc23",
-      "name": "Battlecode 2023 — Tempest (2 seats)",
-      "description": "Best of three on the mixed pool. Carriers mine adamantium and mana from wells and haul it home at half speed when they are full; launchers are the only unit that deals real damage, and they can shoot through the clouds that blind everyone. Pour 600 kg of the wrong resource into a well and it becomes elixir, which buys temporal boosters, destabilizers and the better kind of reality anchor. Win by anchoring 75 % of the sky islands — and an anchor only holds while your robots stand on the island.",
+      "name": "Battlecode 2023 \u2014 Tempest (2 seats)",
+      "description": "Best of three on the mixed pool. Carriers mine adamantium and mana from wells and haul it home at half speed when they are full; launchers are the only unit that deals real damage, and they can shoot through the clouds that blind everyone. Pour 600\u202fkg of the wrong resource into a well and it becomes elixir, which buys temporal boosters, destabilizers and the better kind of reality anchor. Win by anchoring 75\u202f% of the sky islands \u2014 and an anchor only holds while your robots stand on the island.",
       "game_config": {
         "year": "bc23",
         "pool": "mixed",
@@ -3010,8 +3409,8 @@
     },
     {
       "id": "bc22",
-      "name": "Battlecode 2022 — Mutation (2 seats)",
-      "description": "Best of three on the mixed pool. Miners dig lead out of the map, and the map only puts lead back on squares you did not empty — so the cheapest mistake in this year is mining the last unit off a deposit. Soldiers cost lead and deal three damage; sages cost gold, deal forty-five, and gold exists only because a laboratory makes it, more cheaply the lonelier it is. Anomalies strike every two hundred rounds — the abyss eats your bank, the charge kills whoever clumped hardest, the fury burns buildings that are standing still, and the vortex reshuffles the ground — and at round 2000 the Singularity takes the weaker side. Lose your last archon and you lose immediately.",
+      "name": "Battlecode 2022 \u2014 Mutation (2 seats)",
+      "description": "Best of three on the mixed pool. Miners dig lead out of the map, and the map only puts lead back on squares you did not empty \u2014 so the cheapest mistake in this year is mining the last unit off a deposit. Soldiers cost lead and deal three damage; sages cost gold, deal forty-five, and gold exists only because a laboratory makes it, more cheaply the lonelier it is. Anomalies strike every two hundred rounds \u2014 the abyss eats your bank, the charge kills whoever clumped hardest, the fury burns buildings that are standing still, and the vortex reshuffles the ground \u2014 and at round 2000 the Singularity takes the weaker side. Lose your last archon and you lose immediately.",
       "game_config": {
         "year": "bc22",
         "pool": "mixed",
@@ -3037,8 +3436,8 @@
     },
     {
       "id": "bc16",
-      "name": "Battlecode 2016 — Zombie Invasion (2 seats)",
-      "description": "Best of three on the mixed pool, three thousand rounds each. Archons are the only thing that matters: lose your last one and you lose on the spot. They build soldiers, guards, vipers, turrets and scouts out of parts they collect by walking over them, and they repair one wounded robot a turn for free. Zombie dens spawn escalating waves on a schedule both sides can read from round zero, and every three hundred rounds the zombies get stronger. Anything a zombie or a viper bites is infected, and anything that dies while infected stands back up on the horde's side — so a soldier you lose in their half is a zombie hunting them. Anything that dies uninfected leaves a wall of rubble where it fell. At round 2999 the side with more archons wins.",
+      "name": "Battlecode 2016 \u2014 Zombie Invasion (2 seats)",
+      "description": "Best of three on the mixed pool, three thousand rounds each. Archons are the only thing that matters: lose your last one and you lose on the spot. They build soldiers, guards, vipers, turrets and scouts out of parts they collect by walking over them, and they repair one wounded robot a turn for free. Zombie dens spawn escalating waves on a schedule both sides can read from round zero, and every three hundred rounds the zombies get stronger. Anything a zombie or a viper bites is infected, and anything that dies while infected stands back up on the horde's side \u2014 so a soldier you lose in their half is a zombie hunting them. Anything that dies uninfected leaves a wall of rubble where it fell. At round 2999 the side with more archons wins.",
       "game_config": {
         "year": "bc16",
         "pool": "mixed",
@@ -3064,7 +3463,7 @@
     },
     {
       "id": "bc19",
-      "name": "Battlecode 2019 — Crusade (2 seats)",
+      "name": "Battlecode 2019 \u2014 Crusade (2 seats)",
       "description": "Best of three on the mixed pool, one thousand rounds each. Castles are the only thing that matters: destroy all of theirs and you win on the spot. Castles and churches build pilgrims, crusaders, prophets and preachers; pilgrims mine karbonite and fuel and must carry each load back to a structure before it can be spent. Every action burns fuel, and the only free income is twenty-five fuel a round. The board is a mirror, and every robot is handed the whole map on its first turn, so neither side has to look for the other. A preacher puts twenty damage on nine squares at once and does not check whose units are standing there. Castles may barter karbonite for fuel with the enemy's castles. At round one thousand the side with more castles wins, then the side with more total unit health, then a coin flip.",
       "game_config": {
         "year": "bc19",
@@ -3078,6 +3477,33 @@
         "doctrineBudgetMs": 45000,
         "perGameBudgetSeconds": 60,
         "matchBudgetSeconds": 200,
+        "connectTimeoutMs": 25000,
+        "players": [
+          {
+            "name": "Clan Ash"
+          },
+          {
+            "name": "Clan Basil"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc17",
+      "name": "Battlecode 2017 \u2014 Robotic Wildlife Fund (2 seats)",
+      "description": "Best of three on the mixed pool, two thousand nine hundred and ninety-nine rounds each, in continuous space. Archons hire gardeners; gardeners plant bullet trees that pay a bullet a round once grown, and build soldiers, tanks, scouts and lumberjacks. Bullets travel: a shot crosses two units a round and the first body its line touches takes the damage, whoever's it is. A lumberjack's strike hits everything within two of it, including its own farm. Any robot can spend bullets on victory points, and a point costs seven and a half bullets on the first round and twenty on the last -- so waiting is expensive. A thousand points ends the game on the spot, and so does losing your last robot. Otherwise the winner at the round limit is decided by points, then by trees standing, then by bullets in the bank.",
+      "game_config": {
+        "year": "bc17",
+        "pool": "mixed",
+        "gamesPerMatch": 3,
+        "seed": 0,
+        "maxRounds": 3000,
+        "num_agents": 2,
+        "attempt1Ms": 20000,
+        "retryMs": 12000,
+        "doctrineBudgetMs": 45000,
+        "perGameBudgetSeconds": 120,
+        "matchBudgetSeconds": 330,
         "connectTimeoutMs": 25000,
         "players": [
           {

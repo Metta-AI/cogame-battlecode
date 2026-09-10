@@ -151,6 +151,34 @@ block:
     check("and bc16 reuses the existing per-game key " & reused,
       reused in gameProps and reused notin Bc16GameKeys)
 
+  for key in Bc17GameKeys:
+    check("the schema declares bc17's optional game key " & key,
+      key in gameProps)
+  for key in Bc17GameKeys:
+    ## bc17 REUSES ELEVEN keys deliberately -- `units_built`, `units_alive`,
+    ## `units_lost`, `attacks`, `kills`, `robots_lost` and `moves` from
+    ## bc19..bc25, `soldiers_built`, `archons_start`, `archons_end` and
+    ## `archons_per_side` from bc16/bc22 (2016, 2017 and 2022 are the three
+    ## archon years and mean exactly the same thing by them), plus
+    ## `broadcasts`, `builds_refused`, `refused_actions`,
+    ## `decision_ops_peak`, `domination_factor` and `tiebreak_round` -- and
+    ## none of those is in `Bc17GameKeys` at all, so everything here must be
+    ## its own.
+    check("bc17's key " & key & " collides with no other year",
+      key notin Bc26GameKeys and key notin Bc20GameKeys and
+      key notin Bc21GameKeys and key notin Bc24GameKeys and
+      key notin Bc25GameKeys and key notin Bc23GameKeys and
+      key notin Bc22GameKeys and key notin Bc16GameKeys and
+      key notin Bc19GameKeys)
+  for reused in ["units_built", "units_alive", "units_lost", "attacks",
+                 "kills", "robots_lost", "moves", "soldiers_built",
+                 "archons_start", "archons_end", "archons_lost",
+                 "archons_per_side", "archons_alive_at_2000",
+                 "scouts_built", "builds_refused", "refused_actions",
+                 "decision_ops_peak", "tiebreak_round"]:
+    check("and bc17 reuses the existing per-game key " & reused,
+      reused in gameProps and reused notin Bc17GameKeys)
+
   for key in Bc19GameKeys:
     check("the schema declares bc19's optional game key " & key,
       key in gameProps)
@@ -177,7 +205,7 @@ block:
   var wantEndReasons = @EndReasons
   endReasons.sort()
   wantEndReasons.sort()
-  checkEq("end_reason is the union of all SEVEN years plus abandoned",
+  checkEq("end_reason is the union of all TEN years plus abandoned",
     endReasons, wantEndReasons)
   ## bc22's three new rungs, named explicitly so a reviewer can see them, and
   ## the three it REUSES rather than duplicating.
@@ -213,12 +241,13 @@ block:
   var yearEnum: seq[string]
   for v in game["config_schema"]["properties"]["year"]["enum"]:
     yearEnum.add(v.getStr())
-  checkEq("config_schema.year.enum names all nine years", yearEnum,
+  checkEq("config_schema.year.enum names all ten years", yearEnum,
     @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22", "bc16",
-      "bc19"])
-  check("bc19 is APPENDED, so no existing index moved",
-    yearEnum[^1] == "bc19" and yearEnum[0 ..< 8] ==
-      @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22", "bc16"])
+      "bc19", "bc17"])
+  check("bc17 is APPENDED, so no existing index moved",
+    yearEnum[^1] == "bc17" and yearEnum[0 ..< 9] ==
+      @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22", "bc16",
+        "bc19"])
   ## bc24 plays to 2000 rounds, which was EXACTLY the old ceiling; bc16 plays
   ## 3000, so this is the ONE schema bound this year widens -- and this is the
   ## assertion that says so. A widened maximum accepts everything it accepted
@@ -232,7 +261,7 @@ block:
     check(variant["id"].getStr() & "'s maxRounds is inside the widened bound",
       mr >= rounds["minimum"].getInt() and mr <= rounds["maximum"].getInt())
   for variant in variants:
-    if variant["id"].getStr() notin ["bc16", "bc19"]:
+    if variant["id"].getStr() notin ["bc16", "bc19", "bc17"]:
       check("no shipped variant's maxRounds moved: " &
         variant["id"].getStr(),
         variant["game_config"]["maxRounds"].getInt() <= 2000)
@@ -269,12 +298,12 @@ block:
 # --- num_agents -------------------------------------------------------------
 block:
   ## ONE VARIANT PER BATTLECODE YEAR.
-  checkEq("one variant per registered year", variants.len, 9)
+  checkEq("one variant per registered year", variants.len, 10)
   var variantIds: seq[string]
   for variant in variants: variantIds.add(variant["id"].getStr())
   checkEq("and they are the registered years", variantIds,
     @["bc26", "bc20", "bc21", "bc24", "bc25", "bc23", "bc22", "bc16",
-      "bc19"])
+      "bc19", "bc17"])
   for variant in variants:
     check("variant " & variant["id"].getStr() & " is a registered year",
       isRegisteredYear(variant["game_config"]["year"].getStr()))
@@ -406,8 +435,8 @@ block:
   checkEq("docs.readme is an object", docs["readme"].kind, JObject)
   check("docs.readme has type and value",
     docs["readme"].hasKey("type") and docs["readme"].hasKey("value"))
-  checkEq("eleven doc pages ship — one rules page per year",
-    docs["pages"].len, 11)
+  checkEq("twelve doc pages ship — one rules page per year",
+    docs["pages"].len, 12)
   var ids: seq[string]
   for page in docs["pages"]:
     ids.add(page["id"].getStr())
@@ -423,7 +452,7 @@ block:
   checkEq("the pages are the ones the design note names", ids,
     @["rules.md", "rules-bc20.md", "rules-bc21.md", "rules-bc24.md",
       "rules-bc25.md", "rules-bc23.md", "rules-bc22.md", "rules-bc16.md",
-      "rules-bc19.md", "replay.md", "parity.md"])
+      "rules-bc19.md", "replay.md", "parity.md", "rules-bc17.md"])
 
 # --- the rest of the shape --------------------------------------------------
 block:
@@ -469,7 +498,7 @@ block:
 block:
   let policies = parseJson(readFile("tools/ci/policies.json"))
   ## Four per year: two `PLAYER_PROMPT` champions and two scripted fillers.
-  checkEq("thirty-six policies ship — four per year", policies.len, 36)
+  checkEq("forty policies ship — four per year", policies.len, 40)
   var prompts = 0
   var scripted = 0
   var owned = 0
@@ -492,9 +521,9 @@ block:
         p["env"]["PLAYER_PROMPT"].getStr().len > 200)
     if p["env"].hasKey("PLAYER_SCRIPTED"): inc scripted
     if p.hasKey("player"): inc owned
-  checkEq("two LLM champions per year", prompts, 18)
-  checkEq("two scripted baselines per year", scripted, 18)
-  checkEq("each year's champion #2 carries its owning player", owned, 9)
+  checkEq("two LLM champions per year", prompts, 20)
+  checkEq("two scripted baselines per year", scripted, 20)
+  checkEq("each year's champion #2 carries its owning player", owned, 10)
   checkEq("bc26 champion #2 is the second prompt policy",
     policies[1]["player"].getStr(),
     "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
@@ -662,6 +691,32 @@ block:
     "saber,examplefuncsplayer19")
   check("and neither bc19 filler is a champion",
     not policies[34].hasKey("player") and not policies[35].hasKey("player"))
+  ## bc17's four are APPENDED after bc19's, so no existing index moved.
+  checkEq("bc17 champion #1 is the tree-farm doctrine",
+    policies[36]["name"].getStr(), "battlecode-bc17-orchard")
+  checkEq("bc17 champion #2 is the tank-rush doctrine",
+    policies[37]["name"].getStr(), "battlecode-bc17-tankrush")
+  checkEq("and bc17 champion #2 carries its owning player",
+    policies[37]["player"].getStr(),
+    "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d")
+  check("the two bc17 champion prompts differ",
+    policies[36]["env"]["PLAYER_PROMPT"].getStr() !=
+    policies[37]["env"]["PLAYER_PROMPT"].getStr())
+  check("bc17 champion #1 is the tree-farm / out-farm-them pole",
+    policies[36]["env"]["PLAYER_PROMPT"].getStr().contains(
+      "\"tree_farm\"") and
+    policies[36]["env"]["PLAYER_PROMPT"].getStr().contains(
+      "out-farm them"))
+  check("and champion #2 the kill-their-economy pole",
+    policies[37]["env"]["PLAYER_PROMPT"].getStr().contains("LUMBERJACK") and
+    policies[37]["env"]["PLAYER_PROMPT"].getStr().contains(
+      "THE CLOCK ON THE PRICE"))
+  checkEq("the bc17 fillers name the two published chassis",
+    policies[38]["env"]["PLAYER_SCRIPTED"].getStr() & "," &
+    policies[39]["env"]["PLAYER_SCRIPTED"].getStr(),
+    "orchard,examplefuncsplayer17")
+  check("and neither bc17 filler is a champion",
+    not policies[38].hasKey("player") and not policies[39].hasKey("player"))
 
 # --- compose.yaml service names are load-bearing ----------------------------
 block:

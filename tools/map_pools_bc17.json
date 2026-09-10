@@ -1,0 +1,26 @@
+{
+  "_note": [
+    "The bc17 map pools. Every board is one of the seventy official",
+    "`battlecode/world/resources/*.map17` flatbuffers that ship INSIDE the",
+    "pinned oracle jar (org.battlecode:battlecode:2017.1.6.2), converted by",
+    "`tools/convert_maps_bc17.py` — pure Python, no JVM — into",
+    "`data/maps/bc17/<Name>.json`. The 22 boards below are COMMITTED, the",
+    "`test` job re-runs the converter with `--check` and byte-diffs them, and",
+    "`parity-oracle-bc17`'s Tier B cross-checks every one against the JVM's",
+    "own `LiveMap` fields.",
+    "`mixed` is the bc17 variant's played pool and spans the axes the",
+    "doctrines argue about (archons per side 1/2/3, neutral trees 16..924,",
+    "trees holding bullets 0..892, archon separation 5.0..56.9); `small` is",
+    "what the parity oracle and the docker smoke run on; `large` is reserved",
+    "for a later variant and supplies one of the nine parity pairs."
+  ],
+  "small": ["CropCircles", "GreenHouse", "HiddenTunnel", "HouseDivided",
+            "OMGTree", "shrine"],
+  "mixed": ["Aligned", "Barrier", "Blitzkrieg", "Chess", "Cramped",
+            "DenseForest", "Hurdle", "Snowflake", "TreeFarm", "Waves"],
+  "large": ["Alone", "GiantForest", "Interference", "LineOfFire", "Maniple",
+            "Whirligig"],
+  "parity_pairs": ["CropCircles", "GreenHouse", "HiddenTunnel",
+                   "HouseDivided", "OMGTree", "shrine", "Chess", "Cramped",
+                   "Alone"]
+}
