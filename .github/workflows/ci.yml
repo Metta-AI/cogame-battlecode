@@ -3249,6 +3249,501 @@ jobs:
           retention-days: 14
 
   # ---------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------
+  # parity-oracle-bc19: the 2019 JAVASCRIPT engine as a CI-only oracle.
+  #
+  # THE FIRST YEAR IN THIS REPOSITORY WHOSE ENGINE IS NOT JAVA. There is no
+  # jar, no JVM and no JDK anywhere in this job: `coldbrew/` is a handful of
+  # CommonJS files and the driver `require`s `Game` and `ActionRecord`
+  # directly.
+  #
+  # THE NODE VERSION IS A RULES PIN, NOT A PREFERENCE. `coldbrew/game.js:153`
+  # passes `regions.sort` a ONE-ARGUMENT, SIGN-CONSTANT COMPARATOR, so the
+  # map generator's output is V8-IMPLEMENTATION-DEFINED; the 22 committed
+  # boards were generated under exactly this version and this job byte-diffs
+  # them. IF A FUTURE NODE BUMP MAKES THAT DIFF FAIL, THE COMMITTED MAPS ARE
+  # THE RULES AND THE OLD NODE IS THE PIN -- regenerating instead is a rules
+  # change and bumps GameVersion (docs/PARITY.md section bc19).
+  #
+  # EXACTLY ONE npm PACKAGE IS INSTALLED. The engine's own package.json pulls
+  # 404, including `vm2` (deprecated, known sandbox-escape CVEs), `rollup`,
+  # `esm` and `update-notifier` -- which makes a NETWORK CALL on every
+  # `cli/run.js` invocation. The driver needs `game.js`, `action_record.js`,
+  # `specs.json` and `mersenne-twister` and nothing else, proved by running
+  # whole 1000-round games on exactly that set.
+  #
+  # 45 minutes, not 75: bc19's games are a third of bc16's length and the
+  # engine measured well under a second per 1000-round game here, so
+  # fifty-four pairs is minutes rather than an hour.
+  # ---------------------------------------------------------------------
+  parity-oracle-bc19:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache nimby toolchain and nimcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nimby
+            ~/.cache/nim
+          key: nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-${{ hashFiles('nimby.lock') }}
+          restore-keys: |
+            nimby-${{ runner.os }}-${{ env.NIMBY_VERSION }}-${{ env.NIM_VERSION }}-
+
+      - name: Install nimby and Nim
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/nimby" \
+            "https://github.com/treeform/nimby/releases/download/${NIMBY_VERSION}/nimby-Linux-X64"
+          chmod +x "$HOME/.local/bin/nimby"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/nimby" use "$NIM_VERSION"
+
+      - name: Sync Nim dependencies
+        run: nimby --global sync nimby.lock
+
+      - name: Regenerate nim.cfg from the synced package tree
+        run: |
+          set -euo pipefail
+          rm -f nim.cfg
+          for pkg in "$HOME"/.nimby/pkgs/*; do
+            [ -e "$pkg" ] || continue
+            if [ -d "$pkg/src" ]; then
+              echo "--path:\"$pkg/src\"" >> nim.cfg
+            else
+              echo "--path:\"$pkg\"" >> nim.cfg
+            fi
+          done
+          echo '--path:"src"' >> nim.cfg
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.BC19_NODE_VERSION }}
+
+      - name: The Node really is the pinned one, and the lock says so
+        run: |
+          set -euo pipefail
+          want="v${BC19_NODE_VERSION}"
+          got="$(node --version)"
+          echo "node ${got}, lock wants ${want}"
+          test "${got}" = "${want}" || {
+            echo "::error::this oracle MUST run on ${want}."
+            echo "::error::coldbrew/game.js:153 passes regions.sort a"
+            echo "::error::ONE-ARGUMENT, SIGN-CONSTANT comparator, so the map"
+            echo "::error::generator's output is V8-IMPLEMENTATION-DEFINED:"
+            echo "::error::a different V8 generates DIFFERENT BOARDS FROM THE"
+            echo "::error::SAME SEEDS and this job would compare two"
+            echo "::error::different games (docs/PARITY.md section bc19)."
+            exit 1; }
+          # And the lock file is the source of that number, not this yaml.
+          grep -qx "node_version=${BC19_NODE_VERSION}" \
+            tools/oracle/bc19/engine.lock || {
+            echo "::error::tools/oracle/bc19/engine.lock does not pin"
+            echo "::error::node_version=${BC19_NODE_VERSION}. The lock is the"
+            echo "::error::pin; ci.yml only reads it."
+            exit 1; }
+          grep -qx "engine_commit=${BC19_COMMIT}" \
+            tools/oracle/bc19/engine.lock || {
+            echo "::error::engine.lock does not pin engine_commit=${BC19_COMMIT}"
+            exit 1; }
+
+      - name: Clone the pinned engine and install EXACTLY ONE npm package
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/battlecode/battlecode19 \
+            /tmp/bc19engine
+          git -C /tmp/bc19engine checkout --quiet "${BC19_COMMIT}"
+          echo "BC19_ENGINE=/tmp/bc19engine" >> "$GITHUB_ENV"
+          # THE LICENCE, VERIFIED IN CI AND NOT ONLY IN NOTICE: the root
+          # LICENSE is GPL-3.0 and it is the ONLY licence file anywhere in
+          # the tree, which is what makes app/public/assets/img/** covered.
+          licences="$(find /tmp/bc19engine -iname 'licen*' -o -iname 'copying*' \
+            | grep -v '/node_modules/' | wc -l)"
+          test "${licences}" -eq 1 || {
+            echo "::error::expected exactly ONE licence file in the pinned"
+            echo "::error::battlecode19 tree, found ${licences}. NOTICE's"
+            echo "::error::reasoning depends on that being true."
+            exit 1; }
+          grep -q 'GNU GENERAL PUBLIC LICENSE' /tmp/bc19engine/LICENSE || {
+            echo "::error::the pinned battlecode19 LICENSE is not the GPL"
+            exit 1; }
+          # NO `npm install` OF coldbrew/package.json. One package, pinned by
+          # version AND by the integrity hash the engine's own
+          # package-lock.json records.
+          mkdir -p /tmp/bc19engine/coldbrew/node_modules /tmp/mt
+          cd /tmp/mt
+          npm pack "mersenne-twister@${BC19_MT_VERSION}" > /dev/null
+          grep -qx "npm_integrity=${BC19_MT_INTEGRITY}" \
+            "${GITHUB_WORKSPACE}/tools/oracle/bc19/engine.lock" || {
+            echo "::error::engine.lock does not pin the mersenne-twister"
+            echo "::error::integrity hash ${BC19_MT_INTEGRITY}"
+            exit 1; }
+          grep -q "\"integrity\": \"${BC19_MT_INTEGRITY}\"" \
+            /tmp/bc19engine/coldbrew/package-lock.json || {
+            echo "::error::the ENGINE'S OWN package-lock.json does not carry"
+            echo "::error::${BC19_MT_INTEGRITY} for mersenne-twister. The"
+            echo "::error::pin has to be the engine's own, not ours."
+            exit 1; }
+          tar xzf "mersenne-twister-${BC19_MT_VERSION}.tgz"
+          mv package /tmp/bc19engine/coldbrew/node_modules/mersenne-twister
+          test -z "$(ls /tmp/bc19engine/coldbrew/node_modules | \
+            grep -v '^mersenne-twister$')" || {
+            echo "::error::something other than mersenne-twister was installed"
+            ls /tmp/bc19engine/coldbrew/node_modules
+            exit 1; }
+          echo "node_modules holds exactly: $(ls /tmp/bc19engine/coldbrew/node_modules)"
+
+      - name: Apply the two committed engine patches and assert they applied
+        run: |
+          set -euo pipefail
+          cd /tmp/bc19engine
+          # THESE ARE THE ONLY TWO PLACES THE ORACLE IS NOT THE PUBLISHED
+          # ENGINE, and docs/PARITY.md section bc19 names both with their
+          # reasons.
+          for patch in \
+            "${GITHUB_WORKSPACE}/tools/oracle/bc19/visible_order.patch" \
+            "${GITHUB_WORKSPACE}/tools/oracle/bc19/examplefuncsplayer19/determinism.patch"; do
+            hunks="$(grep -c '^@@' "${patch}")"
+            echo "applying $(basename "${patch}") (${hunks} hunk(s))"
+            git apply --check "${patch}" || {
+              echo "::error::$(basename "${patch}") no longer applies to"
+              echo "::error::${BC19_COMMIT}. A patch that has drifted off the"
+              echo "::error::pinned commit is a patch nobody has read."
+              exit 1; }
+            git apply "${patch}"
+          done
+          # V2: the unseeded shuffle is GONE and the ascending-id sort is in.
+          grep -q 'visible_robots.sort' coldbrew/game.js || {
+            echo "::error::visible_order.patch applied but the ascending-id"
+            echo "::error::sort is not in game.js"; exit 1; }
+          grep -q 'Math.floor(Math.random() \* (i + 1))' coldbrew/game.js && {
+            echo "::error::the unseeded Fisher-Yates shuffle is STILL in"
+            echo "::error::getGameStateDump. V2's whole point is that it"
+            echo "::error::draws from the GLOBAL, UNSEEDED Math.random()."
+            exit 1; } || true
+          # Hunk 1: the deterministic per-robot RNG. Hunk 2: no team guard.
+          grep -q 'rngFor(this.me.id).nextDouble()' \
+            coldbrew/bots/example_js/robot.js || {
+            echo "::error::determinism.patch hunk 1 did not land"; exit 1; }
+          grep -q 'this.me.team == 1' coldbrew/bots/example_js/robot.js && {
+            echo "::error::determinism.patch hunk 2 did not land: the stock"
+            echo "::error::team==1 guard makes RED build NOTHING AT ALL, and"
+            echo "::error::a baseline inert on one side cannot be scored."
+            exit 1; } || true
+          echo "both patches applied and verified"
+
+      - name: The comparator's own self-test
+        run: |
+          set -euo pipefail
+          # A comparator with the `zip` bug reads a one-line-longer oracle
+          # trace as bit-exact. This constructs exactly that pair and
+          # asserts a divergence IS reported -- and that the normaliser is
+          # applied to BOTH sides (the bc23 lesson).
+          python3 tools/ci/parity_tiers_bc19.py --self-test
+
+      # TIER B (BLOCKING) -- the constants, the arithmetic and the map data,
+      # OVER THEIR WHOLE FINITE DOMAINS. bc19 has exactly two non-integer
+      # operations and both domains are finite, so this tier is NOT A
+      # SAMPLE: it is the entire domain.
+      - name: "Tier B: the arithmetic tables and all 22 boards, byte-diffed"
+        run: |
+          set -euo pipefail
+          node tools/JsBc19Tables.mjs --engine "$BC19_ENGINE" --check
+          node tools/gen_maps_bc19.mjs --engine "$BC19_ENGINE" \
+            --out data/maps/bc19 --check
+          # AND THE THIRTEEN DEGENERATE SEEDS ARE REFUSED BY NAME, which
+          # proves V3's curation rather than trusting it.
+          node tools/gen_maps_bc19.mjs --engine "$BC19_ENGINE" \
+            --out /tmp/bc19curate --seeds 7 --assert-degenerate \
+            2>&1 | tee /tmp/bc19curate.txt || true
+          for seed in 7 20 24 83 108 127 175 211 232 267 283 348 365; do
+            grep -q "^refused ${seed}: " /tmp/bc19curate.txt || {
+              echo "::error::seed ${seed} was expected to be REFUSED as an"
+              echo "::error::unplayable board (0 castles, 2-4 passable"
+              echo "::error::squares) and was not. A pool that can draw such"
+              echo "::error::a board is not a pool (V3)."
+              exit 1; }
+          done
+          echo "all 13 degenerate seeds refused by name"
+
+      - name: Build the six Nim trace binaries
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bc19bin
+          build() {
+            echo "::group::nim c $2 tools/parity_trace_bc19.nim -> $1"
+            nim c -d:release $2 --hints:off --path:src \
+              -o:"/tmp/bc19bin/$1" tools/parity_trace_bc19.nim
+            echo "::endgroup::"
+          }
+          build bc19idle "-d:bc19Idle"
+          build examplefuncsplayer19 ""
+          build bc19scenario "-d:bc19Scenario"
+          build bc19scenariotrade "-d:bc19Scenario -d:bc19ScenarioTrade"
+          build bc19scenariokill "-d:bc19Scenario -d:bc19ScenarioKill"
+          build bc19scenariotie "-d:bc19Scenario -d:bc19ScenarioTie"
+
+      # TIERS A, A', A'' AND C, all BLOCKING, over the NINE PARITY PAIRS.
+      #
+      # TIER A is deliberately SMALL in this year, and that is the single
+      # most important difference between bc19 parity and bc16 parity: in
+      # bc16 the zombies are ENGINE-SIDE, so an idle player still exercises
+      # half the game, while IN BC19 NOTHING AT ALL HAPPENS WITHOUT A PLAYER
+      # ACTION. THE LOAD-BEARING TIERS ARE A' AND A''.
+      #
+      # TIER B' (a) rides along on every one of them: `--assert-clock` makes
+      # the driver exit 6 if any live robot's `robot.time` ever fell below
+      # CHESS_INITIAL, so the engine's own freeze branch provably never
+      # fired in a game this job COMPARES.
+      #
+      # TIER C is the first divergent round of every whole game against
+      # `tools/ci/parity_ledger_bc19.json`, WHICH SHIPS EMPTY.
+      - name: "Tiers A / A' / A'' / B' (a) / C -- 54 whole-game pairs"
+        run: |
+          set -euo pipefail
+          maps="seed-0009 seed-0021 seed-0034 seed-0043 seed-0048 seed-0107 \
+                seed-0017 seed-0125 seed-0045"
+          mkdir -p "$RUNNER_TEMP/bc19" "$RUNNER_TEMP/bc19digest"
+          fails=0
+          pairs=0
+          for bot in bc19idle examplefuncsplayer19 bc19scenario \
+                     bc19scenariotrade bc19scenariokill bc19scenariotie; do
+            for map in $maps; do
+              flags=""
+              # bc19scenariotrade's WHOLE SCRIPT IS THE BARTER and it never
+              # builds anything, so only the "no unit was ever built" half of
+              # the guard is waived -- it still has to have acted.
+              if [ "$bot" = bc19scenariotrade ]; then
+                flags="--allow-no-build"
+              fi
+              # MEASURED, AND RECORDED IN docs/PARITY.md section bc19: on
+              # seed-0017 BOTH castles' (x+1, y+1) square is IMPASSABLE, so
+              # the stock example bot's only action throws inside the starter
+              # library and the game is inert. The pair is still COMPARED and
+              # is bit-exact; only the "something happened" guard is waived.
+              if [ "$bot" = examplefuncsplayer19 ] && [ "$map" = seed-0017 ]
+              then
+                flags="$flags --allow-inert"
+              fi
+              j="$RUNNER_TEMP/bc19/${bot}.${map}.oracle.txt"
+              n="$RUNNER_TEMP/bc19/${bot}.${map}.nim.txt"
+              # EVERY node INVOCATION IS WRAPPED IN `timeout`.
+              timeout 600 node tools/oracle/bc19/bc19_trace.js \
+                --engine "$BC19_ENGINE" --bot "$bot" --map "$map" \
+                --rounds 1000 --assert-clock $flags --out "$j" \
+                2> "$RUNNER_TEMP/bc19/${bot}.${map}.err" || {
+                  rc=$?
+                  echo "::error::the oracle driver exited ${rc} on ${bot}/${map}"
+                  sed -n '1,20p' "$RUNNER_TEMP/bc19/${bot}.${map}.err"
+                  fails=$((fails+1)); continue; }
+              cat "$RUNNER_TEMP/bc19/${bot}.${map}.err"
+              timeout 600 "/tmp/bc19bin/${bot}" --bot "$bot" --map "$map" \
+                --rounds 1000 --out "$n"
+              pairs=$((pairs+1))
+              python3 tools/ci/parity_tiers_bc19.py --oracle "$j" --nim "$n" \
+                --bot "$bot" --map "$map" \
+                --ledger tools/ci/parity_ledger_bc19.json \
+                --digest "$RUNNER_TEMP/bc19digest/${bot}.${map}.txt.gz" \
+                || fails=$((fails+1))
+              # The traces themselves are NOT uploaded: only the first 200
+              # divergent lines and a gzipped digest are.
+              rm -f "$j" "$n"
+            done
+          done
+          echo "compared ${pairs} whole-game pairs, ${fails} failure(s)"
+          test "${fails}" -eq 0
+
+      # THE JOB ASSERTS OFF THE **ORACLE** TRACE THAT TIER A REALLY DID WHAT
+      # IT CLAIMS, because a bit-exact comparison of two traces of nothing is
+      # a bit-exact comparison of nothing.
+      - name: "Tier A: the oracle trace really shows the trickle, the id pool and the round-limit ladder"
+        run: |
+          set -euo pipefail
+          j=/tmp/bc19a.txt
+          timeout 600 node tools/oracle/bc19/bc19_trace.js \
+            --engine "$BC19_ENGINE" --bot bc19idle --map seed-0043 \
+            --rounds 1000 --assert-clock --out "$j" 2>/tmp/bc19a.err
+          cat /tmp/bc19a.err
+          # The FLAT trickle: +25 fuel a team a round, and NOTHING else
+          # moves a store in an idle game.
+          python3 tools/ci/bc19_assert_trace.py trickle "$j"
+          # The id pool: `ids` equals 2 x castles-per-side and NEVER GROWS,
+          # because nothing is ever built.
+          ids="$(grep -o 'ids=[0-9]*' "$j" | sort -u)"
+          echo "ids seen across the whole game: ${ids}"
+          test "$(echo "${ids}" | wc -l)" -eq 1 || {
+            echo "::error::the id pool grew in an idle game"; exit 1; }
+          test "${ids}" = "ids=4" || {
+            echo "::error::seed-0043 has two castles a side, so the pool"
+            echo "::error::should hold exactly 4 ids; saw ${ids}"; exit 1; }
+          # THE ROUND-LIMIT LADDER: both sides keep every castle and end
+          # level on castles AND on health, so the coin flip fires and the
+          # engine records its own `win_condition = 1` overwrite.
+          tail -1 "$j" | grep -q 'wc=1' || {
+            echo "::error::the round-limit ladder did not record wc=1."
+            echo "::error::game.js:604 assigns win_condition = 1"
+            echo "::error::UNCONDITIONALLY after the round-1000 block, so an"
+            echo "::error::all-square game is RECORDED as greater health"
+            echo "::error::while the winner really is a coin flip."
+            sed -n '$p' "$j"; exit 1; }
+          # AND ROUND 1000 HAS EXACTLY ONE `A` LINE. The game-over check runs
+          # BEFORE EVERY TURN, so the counter reaches 1000 on the first turn
+          # of that round and the check fires immediately after it.
+          n="$(grep -c '^R 1000 A ' "$j")"
+          echo "round 1000 has ${n} action line(s)"
+          test "${n}" -eq 1 || {
+            echo "::error::round 1000 has ${n} turns, expected exactly ONE"
+            exit 1; }
+
+      # TIER A': the job asserts OFF THE ORACLE TRACE that the scripted rare
+      # paths really fired. A scenario bot that silently stopped reaching a
+      # path would otherwise compare bit-exactly against a Nim twin that
+      # also stopped reaching it -- a bit-exact comparison of two traces of
+      # nothing.
+      #
+      # THE ASSERTION IS OVER THE UNION OF THE NINE COMPARED GAMES, not over
+      # one of them, and that is measured rather than lazy: AN ORDER STARTS
+      # WITH ONE HUNDRED KARBONITE AND NO PASSIVE INCOME, so which of the
+      # four buildable mobile types a castle can afford depends on how many
+      # castles the board gives it. Every path below fires in at least one
+      # of the nine, and the tier compares all nine.
+      - name: "Tier A': the scripted rare paths really fired"
+        run: |
+          set -euo pipefail
+          maps="seed-0009 seed-0021 seed-0034 seed-0043 seed-0048 seed-0107 \
+                seed-0017 seed-0125 seed-0045"
+          : > /tmp/bc19union.txt
+          for map in $maps; do
+            timeout 600 node tools/oracle/bc19/bc19_trace.js \
+              --engine "$BC19_ENGINE" --bot bc19scenario --map "$map" \
+              --rounds 1000 --assert-clock --out "/tmp/bc19s.$map.txt" \
+              2>/dev/null
+            cat "/tmp/bc19s.$map.txt" >> /tmp/bc19union.txt
+            rm -f "/tmp/bc19s.$map.txt"
+          done
+          need() {
+            grep -q -- "$1" /tmp/bc19union.txt || {
+              echo "::error::Tier A' never reached: $2"
+              echo "::error::(pattern $1). A scripted path the bot does not"
+              echo "::error::reach must be DROPPED from the bot and added to"
+              echo "::error::docs/PARITY.md section 'What is NOT compared'"
+              echo "::error::with the reason -- never left in silently."
+              exit 1; }
+            echo "ok: $2"
+          }
+          # ONE OF EVERY BUILDABLE UNIT TYPE.
+          for ty in CASTLE PILGRIM CRUSADER PROPHET PREACHER; do
+            need "ty=${ty} " "a ${ty} was on the board"
+          done
+          # THE FIVE ACTION KINDS THE SCRIPT FORCES.
+          need 'act=BUILD ' 'a build'
+          need 'act=MOVE ' 'a move'
+          need 'act=ATTACK ' 'an attack'
+          need 'act=MINE ' 'a mine'
+          need 'act=GIVE ' 'a give'
+          # A BROADCAST AT THE MAXIMUM LEGAL RADIUS, whose fuel cost is 90.
+          need 'sr=7938' 'the r2 7938 broadcast'
+          # CASTLE TALK FROM A MOBILE UNIT (the pilgrim's turn 7).
+          need 'ct=77' 'castle talk from a pilgrim'
+          # A PILGRIM CARRYING AN UNREFINED LOAD -- mining really happened.
+          grep -qE 'ty=PILGRIM .* (k=[1-9]|f=[1-9])' /tmp/bc19union.txt || {
+            echo "::error::no pilgrim ever carried anything"; exit 1; }
+          echo "ok: a pilgrim carried an unrefined load"
+          rm -f /tmp/bc19union.txt
+
+      # THE CHURCH, AND THE LEGAL 0-DAMAGE CHURCH ATTACK (D6.1), on EVERY
+      # ONE of the nine boards. `bc19scenariotie` is the bot that reaches
+      # them because it buys NOTHING ELSE: a church costs 50 of the opening
+      # hundred karbonite, and by the time `bc19scenario`'s pilgrim exists
+      # its castles have spent that hundred on the four mobile types.
+      - name: "Tier A': the CHURCH and its 0-damage attack (D6.1)"
+        run: |
+          set -euo pipefail
+          maps="seed-0009 seed-0021 seed-0034 seed-0043 seed-0048 seed-0107 \
+                seed-0017 seed-0125 seed-0045"
+          for map in $maps; do
+            timeout 600 node tools/oracle/bc19/bc19_trace.js \
+              --engine "$BC19_ENGINE" --bot bc19scenariotie --map "$map" \
+              --rounds 30 --assert-clock --out /tmp/bc19c.txt 2>/dev/null
+            grep -q 'ty=CHURCH ' /tmp/bc19c.txt || {
+              echo "::error::no CHURCH was raised on ${map}"; exit 1; }
+            grep -qE 'A [0-9]+ act=ATTACK dx=-?5 dy=-?5' /tmp/bc19c.txt || {
+              echo "::error::the CHURCH never fired its 0-damage attack on"
+              echo "::error::${map}. A CHURCH's ATTACK_RADIUS is the SCALAR"
+              echo "::error::0, so both range comparisons are against"
+              echo "::error::undefined and both are false -- the action is"
+              echo "::error::ACCEPTED (record.action == 2) for 0 fuel and 0"
+              echo "::error::damage. It is the quirk this year is most"
+              echo "::error::likely to get wrong (D6.1)."
+              exit 1; }
+          done
+          echo "the CHURCH and its 0-damage attack fired on all nine boards"
+
+      # AND THE THREE END RUNGS THE SCRIPTS FORCE, each on the board chosen
+      # for it in the design note's pair table.
+      - name: "Tier A': castles_destroyed, more_unit_health and the barter"
+        run: |
+          set -euo pipefail
+          # `castles_destroyed` (win_condition 0) on the one-castle-a-side
+          # elimination board -- the normal way a bc19 game ends, and the
+          # one rung an idle mirror can never reach.
+          timeout 600 node tools/oracle/bc19/bc19_trace.js \
+            --engine "$BC19_ENGINE" --bot bc19scenariokill --map seed-0017 \
+            --rounds 1000 --assert-clock --out /tmp/bc19k.txt 2>/dev/null
+          tail -1 /tmp/bc19k.txt | grep -q 'wc=0' || {
+            echo "::error::bc19scenariokill did not end on castles_destroyed"
+            sed -n '$p' /tmp/bc19k.txt; exit 1; }
+          echo "bc19scenariokill: $(tail -1 /tmp/bc19k.txt)"
+          # `more_unit_health` with the engine's own win_condition = 1: RED
+          # builds and BLUE builds nothing, so the castles are level and the
+          # health is not.
+          timeout 600 node tools/oracle/bc19/bc19_trace.js \
+            --engine "$BC19_ENGINE" --bot bc19scenariotie --map seed-0043 \
+            --rounds 1000 --assert-clock --out /tmp/bc19t.txt 2>/dev/null
+          tail -1 /tmp/bc19t.txt | grep -q 'winner=RED wc=1' || {
+            echo "::error::bc19scenariotie did not end with RED winning on"
+            echo "::error::unit health."
+            sed -n '$p' /tmp/bc19t.txt; exit 1; }
+          echo "bc19scenariotie: $(tail -1 /tmp/bc19t.txt)"
+          # AND THE BARTER REALLY MOVES BOTH STORES IN OPPOSITE DIRECTIONS
+          # on the matched payable offer -- the only externally visible
+          # proof that `enactTrade` executed rather than merely recording an
+          # offer.
+          timeout 600 node tools/oracle/bc19/bc19_trace.js \
+            --engine "$BC19_ENGINE" --bot bc19scenariotrade --map seed-0043 \
+            --rounds 20 --assert-clock --allow-no-build \
+            --out /tmp/bc19r.txt 2>/dev/null
+          grep -q 'act=TRADE ' /tmp/bc19r.txt || {
+            echo "::error::no trade was ever proposed"; exit 1; }
+          python3 tools/ci/bc19_assert_trace.py barter /tmp/bc19r.txt
+
+      # TIER B' (b): a SEPARATE, NON-COMPARED run that proves the engine
+      # DOES freeze a slow bot. The port has no wall clock, so the freeze
+      # branch is the one behaviour this oracle cannot compare -- this run
+      # exists so the port's READING of the rule is PROVED rather than
+      # asserted (docs/PARITY.md section bc19).
+      - name: "Tier B' (b): the engine really does freeze a slow robot"
+        run: |
+          set -euo pipefail
+          timeout 600 node tools/oracle/bc19/bc19_trace.js \
+            --engine "$BC19_ENGINE" --bot bc19slowbot --map seed-0009 \
+            --rounds 12 --expect-freeze --allow-inert \
+            --out /tmp/bc19slow.txt
+
+      - name: Upload the divergence digests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-bc19-digests
+          path: ${{ runner.temp }}/bc19digest
+          if-no-files-found: ignore
+          retention-days: 7
+
   docker-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 45

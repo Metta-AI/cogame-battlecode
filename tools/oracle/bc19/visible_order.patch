@@ -1,6 +1,9 @@
 --- a/coldbrew/game.js
 +++ b/coldbrew/game.js
-@@ -713,13 +713,15 @@
+@@ -710,19 +710,19 @@
+         if (!is_castle || robot.team !== this.robots[i].team) delete r.castle_talk;
+ 
+         visible_robots.push(r);
  
      }
  
@@ -11,7 +14,7 @@
 -        visible_robots[i] = visible_robots[j];
 -        visible_robots[j] = x;
 -    }
-+    // V2 (docs/PARITY.md #bc19): the stock shuffle here draws from the
++    // V2 (docs/PARITY.md #bc19): the stock shuffle here drew from the
 +    // GLOBAL, UNSEEDED Math.random(), not from this.random(). Measured:
 +    // FIVE DISTINCT ORDERS IN SIX IDENTICAL RUNS of seed 1. There is
 +    // nothing to be faithful to, so both sides order by ascending id --
@@ -21,3 +24,6 @@
  
      return 'robot._do_turn(' + JSON.stringify({
          id: robot.id, 
+         shadow:shadow, 
+         visible:visible_robots, 
+         map:robot.turn===1?this.map:[[0],[0]], 

@@ -197,6 +197,15 @@ type
     splashBeats*: array[2, int]
     lostThisRound*: array[2, int]
     lastKillCause*: array[2, string]
+    ## The last enacted record, flattened. TELEMETRY ONLY -- NO RULE READS
+    ## ANY OF IT. `tools/parity_trace_bc19.nim` prints the `A` line from it,
+    ## and the engine's own `ActionRecord` is not returned by `enactTurn`
+    ## either, so both sides recover it the same way.
+    lastAction*: int
+    lastDx*, lastDy*: int
+    lastBuildUnit*: int
+    lastGiveK*, lastGiveF*: int
+    lastTradeK*, lastTradeF*: int
     brokenChassis*: bool
       ## Set by `-d:bc19BrokenChassis`: the NEGATIVE CONTROL for the
       ## economic-survival gate. Pilgrims mine but never `give`, castles

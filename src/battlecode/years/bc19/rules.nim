@@ -336,6 +336,19 @@ proc enactTurn*(w: World, sides: array[2, Side],
     w.firstActionSeen[t] = true
     discard w.beat(BeatFirstAction, "first_action", t, ord(rec.action),
                    w.round)
+  ## Telemetry for the parity trace: the flattened record, exactly as the
+  ## engine's `ActionRecord` carries it, with `null` rendered the way the
+  ## driver renders it.
+  w.lastAction = ord(rec.action)
+  w.lastDx = (if rec.action in {akMove, akAttack, akBuild, akGive}: rec.dx
+              else: 0)
+  w.lastDy = (if rec.action in {akMove, akAttack, akBuild, akGive}: rec.dy
+              else: 0)
+  w.lastBuildUnit = (if rec.action == akBuild: ord(rec.buildUnit) else: -1)
+  w.lastGiveK = (if rec.action == akGive: rec.giveK else: 0)
+  w.lastGiveF = (if rec.action == akGive: rec.giveF else: 0)
+  w.lastTradeK = (if rec.action == akTrade: rec.tradeK else: 0)
+  w.lastTradeF = (if rec.action == akTrade: rec.tradeF else: 0)
   ## Rule 2.6.
   try:
     w.enact(r, rec)

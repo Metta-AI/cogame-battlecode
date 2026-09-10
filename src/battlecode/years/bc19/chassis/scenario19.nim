@@ -34,7 +34,7 @@
 ##     so the round-limit ladder walks `more_unit_health` with the engine's
 ##     `win_condition = 1`.
 
-import ../constants, ../units, ../world
+import ../constants, ../units, ../world, ../vision
 import ../actions
 
 const
@@ -115,7 +115,7 @@ proc scenarioMain(w: World, r: Robot): Action =
         result.kind = akBuild
         result.dx = sq.dx
         result.dy = sq.dy
-        result.buildUnit = ukCrusader
+        result.buildUnit = ukPreacher
     of 3:
       result.signal = 42
       result.signalRadius = 2
@@ -126,24 +126,34 @@ proc scenarioMain(w: World, r: Robot): Action =
         result.dx = sq.dx
         result.dy = sq.dy
         result.buildUnit = ukProphet
-    of 4:
-      result.signal = 99
-      result.signalRadius = 3
+    of 4, 5, 6:
+      ## THE BUILD ORDER IS PILGRIM, PREACHER, PROPHET, CRUSADER AND THE
+      ## LAST ONE IS TRIED THREE TIMES, and both halves are measured rather
+      ## than chosen: an order starts with ONE HUNDRED KARBONITE AND NO
+      ## PASSIVE INCOME, so a castle can afford at most 80 karbonite of
+      ## units in its whole opening, and on a two- or three-castle board
+      ## the siblings spend it first. Buying the EXPENSIVE units early is
+      ## what puts a PREACHER on the board at all; retrying the CHEAPEST
+      ## one is what fills the remaining free squares as units move away.
+      case r.turn
+      of 4:
+        result.signal = 99
+        result.signalRadius = 3
+      of 5:
+        result.signal = 5
+        result.signalRadius = 5
+        result.castleTalk = 200
+      else:
+        result.signal = 6
+        result.signalRadius = 10
+        result.castleTalk = 17
       let sq = firstFreeAdjacent(w, r)
       if sq.ok:
         result.hasAction = true
         result.kind = akBuild
         result.dx = sq.dx
         result.dy = sq.dy
-        result.buildUnit = ukPreacher
-    of 5:
-      result.signal = 5
-      result.signalRadius = 5
-      result.castleTalk = 200
-    of 6:
-      result.signal = 6
-      result.signalRadius = 10
-      result.castleTalk = 17
+        result.buildUnit = ukCrusader
     of 7:
       ## The maximum legal radius, `2*(64-1)^2`, whose cost is 90 fuel.
       result.signal = 1
@@ -221,15 +231,22 @@ proc scenarioMain(w: World, r: Robot): Action =
       result.kind = akAttack
       result.dx = 1
       result.dy = 0
-    of 6:
-      ## `give` to whatever is west of us: under capacity, over capacity, or
-      ## an empty square (which throws). All three are legal script.
+    of 6, 8:
+      ## `give` WHATEVER THE PILGRIM ACTUALLY HOLDS to whatever is west of
+      ## it. The amount is read off `me` on both sides -- a robot always
+      ## sees its own carried karbonite and fuel -- so the action ALWAYS
+      ## passes validation and the record always carries `GIVE`, and the
+      ## enact then either transfers or throws on an empty square. Both are
+      ## legal script and both sides take the same branch. A fixed amount
+      ## would fail validation on any board where the pilgrim had not
+      ## reached a depot, and the GIVE path would silently never be
+      ## compared.
       result.hasAction = true
       result.kind = akGive
       result.dx = -1
       result.dy = 0
-      result.giveK = 5
-      result.giveF = 30
+      result.giveK = min(r.karbonite, MaxGiveAmount)
+      result.giveF = min(r.fuel, MaxGiveAmount)
     of 7:
       result.castleTalk = 77
       result.hasAction = true
@@ -374,18 +391,37 @@ proc scenarioKill(w: World, r: Robot): Action =
       result.buildUnit = ukCrusader
   of ukCrusader:
     if r.taskX < 0:
+      ## THE CRUSADER'S OWN SPAWN, not its builder's. `createItem` seeds
+      ## `homeX`/`homeY` from the square the robot is created on and
+      ## `enactBuild` then overwrites them with the BUILDER's, which is what
+      ## the `saber` chassis wants and what this bot must not inherit: the
+      ## JavaScript twin reads `this.me.x` on its first turn and there is no
+      ## builder in that reading.
+      r.homeX = r.x
+      r.homeY = r.y
       if mirrorAxisHorizontal(w):
         r.taskX = w.width - 1 - r.homeX
         r.taskY = r.homeY
       else:
         r.taskX = r.homeX
         r.taskY = w.height - 1 - r.homeY
-    let d = distSq(r.x, r.y, r.taskX, r.taskY)
-    if d >= 1 and d <= 16:
+    ## THE LOWEST-ID VISIBLE ENEMY INSIDE THE CRUSADER'S OWN r2 1..16.
+    ## `visible` is ordered by ASCENDING id on BOTH SIDES — here by
+    ## `vision.observationInto` and on the engine side by
+    ## `tools/oracle/bc19/visible_order.patch` (V2) — so "the lowest-id one"
+    ## is the same robot in both, and this is the one scripted decision in
+    ## the whole tier that DEPENDS ON THAT PATCH WORKING.
+    var seen: seq[SeenRobot]
+    observationInto(w, r, seen)
+    for other in seen:
+      if not other.hasUnit: continue          ## `isVisible`
+      if other.team == r.team: continue
+      let dd = distSq(r.x, r.y, other.x, other.y)
+      if dd < 1 or dd > 16: continue
       result.hasAction = true
       result.kind = akAttack
-      result.dx = r.taskX - r.x
-      result.dy = r.taskY - r.y
+      result.dx = other.x - r.x
+      result.dy = other.y - r.y
       return
     let step = towardTarget(w, r, r.taskX, r.taskY)
     if step.ok:
@@ -396,18 +432,57 @@ proc scenarioKill(w: World, r: Robot): Action =
   else: discard
 
 proc scenarioTie(w: World, r: Robot): Action =
+  ## RED builds and BLUE builds NOTHING, so at the round limit the castles
+  ## are level and the total unit health is not: `more_unit_health`, with
+  ## the engine's `win_condition = 1`.
+  ##
+  ## RED's chain is PILGRIM -> CHURCH -> CHURCH ATTACK, and that chain is
+  ## why this bot builds a pilgrim rather than a crusader. THE CHURCH IS
+  ## THE ONE UNIT `bc19scenario` CANNOT AFFORD: an order starts with 100
+  ## karbonite and NO passive income, a church costs 50 of it, and by the
+  ## time that bot's pilgrim exists its castles have spent the opening
+  ## hundred on the four buildable mobile types. Here nothing else is
+  ## bought at all, so the church lands on every board -- and with it the
+  ## LEGAL 0-DAMAGE CHURCH ATTACK (D6.1), which is the quirk this year is
+  ## most likely to get wrong.
   result = newAction()
-  ## RED builds ONE crusader and BLUE builds nothing, so at the round limit
-  ## the castles are level and the total unit health is not:
-  ## `more_unit_health`, with the engine's `win_condition = 1`.
-  if r.unit == ukCastle and r.team == tRed and r.turn == 1:
+  if r.team != tRed: return
+  case r.unit
+  of ukCastle:
+    if r.turn != 1: return
     let sq = firstFreeAdjacent(w, r)
     if sq.ok:
       result.hasAction = true
       result.kind = akBuild
       result.dx = sq.dx
       result.dy = sq.dy
-      result.buildUnit = ukCrusader
+      result.buildUnit = ukPilgrim
+  of ukPilgrim:
+    if r.turn != 2: return
+    let sq = firstFreeAdjacent(w, r)
+    if sq.ok:
+      result.hasAction = true
+      result.kind = akBuild
+      result.dx = sq.dx
+      result.dy = sq.dy
+      result.buildUnit = ukChurch
+  of ukChurch:
+    if r.turn != 1: return
+    ## D6.1: the CHURCH's `ATTACK_RADIUS` is the SCALAR 0, so `r > radius[1]`
+    ## and `r < radius[0]` are both comparisons against `undefined` and both
+    ## are false -- a CHURCH may legally "attack" ANY on-board square for 0
+    ## fuel and 0 damage, consuming its turn. Measured on the real engine:
+    ## `record.action == 2`.
+    ## The target is five squares TOWARD THE BOARD'S CENTRE, so it is on
+    ## the board for every church on every board in the pair set -- a fixed
+    ## `(5, 5)` falls off the edge for a church in the bottom-right quarter
+    ## and the dx/dy gate then refuses the action before the quirk is ever
+    ## reached. Both sides compute the sign from the map's own dimensions.
+    result.hasAction = true
+    result.kind = akAttack
+    result.dx = (if r.x * 2 < w.width: 5 else: -5)
+    result.dy = (if r.y * 2 < w.height: 5 else: -5)
+  else: discard
 
 proc runScenario19*(w: World, r: Robot): Action =
   when defined(bc19ScenarioTrade): scenarioTrade(w, r)

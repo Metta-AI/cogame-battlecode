@@ -1,6 +1,6 @@
 --- a/coldbrew/bots/example_js/robot.js
 +++ b/coldbrew/bots/example_js/robot.js
-@@ -1,14 +1,40 @@
+@@ -1,6 +1,33 @@
  import {BCAbstractRobot, SPECS} from 'battlecode';
  
  var step = -1;
@@ -11,12 +11,10 @@
 +// possible with it. It is replaced by a `java.util.Random` SEEDED FROM THE
 +// ROBOT'S OWN ID, created once per robot on its first draw. A
 +// java.util.Random is chosen rather than a second Mersenne Twister so the
-+// Nim port can reuse `src/battlecode/rng.nim` UNCHANGED -- and Tier A" is
++// Nim port can reuse `src/battlecode/rng.nim` UNCHANGED -- and Tier A'' is
 +// then also a test of that module against a SECOND, INDEPENDENT stream
 +// running alongside the engine's own MT19937.
 +function JavaRandom(seed) {
-+    // (seed ^ 0x5DEECE66D) & ((1 << 48) - 1), in BigInt because the state
-+    // does not fit a float64 mantissa.
 +    this.seed = (BigInt(seed) ^ 0x5DEECE66Dn) & ((1n << 48n) - 1n);
 +}
 +JavaRandom.prototype.next = function (bits) {
@@ -36,9 +34,7 @@
  
  class MyRobot extends BCAbstractRobot {
      turn() {
-         step++;
- 
-         if (this.me.unit === SPECS.CRUSADER) {
+@@ -10,7 +37,7 @@
              // this.log("Crusader health: " + this.me.health);
              this.log("CRUSADER");
              const choices = [[0,-1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]];
@@ -47,8 +43,7 @@
              return this.move(...choice);
          }
  
-@@ -16,7 +42,11 @@
-         else if (this.me.unit === SPECS.CASTLE) {
+@@ -18,7 +45,12 @@
              this.log("CASTLE");
              if (step % 10 === 0) {
                  //this.log("Building a crusader at " + (this.me.x+1) + ", " + (this.me.y+1));
