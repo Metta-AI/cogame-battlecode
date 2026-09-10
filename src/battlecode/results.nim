@@ -276,6 +276,49 @@ const Bc19GameKeys* = [
   ## integer reading of them. Every other bc19 number is an exact integer,
   ## because the 2019 rule set has no float state at all (D5).
 
+const Bc17GameKeys* = [
+  "gardeners_built", "gardeners_end", "gardeners_lost",
+  "lumberjacks_built", "tanks_built", "victory_points",
+  "bullets_end_tenths", "bullets_earned_from_trees_tenths",
+  "bullets_shaken_tenths", "bullets_donated_tenths",
+  "bullets_spent_on_units_tenths", "bullets_spent_on_trees_tenths",
+  "bullets_spent_on_shots_tenths", "bullets_trickled_tenths",
+  "bullet_worth_end_tenths", "broadcasts", "domination_factor",
+  "trees_planted", "trees_end", "trees_lost",
+  "trees_mature_end", "water_actions", "shake_actions", "chop_actions",
+  "neutral_trees_felled", "robots_released_from_trees", "bullets_fired",
+  "single_shots", "triad_shots", "pentad_shots", "damage_dealt_tenths",
+  "damage_taken_tenths", "friendly_fire_damage_tenths",
+  "own_trees_damaged_tenths", "strike_actions", "body_attacks",
+  "tanks_built_by_600", "lumberjacks_built_by_600", "scouts_built_by_600",
+  "enemy_gardeners_killed", "enemy_trees_felled", "trees_alive_at_1500",
+  "mature_trees_by_600", "rounds_below_one_bullet",
+  "trees_lost_to_strike", "board_width_tenths", "board_height_tenths",
+  "neutral_trees_start", "neutral_trees_with_bullets",
+  "neutral_trees_with_robots", "archon_separation_min_tenths",
+  "archon_separation_max_tenths", "robot_ids_issued", "bullet_ids_issued",
+  "peak_bullets_in_flight"
+]
+  ## bc17's own optional siblings. It REUSES ELEVEN keys that already exist
+  ## with the same meaning and the same type rather than duplicating them,
+  ## and those fourteen are deliberately NOT in this list: `units_built`,
+  ## `units_alive`, `units_lost`, `attacks`, `kills`, `robots_lost` and
+  ## `moves` (bc19/bc20/bc22..bc25); `soldiers_built`, `archons_start`,
+  ## `archons_end`, `archons_lost`, `archons_per_side` and
+  ## `archons_alive_at_2000` (bc16/bc22 -- 2016, 2017 and 2022 are the three
+  ## archon years and mean exactly the same thing by them); `scouts_built`
+  ## (bc16's, the same unit name in both years); and `builds_refused`,
+  ## `refused_actions`, `decision_ops_peak` and `tiebreak_round`
+  ## (bc16/bc19).
+  ##
+  ## **EVERY FLOAT QUANTITY IS IN TENTHS AS AN INTEGER** (`_tenths`) -- the
+  ## convention bc16 established, which this year needs more than any other
+  ## because bullets, health and damage are all `float32` and a raw float in
+  ## a JSON results document is a formatter argument waiting to happen. The
+  ## viewer's `fmtStat` divides by 10 and prints one decimal.
+  ## `victory_points`, every count and `decision_ops_peak` are exact
+  ## integers and are NOT in tenths.
+
 const EndReasons* = [
   "kings_destroyed", "cats_cleared", "round_limit", "abandoned",
   "hq_destroyed", "quantity", "quality", "broadcasts", "highest_id",
@@ -289,7 +332,9 @@ const EndReasons* = [
   "more_adamantium_net_worth",
   "more_archons", "more_gold_net_worth", "more_lead_net_worth",
   "archons_destroyed", "more_archon_health", "more_parts_net_worth",
-  "castles_destroyed", "more_castles", "more_unit_health"
+  "castles_destroyed", "more_castles", "more_unit_health",
+  "victory_points_reached", "all_robots_destroyed", "more_victory_points",
+  "more_bullet_trees", "more_bullet_worth"
 ]
   ## The union of all SIX years' `DominationFactor` renderings plus our own
   ## wall-clock `abandoned`. bc24's `MORE_FLAGS_PICKED` and `RESIGNATION` are
@@ -313,6 +358,18 @@ const EndReasons* = [
   ## documents `annihilated` as THOSE years' factor and a bc16 replay must
   ## trace to `DESTROYED`. `zombified` and `cleansed` are NOT added: both are
   ## reachable only on armageddon maps, which are out of scope (bc16 V4).
+  ##
+  ## bc17 adds EXACTLY FIVE -- `victory_points_reached`
+  ## (`PHILANTROPIED`), `all_robots_destroyed` (`DESTROYED`),
+  ## `more_victory_points` (`PWNED`), `more_bullet_trees` (`OWNED`) and
+  ## `more_bullet_worth` (`BARELY_BEAT`) -- and REUSES `highest_id` (bc20's
+  ## `WON_BY_DUBIOUS_REASONS`, word for word the same rule) and `abandoned`.
+  ## `annihilated` is deliberately NOT reused for `all_robots_destroyed`
+  ## even though bc21's and bc22's semantics are similar, because
+  ## docs/RULES-BC21.md and docs/RULES-BC22.md already document
+  ## `annihilated` as THOSE years' factor and a bc17 replay must trace to
+  ## `DominationFactor.DESTROYED`. **No coin-flip value is added, because
+  ## 2017 has no coin flip.**
   ##
   ## bc19 adds EXACTLY THREE -- `castles_destroyed`, `more_castles` and
   ## `more_unit_health` -- and REUSES `coin_flip` (bc22's, the same words for

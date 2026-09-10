@@ -1384,16 +1384,218 @@ def render_bc19(engine: pathlib.Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+# ---------------------------------------------------------------------------
+#  bc17 -- Battlecode 2017 "Robotic Wildlife Fund"
+# ---------------------------------------------------------------------------
+
+BC17_COMMIT = "165d8a8ef24f03e13a101bb8bc9f5b32dcb33c6c"
+BC17_JAR_VERSION = "2017.1.6.2"
+
+BC17_DECISION_OPS_ARCHON = 3000
+BC17_DECISION_OPS_UNIT = 1500
+    # One tenth of `RobotType.bytecodeLimit` -- 30 000 for an ARCHON and
+    # 15 000 for everything else -- the convention bc16 and bc19..bc26 use.
+    # docs/RULES-BC17.md §Divergences item V1 carries the argument, and it is
+    # WEAKER here than in any other year: NO 2017 RULE READS THE BYTECODE
+    # COUNT AT ALL, so the budget is a pure compute cap and the only thing it
+    # decides is how much the chassis got to think.
+
+BC17_TYPE_ORDINALS = {
+    "ARCHON": 0, "GARDENER": 1, "LUMBERJACK": 2, "SOLDIER": 3, "TANK": 4,
+    "SCOUT": 5,
+}
+
+
+def bc17_f32(bits_hex: str) -> str:
+    """The shortest decimal that round-trips one float32, as a Nim literal.
+
+    The Java side prints raw IEEE-754 bits precisely so that no formatter sits
+    between the engine's value and this file; this picks the shortest decimal
+    whose float32 parse is that exact bit pattern, so the generated table is
+    both readable and bit-exact.
+    """
+    raw = int(bits_hex, 16)
+    value = struct.unpack("<f", struct.pack("<I", raw))[0]
+    for digits in range(1, 18):
+        text = "%.*g" % (digits, value)
+        if struct.pack("<f", float(text)) == struct.pack("<f", value):
+            if "e" in text or "E" in text:
+                continue
+            return text + "'f32"
+    raise SystemExit(f"::error::no round-trip decimal for {bits_hex}")
+
+
+def bc17_camel(name: str) -> str:
+    parts = name.split("_")
+    return parts[0].lower() + "".join(p.capitalize() for p in parts[1:])
+
+
+def render_bc17(tables: pathlib.Path) -> str:
+    import json
+    doc = json.loads(tables.read_text())
+    consts = doc["constants"]
+    robots = doc["robots"]
+    if doc["spec_version"] != "1.0":
+        raise SystemExit("::error::GameConstants.SPEC_VERSION is "
+                         f"{doc['spec_version']!r}, expected \"1.0\"")
+    if len(robots) != 6:
+        raise SystemExit(
+            f"::error::expected 6 RobotType entries, saw {len(robots)}")
+    for i, r in enumerate(robots):
+        if r["ordinal"] != i:
+            raise SystemExit("::error::RobotType.values() came back out of "
+                             "order; the ordinal is load-bearing")
+
+    lines: list[str] = []
+    add = lines.append
+    add('## Battlecode 2017 "Robotic Wildlife Fund" gameplay constants '
+        "-- GENERATED, do not edit.")
+    add("##")
+    add("## Source: the PINNED ORACLE JAR's own classes, reflected by")
+    add("## `tools/JavaBc17Tables.java constants` under Temurin 8 and rendered")
+    add("## by `tools/gen_year_constants.py --year bc17 --tables`. 2017's")
+    add("## `GameConstants` is an INTERFACE, so its fields are implicitly")
+    add("## `public static final` and reflection sees every one of them; the")
+    add("## `RobotType` table is read out of `values()` so the ORDINAL -- which")
+    add("## is the wire order, the atlas index and the `Bc17UnitNames` index --")
+    add("## is the engine's own.")
+    add("##")
+    add("## The `parity-oracle-bc17` job re-runs that pair with `--check`,")
+    add("## which byte-diffs this file, so an edit here fails the build instead")
+    add("## of quietly changing the rules under a `GameVersion` that no longer")
+    add("## describes them. The reflection needs a JVM, which is why the")
+    add("## constants byte-diff lives in the oracle job and not in `test`;")
+    add("## the MAP conversion is pure Python and runs in `test`.")
+    add("##")
+    add("## 2017 IS THE FLOAT32 YEAR AND THE ONLY CONTINUOUS-SPACE ONE:")
+    add("## coordinates, radii, strides, bullet speeds, attack powers, health")
+    add("## and the whole tree economy are Java `float`, every gameplay class")
+    add("## is `strictfp`, and the transcendental surface is exactly")
+    add("## `{sin, cos, atan2}` -- ported from fdlibm into")
+    add("## `src/battlecode/fdlibm.nim` and pinned against the JVM's own")
+    add("## `StrictMath` by `data/bc17/fdlibm_vectors.json`")
+    add("## (docs/RULES-BC17.md F1-F5).")
+    add("")
+    add(f'const EngineCommit* = "{BC17_COMMIT}"')
+    add(f'const OracleJarVersion* = "{BC17_JAR_VERSION}"')
+    add("")
+    add("type")
+    add("  RobotType* = enum")
+    add("    ## `common/RobotType.java` in `values()` order. THE ORDINAL IS")
+    add("    ## LOAD-BEARING: it is the flatbuffer `BodyType` ordinal, the")
+    add("    ## `Bc17UnitNames` index and the atlas cell index.")
+    for r in robots:
+        add(f'    rt{r["name"].capitalize()} = "{r["name"]}"')
+    add("")
+    add("  RobotSpec* = object")
+    add("    ## `common/RobotType.java`'s eleven constructor arguments in the")
+    add("    ## file's own order, plus the two derived values the engine")
+    add("    ## computes. `spawnSource` is the ORDINAL of the named type, or")
+    add("    ## -1 for the engine's `null` (ARCHON alone).")
+    add("    ##")
+    add("    ## `maxHealth` and `bulletCost` are Java `int`, and")
+    add("    ## `ARCHON.bulletCost == -1` IS A RULE, NOT A SENTINEL: the")
+    add("    ## round-2999 tiebreak rung 3 sums `type.bulletCost` over live")
+    add("    ## robots, so every surviving archon SUBTRACTS one bullet from")
+    add("    ## its own team's total (docs/RULES-BC17.md, spec-vs-engine")
+    add("    ## disagreement 3).")
+    add("    spawnSource*: int")
+    add("    buildCooldownTurns*: int")
+    add("    maxHealth*: int")
+    add("    bulletCost*: int")
+    add("    bodyRadius*: float32")
+    add("    bulletSpeed*: float32")
+    add("    attackPower*: float32")
+    add("    sensorRadius*: float32")
+    add("    bulletSightRadius*: float32")
+    add("    strideRadius*: float32")
+    add("    bytecodeLimit*: int")
+    add("    startingHealth*: float32")
+    add("      ## `getStartingHealth()` = `maxHealth` for an ARCHON and a")
+    add("      ## GARDENER, `0.2f * maxHealth` for the four fighters -- so a")
+    add("      ## SOLDIER is born at exactly 10.0, a TANK at 40.0 and a SCOUT")
+    add("      ## at 2.0, and every fighter is DORMANT for its first 20 turns")
+    add("      ## while it heals 4 % a turn.")
+    add("")
+    add("const")
+    for c in consts:
+        name = bc17_camel(c["name"])
+        if c["kind"] == "int":
+            add(f'  {name}* = {c["value"]}')
+        elif c["kind"] == "float":
+            add(f'  {name}* = {bc17_f32(c["value"])}')
+        else:
+            add(f'  {name}* = "{c["value"]}"')
+    add("")
+    add("const")
+    add(f"  ArchonOps* = {BC17_DECISION_OPS_ARCHON}")
+    add("    ## `ARCHON.bytecodeLimit / 10` (V1).")
+    add(f"  UnitOps* = {BC17_DECISION_OPS_UNIT}")
+    add("    ## `15000 / 10` for the other five types (V1).")
+    add("  DormantOps* = 0")
+    add("    ## NOT the divergence -- THE RULE. `getBytecodeLimit()` returns 0")
+    add("    ## unless `canExecuteCode()`, i.e.")
+    add("    ## `health > 0 && (isBuildable() ? roundsAlive >= 20 : true)`,")
+    add("    ## so a newly built fighter does nothing at all for twenty turns")
+    add("    ## (`InternalRobot.java:281-287`).")
+    add("  DormancyRounds* = 20")
+    add("  TreeGrowthRounds* = 80")
+    add("    ## `updateTree` grows while `roundsAlive <= 80` and pays NOTHING")
+    add("    ## during those 81 turns (spec-vs-engine disagreement 5).")
+    add("")
+    add("const RobotSpecs*: array[RobotType, RobotSpec] = [")
+    for r in robots:
+        src = ("-1" if r["spawn_source"] == "-"
+               else str(BC17_TYPE_ORDINALS[r["spawn_source"]]))
+        add(f'  rt{r["name"].capitalize()}: RobotSpec(spawnSource: {src}, '
+            f'buildCooldownTurns: {r["build_cooldown_turns"]},')
+        add(f'    maxHealth: {r["max_health"]}, '
+            f'bulletCost: {r["bullet_cost"]},')
+        add(f'    bodyRadius: {bc17_f32(r["body_radius"])}, '
+            f'bulletSpeed: {bc17_f32(r["bullet_speed"])},')
+        add(f'    attackPower: {bc17_f32(r["attack_power"])}, '
+            f'sensorRadius: {bc17_f32(r["sensor_radius"])},')
+        add(f'    bulletSightRadius: {bc17_f32(r["bullet_sight_radius"])}, '
+            f'strideRadius: {bc17_f32(r["stride_radius"])},')
+        add(f'    bytecodeLimit: {r["bytecode_limit"]}, '
+            f'startingHealth: {bc17_f32(r["starting_health"])}),')
+    add("]")
+    add("")
+    add("func canAttack*(t: RobotType): bool = RobotSpecs[t].attackPower > 0")
+    add("  ## `attackPower > 0` -- so an ARCHON and a GARDENER can NEVER")
+    add("  ## attack, and the two `-1`s in the table are why.")
+    add("func canHire*(t: RobotType): bool = t == rtArchon")
+    add("func canBuild*(t: RobotType): bool = t == rtGardener")
+    add("func isHireable*(t: RobotType): bool = "
+        "RobotSpecs[t].spawnSource == ord(rtArchon)")
+    add("func isBuildable*(t: RobotType): bool = "
+        "RobotSpecs[t].spawnSource == ord(rtGardener)")
+    add("func opsFor*(t: RobotType): int = "
+        "(if t == rtArchon: ArchonOps else: UnitOps)")
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--year", default="bc26",
                     choices=["bc26", "bc20", "bc21", "bc22", "bc23", "bc24",
-                             "bc25", "bc16", "bc19"])
-    ap.add_argument("--engine", required=True, type=pathlib.Path)
+                             "bc25", "bc16", "bc19", "bc17"])
+    ap.add_argument("--engine", type=pathlib.Path,
+                    help="a checkout of the year's engine sources; every year "
+                         "but bc17 reads its constants from Java source")
+    ap.add_argument("--tables", type=pathlib.Path,
+                    help="bc17 ONLY: the JSON that "
+                         "`tools/JavaBc17Tables.java constants` printed by "
+                         "REFLECTING the pinned jar's own classes")
     ap.add_argument("--out", type=pathlib.Path, default=None)
     ap.add_argument("--check", action="store_true",
                     help="diff against the committed file; exit 1 on drift")
     args = ap.parse_args()
+    if args.year == "bc17":
+        if args.tables is None:
+            ap.error("--year bc17 needs --tables (see tools/JavaBc17Tables.java)")
+    elif args.engine is None:
+        ap.error("--engine is required for every year but bc17")
 
     out = args.out or pathlib.Path(
         f"src/battlecode/years/{args.year}/constants.nim")
@@ -1401,14 +1603,16 @@ def main() -> int:
              "bc22": BC22_COMMIT,
              "bc23": BC23_COMMIT, "bc24": BC24_COMMIT,
              "bc25": BC25_COMMIT, "bc16": BC16_COMMIT,
-             "bc19": BC19_COMMIT}[args.year]
+             "bc19": BC19_COMMIT, "bc17": BC17_COMMIT}[args.year]
     text = {"bc26": render, "bc20": render_bc20,
             "bc21": render_bc21, "bc22": render_bc22,
             "bc23": render_bc23,
             "bc24": render_bc24,
             "bc25": render_bc25,
             "bc16": render_bc16,
-            "bc19": render_bc19}[args.year](args.engine)
+            "bc19": render_bc19,
+            "bc17": render_bc17}[args.year](
+                args.tables if args.year == "bc17" else args.engine)
     if args.check:
         current = out.read_text() if out.exists() else ""
         if current != text:

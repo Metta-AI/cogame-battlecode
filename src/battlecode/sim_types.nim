@@ -13,12 +13,46 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV12"
+  GameVersion* = "GV13"
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV13 — the `bc17` year module: Battlecode 2017 "Robotic Wildlife
+    ##        Fund" ported from battlecode-server-2017 at commit 165d8a8e
+    ##        (oracle jar 2017.1.6.2, `SPEC_VERSION` 1.0) — THE FIRST
+    ##        CONTINUOUS-SPACE YEAR: float32 coordinates and circular bodies,
+    ##        the ten-step round loop whose second phase moves BULLETS and
+    ##        whose third updates trees, travelling bullets with
+    ##        segment/circle collision and no team check, the six unit types
+    ##        with their float32 radii, strides, bullet speeds and attack
+    ##        powers, the 20-round dormancy of a built unit at 20 % health
+    ##        healing 4 % a turn, bullet trees at `health x 1/50` a round
+    ##        with 0.5 decay and +5 watering and an 81-round maturity,
+    ##        neutral trees at 200 x radius HP holding bullets and robots
+    ##        that only a chop releases, the lumberjack strike hitting
+    ##        everything within distance 2 with no team check, the tank body
+    ##        attack, the four-rung ladder at round 2 999, and victory points
+    ##        bought at `7.5 + round x 12.5/3000` bullets with 1 000 ending
+    ##        the game the instant the donation lands, behind
+    ##        `game_config.year`. The transcendental surface is
+    ##        `{sin, cos, atan2}` and it is ported from fdlibm into
+    ##        `src/battlecode/fdlibm.nim` and pinned against the JVM's own
+    ##        `StrictMath`; the trove iteration order is reproduced because
+    ##        the tree-income sum is float32 and order-dependent; the jsi
+    ##        R-tree candidate order is normalised to (distance, id) on BOTH
+    ##        sides. Bytecode metering is replaced by a fixed DecisionOps
+    ##        budget (a documented divergence whose only effect is how much
+    ##        the chassis got to think: in 2017 the bytecode count has NO
+    ##        effect on any rule). bc16, bc19, bc20, bc21, bc22, bc23, bc24,
+    ##        bc25 AND bc26 SEMANTICS ARE UNCHANGED: no GV04..GV12 recording
+    ##        carries a byte whose meaning changed — this run makes no
+    ##        year-neutral behaviour change at all, and `fdlibm.nim` is
+    ##        extended ADDITIVELY (four new procs, no existing proc touched)
+    ##        — which is why `ReplayCompatibleGameVersions` is EXTENDED
+    ##        rather than reset and every hosted replay keeps rendering.
     ##
     ## GV12 — the `bc19` year module: Battlecode 2019 "Crusade" ported from
     ##        battlecode19 at commit 80cf1cc5 (npm `bc19` 0.4.6; the spec
@@ -251,7 +285,8 @@ const
     ##        formation, squeaks, cats, backstab, float32-narrowed scoring.
 
   ReplayCompatibleGameVersions* = ["GV04", "GV05", "GV06", "GV07", "GV08",
-                                   "GV09", "GV10", "GV11", GameVersion]
+                                   "GV09", "GV10", "GV11", "GV12",
+                                   GameVersion]
     ## Versions whose recordings this build can still re-derive. A replay
     ## carrying anything else is refused with a readable message rather than
     ## silently re-simulated under different rules.
@@ -303,6 +338,8 @@ type
     scGreenhorn = "greenhorn"
     scSaber = "saber"
     scExamplefuncsplayer19 = "examplefuncsplayer19"
+    scOrchard = "orchard"
+    scExamplefuncsplayer17 = "examplefuncsplayer17"
 
   ConfigError* = object of CatchableError
     ## An unusable `game_config`. The container exits 2 on this, per ctf.

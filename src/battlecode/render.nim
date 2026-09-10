@@ -38,6 +38,10 @@ from years/bc16/world as w16 import nil
 from years/bc16/constants as c16 import nil
 from years/bc16/units as u16 import nil
 from years/bc19/world as w19 import nil
+from years/bc17/world as w17 import nil
+from years/bc17/constants as c17 import nil
+from years/bc17/units as u17 import nil
+from years/bc17/geom as g17 import nil
 from years/bc19/constants as c19 import nil
 from years/bc19/units as u19 import nil
 
@@ -1320,6 +1324,167 @@ proc buildBc19Packet(r: Renderer, w: w19.World, gameIndex, sideAslot: int,
   packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
   packet
 
+
+# ---------------------------------------------------------------------------
+#  bc17 -- THE FIRST FLOAT-SPACE RENDERER IN THIS REPOSITORY
+# ---------------------------------------------------------------------------
+#
+# Every other year is a grid: an integer square, a tile, a sprite that fills
+# it. 2017 is CIRCLES AT FLOAT COORDINATES between 30x30 and 100x100, so this
+# renderer draws:
+#
+#   * the arena as a plain field with an 8-unit reference grid, once per game;
+#   * NEUTRAL TREES AT THEIR REAL RADIUS (0.5 to 10 units, i.e. 8 to 320
+#     pixels at 16 px a unit), tinted by `health / maxHealth` and carrying the
+#     `tree_bullets` or `tree_robots` overlay when they hold something -- so
+#     `Maniple`'s 406 robot-bearing trees read as 406 little presents;
+#   * BULLET TREES at radius 1 with a MATURITY ring for their first 81 rounds
+#     and a health ring after, so "the farm is online" is a visible state
+#     change and not a number;
+#   * BODIES AS CIRCLES AT THEIR REAL RADIUS with the sprite inside -- an
+#     archon and a tank at radius 2 are visibly twice a soldier -- with a
+#     DORMANCY ring on a fighter under twenty rounds old;
+#   * BULLETS as small dots sized by their sprite (`bullet_fast` at speed 4,
+#     `bullet_medium` at 2, `bullet_slow` at 1.5), which at FIT on a 100-wide
+#     board read as tracer fire.
+#
+# Sprite scaling is done ONCE PER SIZE and cached by name (`archon_a@32`), so
+# a 2 000-body round sends no new sprite bytes at all.
+
+const Bc17Unit = 16
+  ## Pixels per WORLD UNIT. A 30x30 board is 480 px and a 100x100 one 1600 --
+  ## the same pixel envelope as the grid years' boards, which is what lets the
+  ## inherited `#viewpanel` zoom and pan work unchanged.
+
+proc scaledSpriteId(r: Renderer, packet: var seq[uint8], cell: string,
+                    px: int): int =
+  ## An atlas cell rendered at `px` x `px` and cached under its own name.
+  let size = max(4, px)
+  let name = cell & "@" & $size
+  if name in r.spriteIds:
+    return r.spriteIds[name]
+  let id = r.nextSpriteId
+  inc r.nextSpriteId
+  r.spriteIds[name] = id
+  let source = r.cellImage(cell)
+  var image = newImage(size, size)
+  image.draw(source, scale(vec2(float32(size) / float32(source.width),
+                                float32(size) / float32(source.height))))
+  packet.addSprite(id, image.width, image.height, straightPixels(image), name)
+  r.sentSprites.incl(id)
+  id
+
+proc bc17ScreenY(w: w17.World, worldY: float32, sizePx: int): int =
+  ## The board's y axis grows NORTH and the canvas grows down. The origin is
+  ## the map's own float origin, which is a random offset in [0, 500].
+  let rel = float(worldY - w.rect.origin.y)
+  int(float(w.rect.height) * float(Bc17Unit) - rel * float(Bc17Unit)) -
+    sizePx div 2
+
+proc bc17ScreenX(w: w17.World, worldX: float32, sizePx: int): int =
+  int((float(worldX - w.rect.origin.x)) * float(Bc17Unit)) - sizePx div 2
+
+proc renderBc17Terrain(r: Renderer, w: w17.World): Image =
+  result = newImage(max(1, int(float(w.rect.width) * float(Bc17Unit))),
+                    max(1, int(float(w.rect.height) * float(Bc17Unit))))
+  result.fill(FloorColor)
+  let ctx = newContext(result)
+  ctx.fillStyle = GridColor
+  var u = 0
+  while u <= int(float(w.rect.width)):
+    ctx.fillRect(rect(float32(u * Bc17Unit), 0'f32, 1'f32,
+                      float32(result.height)))
+    u += 8
+  u = 0
+  while u <= int(float(w.rect.height)):
+    ctx.fillRect(rect(0'f32, float32(result.height - u * Bc17Unit),
+                      float32(result.width), 1'f32))
+    u += 8
+
+proc bc17UnitCell(w: w17.World, robot: w17.Robot, sideAslot: int): string =
+  ## RED is engine-side Team.A and BLUE is Team.B, which is the official
+  ## client's own palette; the in-game aliases stay `Clan Ash` / `Clan Basil`
+  ## and the colours are the viewer's business alone.
+  let suffix = (if robot.team == w17.tA: "_a" else: "_b")
+  u17.unitName(robot.kind) & suffix
+
+proc buildBc17Packet(r: Renderer, w: w17.World, gameIndex, sideAslot: int,
+                     chrome: string): seq[uint8] =
+  var packet: seq[uint8]
+  let newGame = r.terrainGame != gameIndex
+  if newGame:
+    r.terrainGame = gameIndex
+    r.terrainStage = -1
+    r.liveObjects.clear()
+    r.prevRobotSprite.clear()
+    packet.addClearObjects()
+    packet.addLayer(MapLayerId, MapLayerKind, ZoomableFlag)
+    packet.addViewport(MapLayerId,
+                       int(float(w.rect.width) * float(Bc17Unit)),
+                       int(float(w.rect.height) * float(Bc17Unit)))
+  if r.terrainStage != 0:
+    r.terrainStage = 0
+    let terrain = r.renderBc17Terrain(w)
+    packet.addSprite(TerrainSpriteId, terrain.width, terrain.height,
+      straightPixels(terrain), "terrain")
+    packet.addObject(1, 0, 0, -32768, MapLayerId, TerrainSpriteId)
+
+  var seen = initHashSet[int]()
+  ## Trees first, at their real radius: they are terrain, and terrain is
+  ## money.
+  for id, tree in w.trees:
+    let objectId = 100000 + (id mod 60000)
+    seen.incl(objectId)
+    let px = max(8, int(float(tree.radius) * 2.0 * float(Bc17Unit)))
+    let cell =
+      if tree.team == w17.tNeutral:
+        if tree.containedRobot >= 0: "tree_robots"
+        elif tree.containedBullets > 0: "tree_bullets"
+        elif tree.health * 2'f32 < tree.maxHealth: "tree_hurt"
+        else: "tree_mature"
+      elif tree.roundsAlive <= c17.TreeGrowthRounds: "tree_sapling"
+      elif tree.team == w17.tA: "bullet_tree_a"
+      else: "bullet_tree_b"
+    let sprite = r.scaledSpriteId(packet, cell, px)
+    r.addObj(packet, objectId, w.bc17ScreenX(tree.loc.x, px),
+             w.bc17ScreenY(tree.loc.y, px), 3, sprite)
+  ## Then every live robot IN EXEC ORDER, so the client's motion
+  ## interpolation glides a body between rounds instead of teleporting it.
+  for id in w.execOrder:
+    if not w.robots.hasKey(id): continue
+    let robot = w.robots[id]
+    let objectId = RobotObjectBase + (robot.id mod 20000)
+    seen.incl(objectId)
+    let px = int(float(u17.bodyRadius(robot.kind)) * 2.0 * float(Bc17Unit))
+    let sprite = r.scaledSpriteId(packet, w.bc17UnitCell(robot, sideAslot),
+                                  px)
+    r.addObj(packet, objectId, w.bc17ScreenX(robot.loc.x, px),
+             w.bc17ScreenY(robot.loc.y, px),
+             (if robot.kind == c17.rtArchon: 6 else: 5), sprite)
+  ## Bullets last and on top: they are the year's signature.
+  for id in w.execOrder:
+    if not w.bullets.hasKey(id): continue
+    let bullet = w.bullets[id]
+    let objectId = 300000 + (id mod 60000)
+    seen.incl(objectId)
+    let cell =
+      if bullet.speed >= 4'f32: "bullet_fast"
+      elif bullet.speed >= 2'f32: "bullet_medium"
+      else: "bullet_slow"
+    let px = 8
+    let sprite = r.scaledSpriteId(packet, cell, px)
+    r.addObj(packet, objectId, w.bc17ScreenX(bullet.loc.x, px),
+             w.bc17ScreenY(bullet.loc.y, px), 7, sprite)
+  for objectId in toSeq(r.liveObjects):
+    if objectId >= 100000 and objectId notin seen:
+      r.dropObj(packet, objectId)
+    elif objectId >= RobotObjectBase and objectId < 100000 and
+        objectId notin seen:
+      r.dropObj(packet, objectId)
+
+  packet.addSprite(BroadcastChromeSpriteId, 1, 1, [0'u8, 0, 0, 0], chrome)
+  packet
+
 proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   ## The ONE place the renderer branches on the year. `Session` is an object
   ## variant, so the compiler checks that a new year gets an arm here.
@@ -1333,3 +1498,4 @@ proc buildSessionPacket*(r: Renderer, s: Session, chrome: string): seq[uint8] =
   of yBc22: r.buildBc22Packet(s.w22, s.gameIndex, s.sideAslot, chrome)
   of yBc16: r.buildBc16Packet(s.w16, s.gameIndex, s.sideAslot, chrome)
   of yBc19: r.buildBc19Packet(s.w19, s.gameIndex, s.sideAslot, chrome)
+  of yBc17: r.buildBc17Packet(s.w17, s.gameIndex, s.sideAslot, chrome)

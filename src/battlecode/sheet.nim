@@ -32,9 +32,10 @@ import years/bc23/knobs as knobs23
 import years/bc22/knobs as knobs22
 import years/bc16/knobs as knobs16
 import years/bc19/knobs as knobs19
+import years/bc17/knobs as knobs17
 
 export sim_types, sheet_common, knobs26, knobs20, knobs21, knobs24,
-  knobs25, knobs23, knobs22, knobs16, knobs19
+  knobs25, knobs23, knobs22, knobs16, knobs19, knobs17
 
 const
   YearBc26* = "bc26"
@@ -46,6 +47,7 @@ const
   YearBc22* = "bc22"
   YearBc16* = "bc16"
   YearBc19* = "bc19"
+  YearBc17* = "bc17"
 
 type
   Sheet* = object
@@ -59,6 +61,7 @@ type
     doctrine22*: knobs22.Doctrine22   ## the bc22 knobs; defaults on another year
     doctrine16*: knobs16.Doctrine16   ## the bc16 knobs; defaults on another year
     doctrine19*: knobs19.Doctrine19   ## the bc19 knobs; defaults on another year
+    doctrine17*: knobs17.Doctrine17   ## the bc17 knobs; defaults on another year
     notes*: string
     motto*: string
     defaultsApplied*: seq[string]
@@ -80,6 +83,7 @@ proc knownKeysFor*(year: string): seq[string] =
   of YearBc22: @(knobs22.KnownKeys22)
   of YearBc16: @(knobs16.KnownKeys16)
   of YearBc19: @(knobs19.KnownKeys19)
+  of YearBc17: @(knobs17.KnownKeys17)
   else: @(knobs26.KnownKeys)
 
 proc defaultSheet*(year = YearBc26): Sheet =
@@ -92,6 +96,7 @@ proc defaultSheet*(year = YearBc26): Sheet =
         doctrine22: knobs22.defaultDoctrine22(),
         doctrine16: knobs16.defaultDoctrine16(),
         doctrine19: knobs19.defaultDoctrine19(),
+        doctrine17: knobs17.defaultDoctrine17(),
         notes: "", motto: "", submitted: "{}", envelope: "")
 
 proc validate*(payload: JsonNode, year = YearBc26): Sheet =
@@ -195,6 +200,9 @@ proc validate*(payload: JsonNode, year = YearBc26): Sheet =
   of YearBc19:
     ## bc19 joins bc22 and bc16 in counting an ABSENT known key.
     result.doctrine19 = knobs19.applyKnobs19(seen, result.defaultsApplied)
+  of YearBc17:
+    ## bc17 joins bc22, bc16 and bc19 in counting an ABSENT known key.
+    result.doctrine17 = knobs17.applyKnobs17(seen, result.defaultsApplied)
   else:
     result.doctrine = knobs26.applyKnobs(seen, result.defaultsApplied)
 
@@ -221,6 +229,7 @@ proc toJson*(sheet: Sheet): JsonNode =
   of YearBc22: knobs22.toJson22(sheet.doctrine22)
   of YearBc16: knobs16.toJson16(sheet.doctrine16)
   of YearBc19: knobs19.toJson19(sheet.doctrine19)
+  of YearBc17: knobs17.toJson17(sheet.doctrine17)
   else: knobs26.toJson(sheet.doctrine)
 
 proc plainWords*(sheet: Sheet): seq[string] =
@@ -235,4 +244,5 @@ proc plainWords*(sheet: Sheet): seq[string] =
   of YearBc22: knobs22.plainWords22(sheet.doctrine22)
   of YearBc16: knobs16.plainWords16(sheet.doctrine16)
   of YearBc19: knobs19.plainWords19(sheet.doctrine19)
+  of YearBc17: knobs17.plainWords17(sheet.doctrine17)
   else: knobs26.plainWords(sheet.doctrine)

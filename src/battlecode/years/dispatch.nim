@@ -50,6 +50,10 @@ import bc19/maps as maps19
 import bc19/rules as rules19
 import bc19/world as world19
 import bc19/chassis/kit as kit19
+import bc17/maps as maps17
+import bc17/rules as rules17
+import bc17/world as world17
+import bc17/chassis/kit as kit17
 
 export registry
 
@@ -64,6 +68,7 @@ type
     yBc22 = "bc22"
     yBc16 = "bc16"
     yBc19 = "bc19"
+    yBc17 = "bc17"
 
   Session* = ref object
     ## One game in progress, in whichever year's sim. `stepRound` advances it;
@@ -107,6 +112,10 @@ type
       w19*: world19.World
       sides19*: array[2, kit19.Side]
       chassis19*: array[2, rules19.ChassisKind19]
+    of yBc17:
+      w17*: world17.World
+      sides17*: array[2, kit17.Side]
+      chassis17*: array[2, rules17.ChassisKind17]
 
   GameOutcome* = object
     ## The YEAR-NEUTRAL per-game outcome. `results.games[]`'s five required
@@ -247,6 +256,32 @@ const Bc19RungNames* = [
 ]
   ## for `tiebreak.rung`.
 
+const Bc17UnitNames* = [
+  "archon", "gardener", "lumberjack", "soldier", "tank", "scout"
+]
+  ## `RobotType.values()` ordinals 0..5, for `unit_milestone.unit` and
+  ## `chop_reveal.unit`. THE ORDINAL IS LOAD-BEARING: it is also the
+  ## flatbuffer `BodyType` ordinal and the atlas cell index.
+
+const Bc17ActionNames* = [
+  "nothing", "move", "fire_single", "fire_triad", "fire_pentad", "strike",
+  "chop", "shake", "water", "plant", "hire", "build", "broadcast", "donate",
+  "disintegrate", "body_attack"
+]
+  ## bc17 has SIX unit types and sixteen distinct actions, so its
+  ## `first_action` names the ACTION rather than the unit -- the same r1-F14
+  ## lesson, ten years on. And the field is `action`, never `kind`: a field
+  ## named `kind` is flattened into the same object as the event's own `kind`
+  ## key and silently overwrites it (the bc23 r1-F25 finding).
+
+const Bc17RungNames* = [
+  "-", "victory_points_reached", "all_robots_destroyed",
+  "more_victory_points", "more_bullet_trees", "more_bullet_worth",
+  "highest_id"
+]
+  ## `DominationFactor` mapped into this repo's snake_case vocabulary, for
+  ## `tiebreak.rung` and `game_end.end_reason`.
+
 const Bc25TowerNames* = ["paint", "money", "defense"]
   ## `TowerKind`'s ordinals, for `tower_built` / `tower_upgraded` /
   ## `tower_lost`.
@@ -261,6 +296,7 @@ proc yearIdOf*(year: string): YearId =
   of "bc22": yBc22
   of "bc16": yBc16
   of "bc19": yBc19
+  of "bc17": yBc17
   else: yBc26
 
 proc strongChassisFor*(year: string): ScriptedChassis =
@@ -276,6 +312,7 @@ proc strongChassisFor*(year: string): ScriptedChassis =
   of yBc22: scWololo
   of yBc16: scBulwark
   of yBc19: scSaber
+  of yBc17: scOrchard
 
 proc parseScriptedChassis*(name: string): ScriptedChassis =
   ## Year-free reading of a recorded `seats[].chassis` string. An unrecognised
@@ -301,6 +338,7 @@ proc poolNamesFor*(year, pool: string): seq[string] =
   of yBc22: maps22.poolNames(pool)
   of yBc16: maps16.poolNames(pool)
   of yBc19: maps19.poolNames(pool)
+  of yBc17: maps17.poolNames(pool)
 
 proc drawMapsFor*(year, pool: string, seed, count: int): seq[string] =
   case yearIdOf(year)
@@ -313,6 +351,7 @@ proc drawMapsFor*(year, pool: string, seed, count: int): seq[string] =
   of yBc22: maps22.drawMaps(pool, seed, count)
   of yBc16: maps16.drawMaps(pool, seed, count)
   of yBc19: maps19.drawMaps(pool, seed, count)
+  of yBc17: maps17.drawMaps(pool, seed, count)
 
 proc sideAslotFor*(year: string, seed, gameIndex: int): int =
   case yearIdOf(year)
@@ -325,6 +364,7 @@ proc sideAslotFor*(year: string, seed, gameIndex: int): int =
   of yBc22: maps22.sideAslotFor(seed, gameIndex)
   of yBc16: maps16.sideAslotFor(seed, gameIndex)
   of yBc19: maps19.sideAslotFor(seed, gameIndex)
+  of yBc17: maps17.sideAslotFor(seed, gameIndex)
 
 proc mapPathFor*(year, name: string): string =
   case yearIdOf(year)
@@ -337,6 +377,7 @@ proc mapPathFor*(year, name: string): string =
   of yBc22: maps22.mapPath(name)
   of yBc16: maps16.mapPath(name)
   of yBc19: maps19.mapPath(name)
+  of yBc17: maps17.mapPath(name)
 
 proc mapCardFor*(year, name: string, slot, sideAslot, rounds: int): JsonNode =
   ## The per-map facts a seat may legitimately know before writing its
@@ -385,6 +426,10 @@ proc mapCardFor*(year, name: string, slot, sideAslot, rounds: int): JsonNode =
     card
   of yBc19:
     var card = maps19.mapCard(maps19.loadMap(name), slot, sideAslot)
+    card["rounds"] = %rounds
+    card
+  of yBc17:
+    var card = maps17.mapCard(maps17.loadMap(name), slot, sideAslot)
     card["rounds"] = %rounds
     card
 
@@ -476,6 +521,15 @@ proc newSession*(year: string, mapName: string, sheets: array[2, Sheet],
                    rules19.chassisKindFor(chassis[1])]
     result.chassis19 = [kinds19[sideAslot], kinds19[1 - sideAslot]]
     result.sides19 = rules19.newSides19(sheets, sideAslot)
+  of yBc17:
+    let spec = maps17.loadMap(mapName)
+    result = Session(year: yBc17, mapName: mapName, sideAslot: sideAslot,
+                     gameIndex: gameIndex)
+    result.w17 = world17.newWorld(spec, maxRounds)
+    let kinds17 = [rules17.chassisKindFor(chassis[0]),
+                   rules17.chassisKindFor(chassis[1])]
+    result.chassis17 = [kinds17[sideAslot], kinds17[1 - sideAslot]]
+    result.sides17 = rules17.newSides17(sheets, sideAslot)
 
 proc stepRound*(s: Session) =
   case s.year
@@ -488,6 +542,7 @@ proc stepRound*(s: Session) =
   of yBc22: rules22.runRound(s.w22, s.sides22, s.chassis22)
   of yBc16: rules16.runRound(s.w16, s.sides16, s.chassis16)
   of yBc19: rules19.runRound(s.w19, s.sides19, s.chassis19)
+  of yBc17: rules17.runRound(s.w17, s.sides17, s.chassis17)
 
 proc currentRound*(s: Session): int =
   ## **THE SESSION-LEVEL NUMBER IS ROUNDS PLAYED, and it is 1-BASED FOR EVERY
@@ -514,6 +569,7 @@ proc currentRound*(s: Session): int =
   of yBc22: s.w22.currentRound
   of yBc16: s.w16.currentRound + 1
   of yBc19: s.w19.round
+  of yBc17: s.w17.currentRound
 
 proc running*(s: Session): bool =
   case s.year
@@ -526,6 +582,7 @@ proc running*(s: Session): bool =
   of yBc22: s.w22.running
   of yBc16: s.w16.running
   of yBc19: s.w19.running
+  of yBc17: s.w17.running
 
 proc hashChainHex*(s: Session): string =
   case s.year
@@ -538,8 +595,12 @@ proc hashChainHex*(s: Session): string =
   of yBc22: toHex(s.w22.hashChain)
   of yBc16: toHex(s.w16.hashChain)
   of yBc19: toHex(s.w19.hashChain)
+  of yBc17: toHex(s.w17.hashChain)
 
 proc mapWidth*(s: Session): int =
+  ## bc17 boards are FLOAT rectangles (30.0 to 100.0 wide), so the
+  ## year-neutral integer accessors report the TRUNCATED width and height;
+  ## the renderer and the map card read the float values off the session.
   case s.year
   of yBc26: s.w26.width
   of yBc20: s.w20.width
@@ -550,6 +611,7 @@ proc mapWidth*(s: Session): int =
   of yBc22: s.w22.width
   of yBc16: s.w16.width
   of yBc19: s.w19.width
+  of yBc17: int(s.w17.rect.width)
 
 proc mapHeight*(s: Session): int =
   case s.year
@@ -562,6 +624,7 @@ proc mapHeight*(s: Session): int =
   of yBc22: s.w22.height
   of yBc16: s.w16.height
   of yBc19: s.w19.height
+  of yBc17: int(s.w17.rect.height)
 
 # ---------------------------------------------------------------------------
 #  Playing a game, and converting the year's outcome to the neutral one
@@ -988,6 +1051,108 @@ proc statsJson19*(o: rules19.GameOutcome19): JsonNode =
     "queue_length_end": o.queueLengthEnd
   }
 
+proc statsJson17*(o: rules17.GameOutcome17): JsonNode =
+  ## **EVERY FLOAT QUANTITY IS REPORTED IN TENTHS AS AN INTEGER** (`_tenths`)
+  ## -- the convention bc16 established, which this year needs more than any
+  ## other because bullets, health and damage are all `float32` and a raw
+  ## float in a JSON results document is a formatter argument waiting to
+  ## happen. `victory_points`, every count and `decision_ops_peak` are exact
+  ## integers and are NOT in tenths.
+  %*{
+    "archons_start": [o.archonsStart[0], o.archonsStart[1]],
+    "archons_end": [o.archonsEnd[0], o.archonsEnd[1]],
+    "archons_lost": [o.archonsLost[0], o.archonsLost[1]],
+    "gardeners_built": [o.gardenersBuilt[0], o.gardenersBuilt[1]],
+    "gardeners_end": [o.gardenersEnd[0], o.gardenersEnd[1]],
+    "gardeners_lost": [o.gardenersLost[0], o.gardenersLost[1]],
+    "lumberjacks_built": [o.lumberjacksBuilt[0], o.lumberjacksBuilt[1]],
+    "soldiers_built": [o.soldiersBuilt[0], o.soldiersBuilt[1]],
+    "tanks_built": [o.tanksBuilt[0], o.tanksBuilt[1]],
+    "scouts_built": [o.scoutsBuilt[0], o.scoutsBuilt[1]],
+    "units_built": [o.unitsBuilt[0], o.unitsBuilt[1]],
+    "units_alive": [o.unitsAlive[0], o.unitsAlive[1]],
+    "units_lost": [o.unitsLost[0], o.unitsLost[1]],
+    "victory_points": [o.victoryPoints[0], o.victoryPoints[1]],
+    "bullets_end_tenths": [o.bulletsEndTenths[0], o.bulletsEndTenths[1]],
+    "bullets_earned_from_trees_tenths":
+      [o.bulletsEarnedFromTreesTenths[0], o.bulletsEarnedFromTreesTenths[1]],
+    "bullets_shaken_tenths":
+      [o.bulletsShakenTenths[0], o.bulletsShakenTenths[1]],
+    "bullets_donated_tenths":
+      [o.bulletsDonatedTenths[0], o.bulletsDonatedTenths[1]],
+    "bullets_spent_on_units_tenths":
+      [o.bulletsSpentOnUnitsTenths[0], o.bulletsSpentOnUnitsTenths[1]],
+    "bullets_spent_on_trees_tenths":
+      [o.bulletsSpentOnTreesTenths[0], o.bulletsSpentOnTreesTenths[1]],
+    "bullets_spent_on_shots_tenths":
+      [o.bulletsSpentOnShotsTenths[0], o.bulletsSpentOnShotsTenths[1]],
+    "bullets_trickled_tenths":
+      [o.bulletsTrickledTenths[0], o.bulletsTrickledTenths[1]],
+    "bullet_worth_end_tenths":
+      [o.bulletWorthEndTenths[0], o.bulletWorthEndTenths[1]],
+    "trees_planted": [o.treesPlanted[0], o.treesPlanted[1]],
+    "trees_end": [o.treesEnd[0], o.treesEnd[1]],
+    "trees_lost": [o.treesLost[0], o.treesLost[1]],
+    "trees_mature_end": [o.treesMatureEnd[0], o.treesMatureEnd[1]],
+    "water_actions": [o.waterActions[0], o.waterActions[1]],
+    "shake_actions": [o.shakeActions[0], o.shakeActions[1]],
+    "chop_actions": [o.chopActions[0], o.chopActions[1]],
+    "neutral_trees_felled":
+      [o.neutralTreesFelled[0], o.neutralTreesFelled[1]],
+    "robots_released_from_trees":
+      [o.robotsReleasedFromTrees[0], o.robotsReleasedFromTrees[1]],
+    "bullets_fired": [o.bulletsFired[0], o.bulletsFired[1]],
+    "single_shots": [o.singleShots[0], o.singleShots[1]],
+    "triad_shots": [o.triadShots[0], o.triadShots[1]],
+    "pentad_shots": [o.pentadShots[0], o.pentadShots[1]],
+    "attacks": [o.attacks[0], o.attacks[1]],
+    "damage_dealt_tenths":
+      [o.damageDealtTenths[0], o.damageDealtTenths[1]],
+    "damage_taken_tenths":
+      [o.damageTakenTenths[0], o.damageTakenTenths[1]],
+    "friendly_fire_damage_tenths":
+      [o.friendlyFireDamageTenths[0], o.friendlyFireDamageTenths[1]],
+    "own_trees_damaged_tenths":
+      [o.ownTreesDamagedTenths[0], o.ownTreesDamagedTenths[1]],
+    "strike_actions": [o.strikeActions[0], o.strikeActions[1]],
+    "body_attacks": [o.bodyAttacks[0], o.bodyAttacks[1]],
+    "kills": [o.kills[0], o.kills[1]],
+    "robots_lost": [o.robotsLost[0], o.robotsLost[1]],
+    "moves": [o.moves[0], o.moves[1]],
+    "broadcasts": [o.broadcasts[0], o.broadcasts[1]],
+    "builds_refused": [o.buildsRefused[0], o.buildsRefused[1]],
+    "refused_actions": [o.refusedActions[0], o.refusedActions[1]],
+    "decision_ops_peak": [o.decisionOpsPeak[0], o.decisionOpsPeak[1]],
+    "tanks_built_by_600": [o.tanksBuiltBy600[0], o.tanksBuiltBy600[1]],
+    "lumberjacks_built_by_600":
+      [o.lumberjacksBuiltBy600[0], o.lumberjacksBuiltBy600[1]],
+    "scouts_built_by_600": [o.scoutsBuiltBy600[0], o.scoutsBuiltBy600[1]],
+    "enemy_gardeners_killed":
+      [o.enemyGardenersKilled[0], o.enemyGardenersKilled[1]],
+    "enemy_trees_felled": [o.enemyTreesFelled[0], o.enemyTreesFelled[1]],
+    "trees_alive_at_1500": [o.treesAliveAt1500[0], o.treesAliveAt1500[1]],
+    "mature_trees_by_600": [o.matureTreesBy600[0], o.matureTreesBy600[1]],
+    "archons_alive_at_2000":
+      [o.archonsAliveAt2000[0], o.archonsAliveAt2000[1]],
+    "rounds_below_one_bullet":
+      [o.roundsBelowOneBullet[0], o.roundsBelowOneBullet[1]],
+    "trees_lost_to_strike":
+      [o.treesLostToStrike[0], o.treesLostToStrike[1]],
+    "archons_per_side": o.archonsPerSide,
+    "board_width_tenths": o.boardWidthTenths,
+    "board_height_tenths": o.boardHeightTenths,
+    "neutral_trees_start": o.neutralTreesStart,
+    "neutral_trees_with_bullets": o.neutralTreesWithBullets,
+    "neutral_trees_with_robots": o.neutralTreesWithRobots,
+    "archon_separation_min_tenths": o.archonSeparationMinTenths,
+    "archon_separation_max_tenths": o.archonSeparationMaxTenths,
+    "robot_ids_issued": o.robotIdsIssued,
+    "bullet_ids_issued": o.bulletIdsIssued,
+    "peak_bullets_in_flight": o.peakBulletsInFlight,
+    "domination_factor": o.dominationFactor,
+    "tiebreak_round": o.tiebreakRound
+  }
+
 proc playGameFor*(
   year, mapName: string, sheets: array[2, Sheet],
   chassis: array[2, ScriptedChassis],
@@ -1085,6 +1250,16 @@ proc playGameFor*(
       endReason: o.endReason, points: o.points, hashChain: o.hashChain,
       roundChains: o.roundChains, aborted: o.aborted,
       stats: statsJson19(o)), w.events)
+  of yBc17:
+    let spec = maps17.loadMap(mapName)
+    let (w, o) = rules17.playGame(spec, sheets,
+      [rules17.chassisKindFor(chassis[0]), rules17.chassisKindFor(chassis[1])],
+      index, sideAslot, maxRounds, budgetSeconds)
+    (GameOutcome(index: o.index, mapName: o.mapName, sideAslot: o.sideAslot,
+      roundsPlayed: o.roundsPlayed, winnerSlot: o.winnerSlot,
+      endReason: o.endReason, points: o.points, hashChain: o.hashChain,
+      roundChains: o.roundChains, aborted: o.aborted,
+      stats: statsJson17(o)), w.events)
 
 proc bc21Breakpoints*(): seq[int] =
   ## The slanderer influence breakpoints, for the bc21 doctrine brief. Read

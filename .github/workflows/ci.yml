@@ -24,9 +24,9 @@ on:
     # `bc19-year-module` are the branches the second through NINTH year
     # modules land on. main's trigger semantics are untouched; this only
     # adds branches.
-    branches: [ main, bc16-year-module, bc19-year-module, bc20-year-module,
-                bc21-year-module, bc22-year-module, bc23-year-module,
-                bc24-year-module, bc25-year-module ]
+    branches: [ main, bc16-year-module, bc17-year-module, bc19-year-module,
+                bc20-year-module, bc21-year-module, bc22-year-module,
+                bc23-year-module, bc24-year-module, bc25-year-module ]
   pull_request:
   workflow_dispatch:
 
@@ -151,6 +151,26 @@ env:
   BC19_NODE_VERSION: "22.22.0"
   BC19_MT_VERSION: "1.1.0"
   BC19_MT_INTEGRITY: "sha1-+RZhjuQ9cXnvz2Qb7EUx65Zwl4o="
+
+  # --- bc17, the TENTH year module and THE ONLY CONTINUOUS-SPACE ONE ------
+  # 2017 is the float32 year: coordinates, radii, strides, bullet speeds,
+  # attack powers, health and the whole tree economy are Java `float`, every
+  # gameplay class is `strictfp`, and the transcendental surface is exactly
+  # {sin, cos, atan2} -- ported from fdlibm into src/battlecode/fdlibm.nim
+  # and pinned against the JVM's own StrictMath by
+  # data/bc17/fdlibm_vectors.json (docs/RULES-BC17.md F1-F5).
+  #
+  # THE MAPS AND THE CONSTANTS COME OUT OF THE PINNED ORACLE JAR ITSELF, not
+  # out of a source checkout: the jar is a FAT jar that carries all seventy
+  # `battlecode/world/resources/*.map17` flatbuffers, so
+  # tools/convert_maps_bc17.py reads them with `zipfile` and NO JVM at all.
+  # The jar is pinned by URL, SIZE and SHA256 in tools/oracle/bc17/jar.lock.
+  # There is no JDK, no JRE, no Java and no Node in any image stage.
+  BC17_COMMIT: "165d8a8ef24f03e13a101bb8bc9f5b32dcb33c6c"
+  BC17_CLIENT_COMMIT: "feb3e03820ba442ab233f05d2432b0dc2833aa98"
+  BC17_JAR_URL: "http://battlecode-maven.s3-website-us-east-1.amazonaws.com/org/battlecode/battlecode/2017.1.6.2/battlecode-2017.1.6.2.jar"
+  BC17_JAR_SHA256: "9254e89268fd6efb72cafc037e3eded006aefd1d19aa44195c945b43ceb7bff9"
+  BC17_JAR_BYTES: "14576275"
 
 jobs:
   # ---------------------------------------------------------------------
