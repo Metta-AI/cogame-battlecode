@@ -118,14 +118,17 @@ inside 720 s.
 
 **bc19 is also the one year with a raised reply cap** — `maxOutputTokens`
 3 000, where every other year inherits `defaultGameConfig()`'s 1 200. It was
-raised in 0.11.2 because both doctrine attempts for one seat returned *inside*
-their deadlines but were long pretty-printed replies that stopped
-mid-structure (`input(40, 40) Error: ] expected`, then
-`input(40, 5) Error: } expected`, against a successful sheet's single line of
-~245 characters), and a truncated reply cannot be detected by the existing
-`max_tokens` guard because the assistant turn is prefilled with `{`, so the
-guard's `'{' notin result` condition is never true and the truncation surfaces
-as an ordinary parse error instead.
+raised after bc19 league **round 3**, the first round to run the raised
+deadlines above: both doctrine attempts for one seat returned *inside* those
+deadlines (27.5 s against 40 000, then 13.1 s against 24 000) but were long
+pretty-printed replies that stopped mid-structure
+(`input(40, 40) Error: ] expected`, then `input(40, 5) Error: } expected`,
+against a successful sheet's single line of ~245 characters), and a truncated
+reply cannot be detected by the existing `max_tokens` guard because the
+assistant turn is prefilled with `{`, so the guard's `'{' notin result`
+condition is never true and the truncation surfaces as an ordinary parse error
+instead. A reply cap is not a deadline: the 75 s doctrine phase and the 335 s
+worst case above are unchanged.
 
 ## HTTP surface
 
