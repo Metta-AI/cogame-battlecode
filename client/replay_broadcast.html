@@ -4080,7 +4080,12 @@ html:not([data-year="bc17"]) #bc17-fund { display: none !important; }
   position: absolute; right: 4px; top: 2px; background: none;
   border: none; color: #9fd4a8; font-size: 14px; cursor: pointer;
 }
-#bc17-doctrines .badge { color: #e8c07f; }
+#bc17-doctrines .dline { margin-bottom: 6px; }
+#bc17-doctrines .dname { color: #f2e8d8; font-weight: 700; }
+#bc17-doctrines .dfall { color: #e0523a; }
+#bc17-doctrines .dbadge { color: #e8c07f; font-weight: 700; }
+#bc17-doctrines .dsub { color: #8b8375; }
+#bc17-doctrines ul { margin: 2px 0; padding-left: 16px; }
 #bc17-doctrines-toggle {
   position: absolute; left: 50%; transform: translateX(-50%);
   top: calc(var(--topband, 0px) + 62px);
@@ -8348,19 +8353,42 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
     if (!body || !s.doctrines) return;
     var html = '';
     s.doctrines.forEach(function (d) {
-      html += '<div><b>' + esc(d.alias) + '</b> (' + esc(d.name) + ')';
+      /* `.dline` / `.dname` / `.dfall` / `.dbadge` / `.dsub` and the `<i>`
+         around `notes` are the five class names every other year's doctrine
+         row uses, and they are not decoration:
+         `tools/ci/renderer_fixture.html` selects
+         `#<year>-doctrines .dline i` to prove the 280-rune note was laid out
+         at its cap, and bc25 shipped its own names first and that check
+         found nothing to measure (the bc16 r1-F2 scar). */
+      html += '<div class="dline"><span class="dname">' + esc(d.alias) +
+        '</span> (' + esc(d.name) + ')' +
+        /* THE FALLBACK BADGE. `doctrinesJson` puts `fallback` in every
+           frame and phase 60 counts fallbacks OFF THE SCREEN, so a seat
+           that played the scripted sheet because its cog never answered has
+           to say so where a spectator can see it (r1-F5). */
+        (d.fallback ? ' <span class="dfall">[fallback: ' +
+          esc(d.fallback) + ']</span>' : '');
       if (d.envelope || (d.defaults_applied && d.defaults_applied.length)) {
-        html += ' <span class="badge">envelope: ' +
+        html += ' <span class="dbadge">envelope: ' +
           esc(d.envelope || 'none') + ' \u00b7 ' +
           (d.defaults_applied ? d.defaults_applied.length : 0) +
-          ' of 11 knobs defaulted</span>';
+          ' of ' + (d.knob_count || 11) + ' knobs defaulted</span>';
       }
       html += '<ul>';
       (d.words || []).forEach(function (w) {
         html += '<li>' + esc(w) + '</li>';
       });
       html += '</ul>';
-      if (d.notes) html += '<div>' + esc(d.notes) + '</div>';
+      if (d.notes) html += '<i>' + esc(d.notes) + '</i>';
+      /* THE "WHAT THE COG ACTUALLY SENT" DISCLOSURE, the third half of the
+         envelope pin: the applied sheet above, the envelope rule that fired
+         in the badge, and the first 120 runes of the reply itself here. A
+         seat that played the schema defaults because its knobs arrived
+         inside a protocol envelope is then visible in one glance. */
+      if (d.envelope && d.submitted) {
+        html += '<div class="dsub">what the cog actually sent: ' +
+          esc(d.submitted) + '</div>';
+      }
       html += '</div>';
     });
     body.innerHTML = html;
