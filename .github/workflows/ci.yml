@@ -5771,12 +5771,33 @@ jobs:
                  echo "::error::readout that says which round is on screen."
                  exit 1;;
             esac
-            test "${ff_round}" = "1" || {
-              echo "::error::the bc17 viewer opened on round ${ff_round},"
-              echo "::error::not round 1. Playback must open at the game"
-              echo "::error::start; a recording whose first drawn frame is"
-              echo "::error::not its opening round is one this deriver could"
-              echo "::error::not have produced."
+            # A WINDOW, NOT AN EQUALITY, and the reason is the
+            # instrument rather than the viewer. The load signal fires
+            # INSIDE the page on the first frame the worker hands the
+            # shell; this harness reads `#tick-clock` from OUTSIDE on a
+            # 250 ms poll, so free-running playback puts a round or three
+            # on the clock before the read lands. Measured across all ten
+            # years on run 34578233563: 1, 2, 2, 2, 3, 3, 3, 3, 3, 3 -- and
+            # bc17 itself read 1 on runs 34565862675 and 34573046331 and 3
+            # on 34578233563, which is a race and not a regression. An
+            # equality here made a busy runner red for no defect (and did,
+            # once). The floor is what carries the claim: below 1 there is
+            # no frame at all, and the EXACT clamp is asserted on the
+            # rewind below, which is a positioned jump and not a race.
+            start_window=$(( total / 50 ))
+            if [ "${start_window}" -lt 10 ]; then start_window=10; fi
+            test "${ff_round}" -ge 1 || {
+              echo "::error::the bc17 viewer opened on round ${ff_round}."
+              echo "::error::Round 1 is the first frame this deriver can"
+              echo "::error::produce (replay.nim enumerates rounds from 1),"
+              echo "::error::so anything below it is a frame from a lobby"
+              echo "::error::this runtime does not have."
+              exit 1; }
+            test "${ff_round}" -le "${start_window}" || {
+              echo "::error::the bc17 viewer opened on round ${ff_round} of"
+              echo "::error::${total}, past the ${start_window} the 250 ms"
+              echo "::error::read can account for. Playback must open at the"
+              echo "::error::game start, not part way through it."
               exit 1; }
             case "${rw}" in
               "round "*) ;;

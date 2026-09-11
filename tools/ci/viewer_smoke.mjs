@@ -695,6 +695,10 @@ async function main() {
   let loaded = false;
   let failure = navError;
   let readout = null;
+  // The readout that FIRST saw the load signal, kept before the re-read
+  // below moves it on. It is the closest this harness can get to the first
+  // drawn frame from outside the page, and it is what `first_frame` reports.
+  let atLoadSignal = null;
   while (Date.now() < deadline) {
     try {
       readout = await page.evaluate(READOUT_SCRIPT);
@@ -704,8 +708,8 @@ async function main() {
     const bridgeError = bridge.find((e) => e.type === "error");
     if (bridgeError) { failure = `bridge error: ${bridgeError.message || "(no message)"}`; break; }
     if (readout && readout.error_attr) { failure = `data-replay-error: ${readout.error_attr}`; break; }
-    if (readout && readout.loaded_attr === "true") { loaded = true; break; }
-    if (bridge.some((e) => e.type === "ready")) { loaded = true; break; }
+    if (readout && readout.loaded_attr === "true") { loaded = true; atLoadSignal = readout; break; }
+    if (bridge.some((e) => e.type === "ready")) { loaded = true; atLoadSignal = readout; break; }
     await sleep(250);
   }
   const elapsedMs = Date.now() - started;
@@ -714,12 +718,23 @@ async function main() {
   }
   try { readout = await page.evaluate(READOUT_SCRIPT); } catch { /* keep the last good readout */ }
 
-  // THE FIRST DRAWN FRAME, captured before the soak advances it. The load
-  // signal fires on the first frame the worker hands the shell, so this is
-  // the frame a viewer opens on -- which is the only thing "playback opens
-  // at the game start, never the recorded lobby" can be read off.
-  const firstFrame = readout
-    ? { clock: readout.clock, tick: readout.tick, status: readout.status }
+  // THE FIRST DRAWN FRAME, taken at the load signal and before the soak
+  // advances it. NOT AN EXACT FRAME NUMBER, and the reason is the
+  // instrument: the load signal fires inside the page on the first frame
+  // the worker hands the shell, while this harness reads `#tick-clock` from
+  // outside on a 250 ms poll, so free-running playback can put a round or
+  // three on the clock before the read lands. Measured across all ten
+  // years on one run: 1, 2, 2, 2, 3, 3, 3, 3, 3, 3. `atLoadSignal` is the
+  // poll that first saw the signal rather than the re-read after the loop,
+  // which is as close as the outside can get; the caller treats the number
+  // as "at the start", not as "exactly frame one", and rests the exact
+  // claim on the rewind seek, which is a positioned jump and not a race.
+  const firstFrame = (atLoadSignal || readout)
+    ? {
+        clock: (atLoadSignal || readout).clock,
+        tick: (atLoadSignal || readout).tick,
+        status: (atLoadSignal || readout).status,
+      }
     : null;
 
   // ------------------------------------------------------------------
