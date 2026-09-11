@@ -4604,6 +4604,16 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
               >&times;</button>
       <div id="bc17-doctrines-body"></div>
     </div>
+    <!-- BC17: re-opens #bc17-doctrines after it has been dismissed. It sits
+         HERE, beside the panel inside #chrome, and not in the clock column
+         with the other eight years' chips, because bc17's own rule at
+         `#bc17-doctrines-toggle` is `position: absolute` off `--topband` --
+         it is a pill in this year's HUD stack, twelve pixels above the
+         panel it re-opens, and it has to share the panel's containing
+         block to land there. -->
+    <button type="button" id="bc17-doctrines-toggle" hidden
+            title="Show the doctrines"
+            aria-label="Show doctrines">doctrines</button>
 
     <!-- BC22 additions to the inherited cogame-battlecode chrome -->
     <div id="bc22-archons"></div>
@@ -8490,7 +8500,13 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
     var box = $('bc17-doctrines');
     var chip = $('bc17-doctrines-toggle');
     if (box) box.style.display = open ? '' : 'none';
-    if (chip) chip.style.display = open ? 'none' : '';
+    /* `chip.hidden`, not `chip.style.display`, and the difference is
+       load-bearing: the element ships with the `hidden` attribute so it is
+       not on screen over the panel that is already open, and the UA rule
+       `[hidden] { display: none }` would survive `style.display = ''`
+       because `#bc17-doctrines-toggle`'s own rule sets no `display`. bc16
+       does the same (`chip.hidden = !dismissed`). */
+    if (chip) chip.hidden = open;
   }
 
   function wireDoctrines() {
