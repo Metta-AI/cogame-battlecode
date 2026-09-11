@@ -5685,7 +5685,9 @@ jobs:
           # same function. A wasm32 divergence in ANY of that shows up here
           # as a hash-chain mismatch and nowhere else. NOTE that this smoke
           # steps 200 FRAMES, so its `mismatch_round: -1` covers the first
-          # 200 rounds only.
+          # 200 rounds only -- the WHOLE-recording re-derivation is asserted
+          # by tests/test_bc17_replay.nim (r1-F1), which also compares the
+          # deriver's per-tick state against the recorder's frame by frame.
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
             "${{ github.workspace }}/dist/smoke/replay-bc17.json"
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
