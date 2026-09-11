@@ -5740,6 +5740,64 @@ jobs:
           # nothing read the number (r1-F15). Gated on bc17 only, because
           # this round's scope is bc17 and the other nine are measured
           # green without a gate.
+          # PLAYBACK OPENS AT THE GAME START, AND EVERY SEEK CLAMPS
+          # THERE (checklist item 13's last bullet). This runtime has NO
+          # LOBBY: `newDeriver` enumerates frames `for r in 1 ..
+          # gameRecord(index).rounds` (src/battlecode/replay.nim:270-276),
+          # so frame 0 is the state AFTER round 1 has been stepped and no
+          # pre-gameStart frame can be recorded at all; every year's chrome
+          # emits `"lob": 0` and `ph` only ever "playing" or "gameover", so
+          # `chrome_common.js:420`'s `s.ph === 'lobby'` branch is
+          # unreachable from a recording; and `Deriver.seek` clamps to
+          # `[0, totalFrames - 1]`. The checklist's suggested probe -- a
+          # replay recorded with a large `lobbyJoinTimeoutTicks` -- does not
+          # apply to a runtime with no join phase, so the claim is settled
+          # HERE, on the two numbers a browser can actually report: the
+          # first drawn frame's round, and where the playhead lands when
+          # the scrubber is driven back to its left edge AFTER the 100 %
+          # seek.
+          ff="$(jq -r '.first_frame.tick // ""' viewer-smoke.json)"
+          rw="$(jq -r '[.scrub[] | select(.at == "0%-rewind")] | last
+                       | .tick // ""' viewer-smoke.json)"
+          echo "first drawn frame: ${ff}   after a rewind seek: ${rw}"
+          if [ "${replay}" = "dist/smoke/replay-bc17.json" ]; then
+            ff_round="${ff#round }"; ff_round="${ff_round%% *}"
+            rw_round="${rw#round }"; rw_round="${rw_round%% *}"
+            total="${ff##*/ }"
+            case "${ff}" in
+              "round "*) ;;
+              *) echo "::error::the bc17 first drawn frame read '${ff}',"
+                 echo "::error::not 'round N / M' -- #tick-clock is the only"
+                 echo "::error::readout that says which round is on screen."
+                 exit 1;;
+            esac
+            test "${ff_round}" = "1" || {
+              echo "::error::the bc17 viewer opened on round ${ff_round},"
+              echo "::error::not round 1. Playback must open at the game"
+              echo "::error::start; a recording whose first drawn frame is"
+              echo "::error::not its opening round is one this deriver could"
+              echo "::error::not have produced."
+              exit 1; }
+            case "${rw}" in
+              "round "*) ;;
+              *) echo "::error::the bc17 rewind seek read '${rw}'; the"
+                 echo "::error::scrubber could not pull the match back from"
+                 echo "::error::the end."
+                 exit 1;;
+            esac
+            test "${rw_round}" -ge 1 || {
+              echo "::error::a rewind seek landed on round ${rw_round}."
+              echo "::error::Round 1 is the floor: there is no frame before"
+              echo "::error::it and a seek must clamp there."
+              exit 1; }
+            limit=$(( total / 20 + 25 ))
+            test "${rw_round}" -le "${limit}" || {
+              echo "::error::a rewind to the scrubber's left edge landed on"
+              echo "::error::round ${rw_round} of ${total}, past the ${limit}"
+              echo "::error::the 700 ms settle can account for. The seek did"
+              echo "::error::not clamp at the game start."
+              exit 1; }
+          fi
           feed="$(jq -r '.feed_lines // 0' viewer-smoke.json)"
           echo "killfeed lines at the first drawn frame: ${feed}"
           if [ "${replay}" = "dist/smoke/replay-bc17.json" ] && \
