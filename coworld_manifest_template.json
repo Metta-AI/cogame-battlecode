@@ -3475,6 +3475,7 @@
         "attempt1Ms": 40000,
         "retryMs": 24000,
         "doctrineBudgetMs": 75000,
+        "maxOutputTokens": 3000,
         "perGameBudgetSeconds": 60,
         "matchBudgetSeconds": 200,
         "connectTimeoutMs": 25000,
