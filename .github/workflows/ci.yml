@@ -4294,6 +4294,46 @@ jobs:
       - name: Build image
         run: docker build --platform=linux/amd64 -t "${IMAGE}:ci" .
 
+      # RAIL 2, GATED RATHER THAN ASSERTED. `Dockerfile:7` says "NO JDK, NO
+      # JRE, NO JAVA, NO NODE in any stage" and a comment is not a gate: the
+      # 2017, 2016, 2019 and 2026 engines are CI-only oracles and the
+      # 2019/2020 generators need node, so a copy-paste from one of those
+      # jobs into a Dockerfile stage is a real way for a JVM to arrive in a
+      # published image. This asks the BUILT IMAGE, through its own shell,
+      # what its PATH resolves -- `command -v` and not `which`, because
+      # `which` is not installed in debian-slim and its absence would make
+      # every probe "succeed" (r1-F6, design note §Packaging).
+      - name: The built image has no java, javac, node or npm on its PATH
+        run: |
+          set -euo pipefail
+          found=""
+          for bin in java javac node npm; do
+            # `|| true`: a resolved binary is the failure, a non-zero exit
+            # from `command -v` is the pass, and `set -e` must not turn the
+            # pass into a red step.
+            path="$(docker run --rm --entrypoint /bin/sh "${IMAGE}:ci" \
+              -c "command -v ${bin} 2>/dev/null || true")"
+            if [ -n "${path}" ]; then
+              echo "::error::${bin} resolves to ${path} inside ${IMAGE}:ci"
+              found="${found} ${bin}"
+            else
+              echo "absent from the image's PATH: ${bin}"
+            fi
+          done
+          if [ -n "${found}" ]; then
+            echo "::error::rail 2: the published image must carry NO JVM and"
+            echo "::error::NO Node.${found} is in it. The Battlecode engines"
+            echo "::error::are CI-only oracles (docs/PARITY.md) and the map"
+            echo "::error::and constant generators are build-time only."
+            exit 1
+          fi
+          # And the probe itself has to be able to find something, or an
+          # image with no shell at all would report four absences and pass.
+          test -n "$(docker run --rm --entrypoint /bin/sh "${IMAGE}:ci" \
+            -c 'command -v sh')" || {
+            echo "::error::the absence probe could not resolve even /bin/sh,"
+            echo "::error::so its four absences prove nothing"; exit 1; }
+
       # The contract probe inside docker_smoke.sh speaks WebSocket to the
       # running game exactly as `coworld certify` does. Without these it
       # fails loudly rather than skipping (see SMOKE_CONTRACT_PROBE).
