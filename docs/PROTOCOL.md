@@ -85,9 +85,9 @@ parsing.
 
 | failure | response |
 | --- | --- |
-| no reply within `attempt1Ms` (20 000) | one retry with `retryMs` (12 000), logged `will retry` |
+| no reply within `attempt1Ms` (20 000; bc19 40 000) | one retry with `retryMs` (12 000; bc19 24 000), logged `will retry` |
 | second failure, unparseable JSON, or a throttle with no other candidate model | that seat plays its **scripted doctrine**, `results.fallbacks[seat] = 1`, a `doctrine_fallback` event names the cause, the log says `falling back` |
-| the phase exceeds `doctrineBudgetMs` | whatever is unresolved takes the scripted doctrine; the match starts anyway |
+| the phase exceeds `doctrineBudgetMs` (45 000; bc19 75 000) | whatever is unresolved takes the scripted doctrine; the match starts anyway |
 | a sheet field is unknown, mistyped or out of range | that field alone takes its default |
 | a seat never registers | it plays the scripted doctrine, is reported to `COGAME_PLAYER_FAILURE_URI`, and the server logs **loudly** |
 | a game exceeds `perGameBudgetSeconds`, or the match exceeds `matchBudgetSeconds` | the running game is abandoned, finished games are scored, `results.reason = deadline` |
@@ -107,6 +107,13 @@ score + replay write + shutdown grace                <=  30 s
                                                        ------
                                                         435 s  <= 720 s
 ```
+
+**bc19 is the one year with raised doctrine deadlines** — `attempt1Ms` 40 000,
+`retryMs` 24 000, `doctrineBudgetMs` 75 000. They were raised in 0.9.1 because
+both doctrine attempts for one seat timed out against the bedrock sidecar in
+league rounds 1 and 2 while the provider answered `200 OK` to every request.
+Its worst case is 30 + 75 + 200 (`matchBudgetSeconds`) + 30 = 335 s, still
+inside 720 s.
 
 ## HTTP surface
 
