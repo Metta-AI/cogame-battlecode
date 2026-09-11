@@ -2480,11 +2480,30 @@ proc bc17Fund(w: w17.World, sideAslot: int): JsonNode =
       "bullets_end_tenths": int(w.bulletSupply[t] * 10'f32),
       "bullet_worth_tenths": int(w17.bulletWorth(w, team) * 10'f32)
     })
+  ## THE TIEBREAK LEDGER: all four rungs with BOTH sides' numbers, so a
+  ## spectator can see how close the ones that did not decide it were.
+  ## Rung 4 is the highest ROBOT id of any type, not the highest archon id
+  ## the spec claims (disagreement 2), so it is computed the way
+  ## `runLadder` computes it.
+  var highestId = [0, 0]
+  for id, r in w.robots:
+    let o = ord(r.team)
+    if o <= 1 and r.id > highestId[o]: highestId[o] = r.id
   %*{
     "orders": orders,
     "rung": w17.Bc17RungNames[w.domination],
     "domination_factor": r17.DominationNames[w.domination],
-    "tiebreak_round": w.tiebreakRound
+    "tiebreak_round": w.tiebreakRound,
+    "ladder": [
+      {"rung": "more_victory_points",
+       "a": w.victoryPoints[ord(w17.tA)], "b": w.victoryPoints[ord(w17.tB)]},
+      {"rung": "more_bullet_trees",
+       "a": w.treeCount[ord(w17.tA)], "b": w.treeCount[ord(w17.tB)]},
+      {"rung": "more_bullet_worth",
+       "a": int(w17.bulletWorth(w, w17.tA) * 10'f32),
+       "b": int(w17.bulletWorth(w, w17.tB) * 10'f32)},
+      {"rung": "highest_id", "a": highestId[0], "b": highestId[1]}
+    ]
   }
 
 proc bc17ChromeJson*(

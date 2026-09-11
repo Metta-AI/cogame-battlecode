@@ -1946,8 +1946,16 @@ block:
   ## it.
   let page = readFile("client/replay_broadcast.html")
   for id in ["bc17-vp", "bc17-bullets", "bc17-econ", "bc17-units",
-             "bc17-doctrines"]:
+             "bc17-doctrines", "bc17-fund"]:
     check("the page carries #" & id, "id=\"" & id & "\"" in page)
+  ## `#bc17-fund` is the endcard Fund panel, and a panel nothing READS is a
+  ## panel nobody sees: `s.bc17_fund` was computed on every frame and never
+  ## drawn (r1-F4). Assert the reader, not only the markup.
+  check("and the Fund panel is actually read off the frame",
+    "s.bc17_fund" in page)
+  check("by this block's own endcard renderer",
+    "function renderEndcardExtras" in page and
+    "renderEndcardExtras(s);" in page)
   check("the doctrines panel is DISMISSIBLE",
     "id=\"bc17-doctrines-close\"" in page and
     "aria-label=\"Dismiss doctrines\"" in page)
