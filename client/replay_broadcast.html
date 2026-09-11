@@ -4020,13 +4020,21 @@ html:not([data-year="bc17"]) #bc17-fund { display: none !important; }
 #bc17-vp {
   position: absolute; left: 50%; transform: translateX(-50%);
   top: calc(var(--topband, 0px) + 6px);
-  display: flex; gap: 10px; align-items: center;
+  display: flex; gap: 10px; align-items: center; justify-content: center;
   padding: 5px 12px; border-radius: 12px;
   background: rgba(8, 14, 10, .82); border: 1px solid #2f4a34;
   font: 700 12px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #d8e8d8; z-index: 30; pointer-events: none;
-  max-width: 96vw; white-space: nowrap;
+  /* `max-width: 96vw` and `white-space: nowrap` ON THE CONTAINER are a
+     contradiction: the cap cannot be honoured without a break, so the row
+     ran off the right edge instead. The nowrap belongs on the CHILDREN, so
+     a number is never broken in half, and the row wraps between them. At
+     the measured widest -- two 1000-point bars, a 19.9 price and two
+     19723.5 shortfalls -- this is the difference between three legible
+     lines and a readout that leaves the screen (r1-F2). */
+  max-width: 96vw; flex-wrap: wrap;
 }
+#bc17-vp > span { white-space: nowrap; }
 #bc17-vp .ash { color: #e8c07f; }
 #bc17-vp .basil { color: #9fd4a8; }
 #bc17-vp .price { color: #a8b8a8; font-weight: 400; }
@@ -4042,13 +4050,17 @@ html:not([data-year="bc17"]) #bc17-fund { display: none !important; }
 #bc17-bullets {
   position: absolute; left: 50%; transform: translateX(-50%);
   top: calc(var(--topband, 0px) + 40px);
-  display: flex; gap: 10px; align-items: center;
+  display: flex; gap: 10px; align-items: center; justify-content: center;
   padding: 4px 10px; border-radius: 10px;
   background: rgba(8, 14, 10, .74); border: 1px solid #24381f;
   font: 400 11px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #cfe0cf; z-index: 29; pointer-events: none; max-width: 96vw;
-  white-space: nowrap;
+  /* The same repair, and this one escapes at 1280 px too: both seats'
+     banked bullets, mature-tree income and the plain-words trickle reason
+     are 150 characters of monospace on one line (r1-F2). */
+  flex-wrap: wrap;
 }
+#bc17-bullets > span { white-space: nowrap; }
 #bc17-bullets .off { color: #6d7a6d; }
 
 /* The two stat boxes `relayout()` measures for `--statrail`, so the
@@ -4080,7 +4092,12 @@ html:not([data-year="bc17"]) #bc17-fund { display: none !important; }
   position: absolute; right: 4px; top: 2px; background: none;
   border: none; color: #9fd4a8; font-size: 14px; cursor: pointer;
 }
-#bc17-doctrines .badge { color: #e8c07f; }
+#bc17-doctrines .dline { margin-bottom: 6px; }
+#bc17-doctrines .dname { color: #f2e8d8; font-weight: 700; }
+#bc17-doctrines .dfall { color: #e0523a; }
+#bc17-doctrines .dbadge { color: #e8c07f; font-weight: 700; }
+#bc17-doctrines .dsub { color: #8b8375; }
+#bc17-doctrines ul { margin: 2px 0; padding-left: 16px; }
 #bc17-doctrines-toggle {
   position: absolute; left: 50%; transform: translateX(-50%);
   top: calc(var(--topband, 0px) + 62px);
@@ -4089,8 +4106,9 @@ html:not([data-year="bc17"]) #bc17-fund { display: none !important; }
   font: 400 10px/1.2 ui-monospace, monospace; z-index: 33;
 }
 
-/* The endcard's Fund panel. `#endcard` is opaque over the board and the
-   `#bc17-*` boxes are hidden while it shows (the bc23 finding). */
+/* The endcard's Fund panel. `#endcard` is NOT opaque over the board -- its
+   background is a radial gradient at 0.82-0.95 alpha -- so the `#bc17-*`
+   boxes have to be hidden while it shows (the bc23 finding). */
 #bc17-fund {
   display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
   max-height: calc(100vh - var(--band, 0px) - var(--topband, 0px) - 24px);
@@ -4098,10 +4116,28 @@ html:not([data-year="bc17"]) #bc17-fund { display: none !important; }
   font: 400 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #d8e8d8;
 }
-html[data-year="bc17"].endcard-open #bc17-vp,
-html[data-year="bc17"].endcard-open #bc17-bullets,
-html[data-year="bc17"].endcard-open #bc17-econ,
-html[data-year="bc17"].endcard-open #bc17-units { visibility: hidden; }
+#bc17-fund .clan b { color: #e8c07f; }
+#bc17-fund .ff { color: #e0523a; }
+#bc17-fund .ladder { grid-column: 1 / -1; color: #a8b8a8; }
+#bc17-fund .ladder .won { color: #f2e8d8; font-weight: 700; }
+
+/* THE HUD MAY NOT BLEED THROUGH THE ENDCARD (the bc23 finding).
+   PARENT-SCOPED and keyed on `.on`, THE CLASS THE PAGE ACTUALLY TOGGLES
+   (`$('endcard').classList.add('on')`), and not on `endcard-open`, which
+   nothing in this tree has ever set -- the bc16 r1-F1 defect returning
+   verbatim (r1-F3). `#chrome:has(#endcard.on)` is direction-free and keys on
+   the class that exists.
+   The gate for this is a COMPUTED STYLE, not a text grep:
+   `tools/ci/renderer_fixture.html` raises `#endcard` and reads
+   `getComputedStyle(...).visibility` on all five boxes, so a rule that
+   cannot match is RED. A grep could not see the defect above and did not. */
+html[data-year="bc17"] #chrome:has(#endcard.on) #bc17-vp,
+html[data-year="bc17"] #chrome:has(#endcard.on) #bc17-bullets,
+html[data-year="bc17"] #chrome:has(#endcard.on) #bc17-econ,
+html[data-year="bc17"] #chrome:has(#endcard.on) #bc17-units,
+html[data-year="bc17"] #chrome:has(#endcard.on) #bc17-doctrines {
+  visibility: hidden;
+}
 
 /* EVERY BEAT KIND THE SIM EMITS HAS A RULE, and every rule is scoped to
    this year. Nine of the thirteen kinds are emitted by the committed
@@ -4657,6 +4693,10 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
            fuel or the barter is stored in the replay -- the wasm sim
            re-derives every round. -->
       <div id="bc19-crusade"></div>
+      <!-- BC17: the Fund panel. Nothing about bullets, trees, victory
+           points or the four-rung ladder is stored in the replay -- the
+           wasm sim re-derives every round. -->
+      <div id="bc17-fund"></div>
       <div class="ec-replay" id="ec-replay"></div>
     </div>
   </div>
@@ -8325,22 +8365,125 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
     if (!body || !s.doctrines) return;
     var html = '';
     s.doctrines.forEach(function (d) {
-      html += '<div><b>' + esc(d.alias) + '</b> (' + esc(d.name) + ')';
+      /* `.dline` / `.dname` / `.dfall` / `.dbadge` / `.dsub` and the `<i>`
+         around `notes` are the five class names every other year's doctrine
+         row uses, and they are not decoration:
+         `tools/ci/renderer_fixture.html` selects
+         `#<year>-doctrines .dline i` to prove the 280-rune note was laid out
+         at its cap, and bc25 shipped its own names first and that check
+         found nothing to measure (the bc16 r1-F2 scar). */
+      html += '<div class="dline"><span class="dname">' + esc(d.alias) +
+        '</span> (' + esc(d.name) + ')' +
+        /* THE FALLBACK BADGE. `doctrinesJson` puts `fallback` in every
+           frame and phase 60 counts fallbacks OFF THE SCREEN, so a seat
+           that played the scripted sheet because its cog never answered has
+           to say so where a spectator can see it (r1-F5). */
+        (d.fallback ? ' <span class="dfall">[fallback: ' +
+          esc(d.fallback) + ']</span>' : '');
       if (d.envelope || (d.defaults_applied && d.defaults_applied.length)) {
-        html += ' <span class="badge">envelope: ' +
+        html += ' <span class="dbadge">envelope: ' +
           esc(d.envelope || 'none') + ' \u00b7 ' +
           (d.defaults_applied ? d.defaults_applied.length : 0) +
-          ' of 11 knobs defaulted</span>';
+          ' of ' + (d.knob_count || 11) + ' knobs defaulted</span>';
       }
       html += '<ul>';
       (d.words || []).forEach(function (w) {
         html += '<li>' + esc(w) + '</li>';
       });
       html += '</ul>';
-      if (d.notes) html += '<div>' + esc(d.notes) + '</div>';
+      if (d.notes) html += '<i>' + esc(d.notes) + '</i>';
+      /* THE "WHAT THE COG ACTUALLY SENT" DISCLOSURE, the third half of the
+         envelope pin: the applied sheet above, the envelope rule that fired
+         in the badge, and the first 120 runes of the reply itself here. A
+         seat that played the schema defaults because its knobs arrived
+         inside a protocol envelope is then visible in one glance. */
+      if (d.envelope && d.submitted) {
+        html += '<div class="dsub">what the cog actually sent: ' +
+          esc(d.submitted) + '</div>';
+      }
       html += '</div>';
     });
     body.innerHTML = html;
+  }
+
+  /* ---- the killfeed ---------------------------------------------------
+     THE INHERITED `renderFeed` IS NOT CALLED FOR THIS YEAR. `onText`'s
+     `if (!isBc16 && !isBc17 && ...)` guard skips the bc26 block's feed
+     whenever a year block claims the frame, so every year block draws its
+     own -- and bc17's did not exist, which is why the viewer smoke reported
+     `feed_lines: 0` for bc17 against 1-8 for all nine other years (r1-F15).
+     An empty killfeed is what phase 60 would have found on softmax.com.
+
+     This is bc19's shape: a REBUILD from the beats at or behind the
+     playhead, tail of seven. A rebuild and not an append, so a BACKWARD
+     seek takes lines away again; and spoiler-safe by construction, because
+     a beat ahead of the playhead is never in the list. */
+  function renderFeed(s) {
+    var feed = $('killfeed');
+    if (!feed || !s.beats) return;
+    var lines = [];
+    s.beats.forEach(function (b) {
+      if (b.t > s.t) return;
+      if (!b.label) return;
+      lines.push(b);
+    });
+    var tail = lines.slice(-7);
+    var html = '';
+    tail.forEach(function (b) {
+      html += '<div class="kf ' + esc(b.k) + '">' + esc(b.label) + '</div>';
+    });
+    feed.innerHTML = html;
+  }
+
+  /* ---- the endcard Fund panel ----------------------------------------
+     Per faction: the points bought AND WHAT THEY COST (bullets donated
+     over points gained, so a spectator sees who bought cheap), the farm
+     ledger, the war ledger with friendly fire and own-tree damage on their
+     own line -- and the TIEBREAK LEDGER, all four rungs with both sides'
+     numbers and which one decided it. None of it is stored in the replay:
+     the wasm sim re-derives every round (r1-F4 -- `s.bc17_fund` was
+     computed on every frame and read by nobody). */
+  function renderEndcardExtras(s) {
+    var panel = $('bc17-fund');
+    var f = s.bc17_fund;
+    if (!panel || !f || !f.orders) return;
+    var html = '';
+    f.orders.forEach(function (o) {
+      html += '<div class="clan"><b>' + esc(o.alias) + '</b>: ' +
+        stat(o.vp, 'int') + ' victory points for ' +
+        stat(o.donated_tenths, 'tenths') + ' bullets' +
+        (o.vp > 0 ? ' (' + stat(o.price_paid_tenths, 'tenths') +
+          ' a point)' : '') +
+        '<br>trees: ' + stat(o.trees_planted, 'int') + ' planted, ' +
+        stat(o.trees_mature, 'int') + ' mature at the end, ' +
+        stat(o.trees_lost, 'int') + ' lost' +
+        '<br>units: ' + stat(o.units_built, 'int') + ' built, ' +
+        stat(o.units_lost, 'int') + ' lost \u00b7 ' +
+        stat(o.kills, 'int') + ' kills' +
+        '<br>damage dealt ' + stat(o.damage_dealt_tenths, 'tenths') +
+        '<br><span class="ff">friendly fire ' +
+        stat(o.friendly_fire_tenths, 'tenths') + ' \u00b7 own trees ' +
+        stat(o.own_trees_damaged_tenths, 'tenths') + '</span>' +
+        '<br>neutral trees felled ' +
+        stat(o.neutral_trees_felled, 'int') + ' \u00b7 robots released ' +
+        stat(o.robots_released, 'int') +
+        '<br>bullets left ' + stat(o.bullets_end_tenths, 'tenths') +
+        ' \u00b7 worth ' + stat(o.bullet_worth_tenths, 'tenths') +
+        '</div>';
+    });
+    html += '<div class="ladder">round ' + stat(f.tiebreak_round, 'int') +
+      ' ladder (' + esc(f.domination_factor || '-') + '):';
+    (f.ladder || []).forEach(function (rung) {
+      var won = rung.rung === f.rung;
+      var tenths = rung.rung === 'more_bullet_worth';
+      html += '<br>' + (won ? '<span class="won">' : '<span>') +
+        esc(rung.rung.replace(/_/g, ' ')) + ': ' +
+        stat(rung.a, tenths ? 'tenths' : 'int') + ' vs ' +
+        stat(rung.b, tenths ? 'tenths' : 'int') +
+        (won ? ' \u2190 decided it' : '') + '</span>';
+    });
+    html += '</div>';
+    panel.innerHTML = html;
   }
 
   function setDoctrinesOpen(open) {
@@ -8408,6 +8551,8 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
       renderEcon(s);
       renderUnits(s);
       renderDoctrines(s);
+      renderFeed(s);
+      renderEndcardExtras(s);
       applyBc17BeatSpoilers(s);
     }
   };

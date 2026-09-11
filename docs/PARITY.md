@@ -2287,9 +2287,13 @@ build script counts the patch files and fails if there are not exactly three
 got — and NO 2017 RULE READS IT.** `bytecodesUsed` is replay telemetry and
 `prevBytecodesUsed` is written and never read by any gameplay path, so the
 `DecisionOps` divergence (V1) has no observable consequence in the rules; on
-the engine side the metering can be proved never to have fired by asserting
-`Clock.getBytecodesLeft() > 5000` at the end of every turn of every compared
-bot. That assertion belongs to the outstanding job.
+the engine side the metering is proved never to have fired: **Tier B′(a) is
+DONE and measured** — every compared bot asserts `Clock.getBytecodesLeft() >
+5000` at the end of every one of its turns, the comparator independently reads
+the `bc=` column, and the peak over all 54 pairs is **3 % of a limit**
+(`examplefuncsplayer17`). The Status table above is the verdict; this
+paragraph records only what the oracle cannot compare, and the metering's
+*consequence* — not its measurement — is what stays out of reach.
 
 `GameWorld.rand` (a third `Random(mapSeed)` the engine constructs and never
 reads), team memory (V4), `resign()` (V6) and the debug indicator APIs are not

@@ -900,8 +900,17 @@ library's iteration order is a derivation of its behaviour;
 bc17` by reflecting `GameConstants` and `RobotType` out of the jar's own
 classes; `data/maps/bc17/*.json` — 22 of the engine's own 70
 `battlecode/world/resources/*.map17` flatbuffers, converted at build time by
-`tools/convert_maps_bc17.py` (the runtime sim has no flatbuffer reader); and
-`tools/JavaBc17Tables.java`, which is compiled and run only in CI.
+`tools/convert_maps_bc17.py` (the runtime sim has no flatbuffer reader);
+`tools/JavaBc17Tables.java`, which is compiled and run only in CI; and
+`tools/oracle/bc17/Bc17Trace.java` plus the six oracle bots written against
+the engine's own API — `tools/oracle/bc17/{bc17idle,bc17scenario,
+bc17scenariotree,bc17scenariokill,bc17scenariotie,bc17slowbot}/RobotPlayer.java`
+— all of which are **compiled and run only in CI**, by
+`tools/oracle/bc17/build_oracle.sh`, and none of which is copied from any
+upstream file: each is written from the published `RobotController` API of
+the pinned jar. (The seventh bot the oracle runs,
+`examplefuncsplayer17/RobotPlayer.java`, is NOT ours and is credited in
+full in the next section: it is the scaffold's own file, byte for byte.)
 
 **The engine is used only at CI time and at map-conversion time**, from the
 published jar, verified by sha256, byte size and `GameConstants.SPEC_VERSION`.

@@ -780,6 +780,31 @@ block:
     check("NOTICE names " & named & " for bc16", named in notice)
   check("and says the two unlicensed repositories were not read",
     "not cloned, not read, not copied, not vendored" in notice)
+  ## bc17: the engine, the scaffold and the client are all AGPL-3.0, so
+  ## there is no compatibility argument to make -- but the credit list has
+  ## to be COMPLETE, and it was not: the oracle's trace driver and its six
+  ## CI-only scenario bots were missing from the "what derives from it"
+  ## paragraph the design note dictates (r1-F13).
+  for named in ["battlecode/battlecode-server-2017",
+                "165d8a8ef24f03e13a101bb8bc9f5b32dcb33c6c",
+                "battlecode/battlecode-scaffold-2017",
+                "76e7b51e06088fdcce2f6a6b97aff21782ae20d0",
+                "battlecode/battlecode-client-17",
+                "tools/JavaBc17Tables.java",
+                "tools/oracle/bc17/Bc17Trace.java"]:
+    check("NOTICE names " & named & " for bc17", named in notice)
+  ## Every Java file the bc17 oracle compiles is named, and the check is
+  ## derived from the TREE rather than from a hand-written list, so a bot
+  ## added later is credited or the build is red.
+  for path in walkDirRec("tools/oracle/bc17"):
+    if not path.endsWith(".java"): continue
+    let bot = path.splitPath().head.splitPath().tail
+    if bot == "examplefuncsplayer17":
+      ## Not ours: credited in its own section as the scaffold's own file.
+      continue
+    let named = (if bot == "bc17": path.extractFilename() else: bot)
+    check("NOTICE credits the CI-only Java at " & path & " (as `" &
+      named & "`)", named in notice)
   check("and says no upstream Java runs in the image",
     "No upstream Java source runs in any image" in notice)
   check("README's NOTICE link has a target", "[`NOTICE`](NOTICE)" in

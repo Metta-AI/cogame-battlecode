@@ -393,9 +393,9 @@ block:
 ## The renderer fixture lays the full-cap doctrine text out for EVERY year.
 block:
   let fixture = readFile("tools/ci/renderer_fixture.html")
-  check("the fixture has a row per year, now NINE of them",
+  check("the fixture has a row per year, now TEN of them",
     "var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22'," in
-      fixture and "'bc16', 'bc19'];" in fixture)
+      fixture and "'bc16', 'bc19', 'bc17'];" in fixture)
   check("and fills bc21's own readouts",
     "bc21-influence" in fixture and "bc21-votes" in fixture and
     "bc21-doctrines-body" in fixture)
@@ -1895,7 +1895,7 @@ block:
   block:
     let fixture = readFile("tools/ci/renderer_fixture.html")
     check("the fixture lays bc19 out at three widths",
-      "'bc16', 'bc19'];" in fixture)
+      "'bc16', 'bc19', 'bc17'];" in fixture)
     check("and it proves the suppression by computed style, not by grep",
       "bc19: ['bc19-castles', 'bc19-fuel', 'bc19-econ', 'bc19-units'," in
         fixture and "'bc19-doctrines']" in fixture)
@@ -1946,8 +1946,16 @@ block:
   ## it.
   let page = readFile("client/replay_broadcast.html")
   for id in ["bc17-vp", "bc17-bullets", "bc17-econ", "bc17-units",
-             "bc17-doctrines"]:
+             "bc17-doctrines", "bc17-fund"]:
     check("the page carries #" & id, "id=\"" & id & "\"" in page)
+  ## `#bc17-fund` is the endcard Fund panel, and a panel nothing READS is a
+  ## panel nobody sees: `s.bc17_fund` was computed on every frame and never
+  ## drawn (r1-F4). Assert the reader, not only the markup.
+  check("and the Fund panel is actually read off the frame",
+    "s.bc17_fund" in page)
+  check("by this block's own endcard renderer",
+    "function renderEndcardExtras" in page and
+    "renderEndcardExtras(s);" in page)
   check("the doctrines panel is DISMISSIBLE",
     "id=\"bc17-doctrines-close\"" in page and
     "aria-label=\"Dismiss doctrines\"" in page)
@@ -1980,5 +1988,43 @@ block:
                "shake", "strike", "volley", "rout", "duel", "famine", "end"]:
     check("a scoped rule for the bc17 " & kind & " beat",
       "html[data-year=\"bc17\"] .beat-marker." & kind & " {" in page)
+  ## NO HUD BLEED-THROUGH. The static half below is a grep and a grep is NOT
+  ## coverage: bc17 shipped `html[data-year="bc17"].endcard-open #bc17-*`,
+  ## naming a class NOTHING in this tree has ever set, and no test saw it
+  ## (r1-F3 — the bc16 r1-F1 defect returning). The gate is a computed style
+  ## in `tools/ci/renderer_fixture.html`, which raises `#endcard` and reads
+  ## `visibility` on all five boxes; this static pair only pins the shape so
+  ## a future edit cannot quietly drop it.
+  for id in ["bc17-vp", "bc17-bullets", "bc17-econ", "bc17-units",
+             "bc17-doctrines"]:
+    check("every bc17 box is named in the suppression rule: " & id,
+      "html[data-year=\"bc17\"] #chrome:has(#endcard.on) #" & id in page)
+  check("keyed on the class the page ACTUALLY toggles, and never again on " &
+    "one nothing sets",
+    "endcard-open #bc17" notin page and
+    "#endcard.on ~ #bc17-vp" notin page)
+  block:
+    let fixture = readFile("tools/ci/renderer_fixture.html")
+    check("the fixture lays bc17 out at three widths",
+      "'bc16', 'bc19', 'bc17'];" in fixture)
+    check("and it proves the suppression by computed style, not by grep",
+      "bc17: ['bc17-vp', 'bc17-bullets', 'bc17-econ', 'bc17-units'," in
+        fixture and "'bc17-doctrines']" in fixture)
+    check("with the Fund panel INSIDE the card, where the page puts it",
+      "'<div id=\"bc17-fund\">' + bc17Fund + '</div>' +" in fixture)
+    check("and every readout fed its MEASURED WIDEST value",
+      "EVERY NUMBER BELOW IS MEASURED" in fixture and
+      "15130.8" in fixture and "17577.1" in fixture)
+    check("and both doctrine poles at the full rune caps",
+      "var BC17_WORDS = [" in fixture and
+      "BC17_WORDS[m17].join('</li><li>')" in fixture)
+    check("with the fallback badge and the submitted disclosure on the row",
+      "[fallback: timeout]" in fixture and
+      "what the cog actually sent: ' +\n      notes.slice(0, 120)" in fixture)
+    check("and the endcard fed this year's own words",
+      "bc17: [BC17_WORDS[0].join(', '), BC17_WORDS[1].join(', ')]" in fixture)
+    check("and the year's own readouts are in the overflow scan",
+      "bc17: '#scorebug .plate, #scorebug .plate *, #bc17-vp, #bc17-vp *, '" in
+        fixture)
 
 finish("test_viewer")

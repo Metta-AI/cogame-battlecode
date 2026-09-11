@@ -696,6 +696,14 @@ async function main() {
   }
   try { readout = await page.evaluate(READOUT_SCRIPT); } catch { /* keep the last good readout */ }
 
+  // THE FIRST DRAWN FRAME, captured before the soak advances it. The load
+  // signal fires on the first frame the worker hands the shell, so this is
+  // the frame a viewer opens on -- which is the only thing "playback opens
+  // at the game start, never the recorded lobby" can be read off.
+  const firstFrame = readout
+    ? { clock: readout.clock, tick: readout.tick, status: readout.status }
+    : null;
+
   // ------------------------------------------------------------------
   // SOAK (--soak). LOADING IS NOT PLAYING. cogball 0.1.4 loaded, drew its
   // first frame, set data-replay-loaded -- and then threw inside that frame's
@@ -752,11 +760,21 @@ async function main() {
   // as broken as one that never renders, so the clock is read at 0 %, 50 %
   // and 100 % and the three must differ.
   // ------------------------------------------------------------------
+  //
+  // THE LAST SEEK IS A REWIND, and it is not decoration. The checklist asks
+  // that "playback opens at the game start, never the recorded lobby" and
+  // that every seek clamps there. `first_frame` below answers the first
+  // half from the readout taken at the load signal; the `0%-rewind` entry
+  // answers the second, by driving the scrubber back to its left edge after
+  // the 100 % seek and recording where the playhead landed. A viewer that
+  // can be seeked to a frozen pre-game frame, or that cannot come back from
+  // the end at all, is visible in those two numbers.
   const scrub = [];
   let scrubSelector = null;
   if (loaded && readout && readout.has_scrub) {
-    scrub.push({ at: "0%", clock: readout.clock, obscured: readout.obscured });
-    for (const fraction of [0.5, 1.0]) {
+    scrub.push({ at: "0%", clock: readout.clock, tick: readout.tick,
+      obscured: readout.obscured });
+    for (const fraction of [0.5, 1.0, 0.0]) {
       try {
         const target = await scrubTarget(page);
         if (!target) break;
@@ -766,10 +784,15 @@ async function main() {
         await page.mouse.click(x, box.y + box.height / 2);
         await sleep(700);
         const now = await page.evaluate(READOUT_SCRIPT);
-        scrub.push({ at: `${Math.round(fraction * 100)}%`, clock: now.clock,
+        const label = fraction === 0 ? "0%-rewind"
+          : `${Math.round(fraction * 100)}%`;
+        scrub.push({ at: label, clock: now.clock, tick: now.tick,
           endcard: now.endcard, obscured: now.obscured });
       } catch (error) {
-        scrub.push({ at: `${Math.round(fraction * 100)}%`, clock: null, error: String(error && error.message) });
+        const label = fraction === 0 ? "0%-rewind"
+          : `${Math.round(fraction * 100)}%`;
+        scrub.push({ at: label, clock: null, tick: null,
+          error: String(error && error.message) });
       }
     }
   }
@@ -883,6 +906,11 @@ async function main() {
     status: readout ? readout.status : null,
     loading_text: readout ? readout.loading : null,
     feed_lines: readout ? readout.feed_lines : 0,
+    // THE FIRST DRAWN FRAME, taken at the load signal and before the soak
+    // moves it: this is what "playback opens at the game start" is read
+    // off. `soak.before` carries the same pair when a soak ran; this field
+    // is here so the check does not depend on one.
+    first_frame: firstFrame,
     signals: {
       data_replay_loaded: readout ? readout.loaded_attr : null,
       data_replay_error: readout ? readout.error_attr : null,

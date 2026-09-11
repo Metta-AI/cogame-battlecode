@@ -4294,6 +4294,46 @@ jobs:
       - name: Build image
         run: docker build --platform=linux/amd64 -t "${IMAGE}:ci" .
 
+      # RAIL 2, GATED RATHER THAN ASSERTED. `Dockerfile:7` says "NO JDK, NO
+      # JRE, NO JAVA, NO NODE in any stage" and a comment is not a gate: the
+      # 2017, 2016, 2019 and 2026 engines are CI-only oracles and the
+      # 2019/2020 generators need node, so a copy-paste from one of those
+      # jobs into a Dockerfile stage is a real way for a JVM to arrive in a
+      # published image. This asks the BUILT IMAGE, through its own shell,
+      # what its PATH resolves -- `command -v` and not `which`, because
+      # `which` is not installed in debian-slim and its absence would make
+      # every probe "succeed" (r1-F6, design note §Packaging).
+      - name: The built image has no java, javac, node or npm on its PATH
+        run: |
+          set -euo pipefail
+          found=""
+          for bin in java javac node npm; do
+            # `|| true`: a resolved binary is the failure, a non-zero exit
+            # from `command -v` is the pass, and `set -e` must not turn the
+            # pass into a red step.
+            path="$(docker run --rm --entrypoint /bin/sh "${IMAGE}:ci" \
+              -c "command -v ${bin} 2>/dev/null || true")"
+            if [ -n "${path}" ]; then
+              echo "::error::${bin} resolves to ${path} inside ${IMAGE}:ci"
+              found="${found} ${bin}"
+            else
+              echo "absent from the image's PATH: ${bin}"
+            fi
+          done
+          if [ -n "${found}" ]; then
+            echo "::error::rail 2: the published image must carry NO JVM and"
+            echo "::error::NO Node.${found} is in it. The Battlecode engines"
+            echo "::error::are CI-only oracles (docs/PARITY.md) and the map"
+            echo "::error::and constant generators are build-time only."
+            exit 1
+          fi
+          # And the probe itself has to be able to find something, or an
+          # image with no shell at all would report four absences and pass.
+          test -n "$(docker run --rm --entrypoint /bin/sh "${IMAGE}:ci" \
+            -c 'command -v sh')" || {
+            echo "::error::the absence probe could not resolve even /bin/sh,"
+            echo "::error::so its four absences prove nothing"; exit 1; }
+
       # The contract probe inside docker_smoke.sh speaks WebSocket to the
       # running game exactly as `coworld certify` does. Without these it
       # fails loudly rather than skipping (see SMOKE_CONTRACT_PROBE).
@@ -5135,14 +5175,25 @@ jobs:
       #
       # SMOKE_REQUIRE_STATS is the episode SUBSTANCE assertion (the LEARNINGS
       # 2026-09-03 pin), enforced FOR BOTH SEATS by the script. THE FLOORS
-      # ARE MEASURED, NOT GUESSED: this exact episode -- seed 5,
-      # `HouseDivided`, 900 rounds, orchard against examplefuncsplayer17 --
-      # produces
+      # ARE MEASURED, NOT GUESSED, AND RE-MEASURED IN ROUND 1 (r1-F10):
+      # this exact episode -- seed 5, `HouseDivided`, 900 rounds, orchard
+      # against examplefuncsplayer17 -- produces, reproduced bit for bit
+      # against CI run 34536659753's own
+      # `across the two seats: planted=4 water=1323 shakes=20 chops=0
+      # fired=1435 tree_income_tenths=20881 strikes=22`:
       #
-      #   seat 0 (orchard)                20 units built, 1196 moves, 805 damage
-      #   seat 1 (examplefuncsplayer17)    6 units built, 1860 moves, 368 damage
+      #   seat 0 (orchard)               27 units, 2480 moves,  540 broadcasts,
+      #                                  721.5 damage
+      #   seat 1 (examplefuncsplayer17)   3 units, 1203 moves, 1652 broadcasts,
+      #                                   43.0 damage
       #
-      # and the committed floors are at or below HALF the weak seat's value.
+      # and the committed floors are at or below HALF the weak seat's value,
+      # except `units_built: 3`, which is AT the weak seat's measured 3 and
+      # is left there because it shipped stronger than the note's 2.
+      # `broadcasts: 1` is the note's own entry and is BACK (r1-F10): it was
+      # dropped, and the measurement says it never needed to be --
+      # `examplefuncsplayer17`'s archon broadcasts its x and its y EVERY
+      # turn (1652) and `orchard`'s comms layer broadcasts too (540).
       # `damage_dealt` is floored at 0 PER SEAT deliberately: the weak floor
       # fires at `robots[0]` and may legitimately never connect. PLANTING,
       # WATERING, SHAKING, CHOPPING AND DONATING ARE NOT IN THIS SET, because
@@ -5159,17 +5210,24 @@ jobs:
           # `awu` is orchard and `scaffold` is examplefuncsplayer17
           # (src/battlecode/baselines.nim).
           SMOKE_PLAYER_IDS: awu,scaffold
+          # The budgets are the design note's own 120 / 130 (r1-F10): they
+          # shipped at 90 / 100 with no measurement recorded, and a budget
+          # is a rail. The episode simulates in 0.113 s
+          # (docs/RULES-BC17.md, "Playback pacing, measured"), so the
+          # headroom costs nothing and buys the assertions below the room
+          # to hold on a loaded runner.
           SMOKE_CONFIG_OVERRIDE: >-
             {"year":"bc17","pool":"small","seed":5,"gamesPerMatch":1,
-             "maxRounds":900,"perGameBudgetSeconds":90,
-             "matchBudgetSeconds":100,"connectTimeoutMs":15000}
+             "maxRounds":900,"perGameBudgetSeconds":120,
+             "matchBudgetSeconds":130,"connectTimeoutMs":15000}
           # `damage_dealt_tenths`, not `damage_dealt`: EVERY float quantity
           # in this year's results document is an integer number of TENTHS
           # (results.nim, bc17's optional list), because bullets, health and
           # damage are all float32 and a raw float in a JSON results
           # document is a formatter argument waiting to happen.
           SMOKE_REQUIRE_STATS: >-
-            {"units_built":3,"moves":400,"damage_dealt_tenths":0}
+            {"units_built":3,"moves":400,"broadcasts":1,
+             "damage_dealt_tenths":0}
           SMOKE_REPLAY_OUT: ${{ github.workspace }}/dist/smoke/replay-bc17.json
           SMOKE_CONTRACT_PROBE: "0"
         run: ./tools/ci/docker_smoke.sh "${IMAGE}:ci"
@@ -5183,15 +5241,48 @@ jobs:
       # across the pair makes an idle win machine-visible, which is exactly
       # what the 2026-09-03 round-1 degenerate match lacked.
       #
-      # IF `water_actions >= 200` OR `bullets_fired >= 1` EVER STOPS
-      # HOLDING, THE FIX IS TO RAISE THE SMOKE'S `maxRounds` UNTIL IT DOES
-      # -- never to drop the assertion. An episode of this year in which
-      # nobody ever watered a tree or fired a bullet is not this game being
-      # played.
+      # IF `victory_points >= 1` OR `trees_mature_end >= 1` OR
+      # `water_actions >= 200` OR `bullets_fired >= 20` EVER STOPS HOLDING,
+      # THE FIX IS TO RAISE THE SMOKE'S `maxRounds` UNTIL IT DOES -- never
+      # to drop the assertion. An episode of this year in which nobody ever
+      # grew a tree or bought a point is not this game being played, and the
+      # design note puts those two in bold for that reason.
       #
-      # Measured on this exact episode (the numbers the floors are at or
-      # below half of): trees planted 5, water actions 1145, shakes 30,
-      # chops 80, bullets fired 951, tree income 1529 bullets, strikes 100.
+      # ALL ELEVEN OF THE NOTE'S ASSERTIONS ARE HERE (r1-F10). Six of them
+      # -- `victory_points`, `trees_mature_end`, `units_built`,
+      # `damage_dealt_tenths`, `robot_ids_issued` and
+      # `peak_bullets_in_flight` -- were dropped in phase 20 with no
+      # measurement recorded. They are RESTORED, because the measurement
+      # says every one of them holds on the committed episode with room to
+      # spare; nothing had to be raised to make room.
+      #
+      # MEASURED ON THIS EXACT EPISODE, re-measured in round 1 and
+      # reproduced bit for bit against CI run 34536659753's own
+      # `across the two seats: planted=4 water=1323 shakes=20 chops=0
+      # fired=1435 tree_income_tenths=20881 strikes=22`:
+      #
+      #   trees planted      4     water actions   1323   shakes         20
+      #   tree income   2088.1     bullets fired   1435   strikes        22
+      #   victory points     5     trees mature       3   units built    30
+      #   damage dealt   764.5     robot ids         34   peak bullets    6
+      #   chops              0
+      #
+      # Every committed floor is at or below HALF of its measured value
+      # except the three the note fixes at 1 (`victory_points`,
+      # `trees_mature_end`) and the two phase 20 shipped STRONGER than the
+      # note asked (`water_actions >= 200` against 5, `strike_actions >= 10`
+      # against nothing) -- those stay stronger.
+      #
+      # `chop_actions` IS THE ONE THE NOTE ASKED FOR THAT IS NOT ASSERTED,
+      # and it is recorded rather than dropped silently. MEASURED 0 on this
+      # episode, and the reason is the map, not the chassis: the smoke is
+      # pinned to `HouseDivided`, whose 41 neutral trees hold bullets and
+      # whose 6 robot-bearing trees sit outside the farm both seats build,
+      # and `chop_policy` defaults to `clear_path` -- which chops only a
+      # tree that blocks a lane. The note's own list does not contain
+      # `chop_actions` either; it is named here because the phase-20 step
+      # printed it and a reader would otherwise wonder why a printed zero
+      # has no floor.
       - name: The bc17 episode really played bc17
         run: |
           set -euo pipefail
@@ -5209,9 +5300,21 @@ jobs:
           fired="$(sum bullets_fired)"
           income="$(sum bullets_earned_from_trees_tenths)"
           strikes="$(sum strike_actions)"
+          points="$(sum victory_points)"
+          mature="$(sum trees_mature_end)"
+          built="$(sum units_built)"
+          damage="$(sum damage_dealt_tenths)"
+          # Two SCALARS, not per-seat arrays: the id generator and the
+          # bullet census belong to the game, not to a side.
+          ids="$(jq -r '.result.games[0].robot_ids_issued' \
+            dist/smoke/replay-bc17.json)"
+          inflight="$(jq -r '.result.games[0].peak_bullets_in_flight' \
+            dist/smoke/replay-bc17.json)"
           echo "across the two seats: planted=${planted} water=${water}" \
                "shakes=${shakes} chops=${chops} fired=${fired}" \
-               "tree_income_tenths=${income} strikes=${strikes}"
+               "tree_income_tenths=${income} strikes=${strikes}" \
+               "vp=${points} mature=${mature} built=${built}" \
+               "damage_tenths=${damage} ids=${ids} inflight=${inflight}"
           test "${planted}" -ge 2 || {
             echo "::error::only ${planted} bullet trees were planted in the"
             echo "::error::whole episode. A bullet tree is the ONLY real"
@@ -5249,6 +5352,46 @@ jobs:
             echo "::error::not one lumberjack strike landed in the whole"
             echo "::error::episode. A strike is this year's only area"
             echo "::error::attack and it damages TREES as well as robots."
+            exit 1; }
+          # THE TWO THE DESIGN NOTE PUTS IN BOLD AS NEVER-DROPPABLE.
+          test "${points}" -ge 1 || {
+            echo "::error::nobody bought a single victory point in the whole"
+            echo "::error::episode. Winning this year IS a purchase --"
+            echo "::error::donate() converts bullets at 7.5 + round x"
+            echo "::error::12.5/3000 -- so an episode with zero points is"
+            echo "::error::not this game being played. RAISE maxRounds until"
+            echo "::error::it fires; do NOT drop this (measured 5)."
+            exit 1; }
+          test "${mature}" -ge 1 || {
+            echo "::error::not one bullet tree was still MATURE at the end."
+            echo "::error::A tree pays nothing for its first 81 rounds and"
+            echo "::error::then health/50 a round for ever, which is the"
+            echo "::error::whole economy. RAISE maxRounds until it fires; do"
+            echo "::error::NOT drop this (measured 3)."
+            exit 1; }
+          test "${built}" -ge 5 || {
+            echo "::error::only ${built} units were built across the pair."
+            echo "::error::A gardener costs 100 and a soldier 100 against"
+            echo "::error::300 starting bullets, so five is what two sides"
+            echo "::error::that got their farms going produce (measured 30)."
+            exit 1; }
+          test "${damage}" -ge 10 || {
+            echo "::error::${damage} tenths of damage were dealt in the whole"
+            echo "::error::episode. On HouseDivided the archons start 6.5"
+            echo "::error::apart (measured 7645)."
+            exit 1; }
+          test "${ids}" -ge 6 || {
+            echo "::error::only ${ids} robot ids were issued. Every body ever"
+            echo "::error::created takes one from the map-seeded IDGenerator"
+            echo "::error::(D3), so ${ids} means almost nothing was ever"
+            echo "::error::hired or built (measured 34)."
+            exit 1; }
+          test "${inflight}" -ge 2 || {
+            echo "::error::the peak bullet census was ${inflight}. A 2017"
+            echo "::error::bullet is a MOVING BODY with its own id, its own"
+            echo "::error::exec slot and its own collision pass; a peak"
+            echo "::error::below two means the ballistics never ran"
+            echo "::error::(measured 6)."
             exit 1; }
 
       # THE PACING NUMBER phase 60 sizes its check-8 dispatch from, and the
@@ -5587,6 +5730,86 @@ jobs:
             echo "::error::a panel that opens over them must dismiss itself."
             exit 1
           fi
+          # THE KILLFEED IS DRAWN AT ALL. `onText`'s
+          # `if (!isBc16 && !isBc17 && ...)` guard skips the inherited
+          # `renderFeed` whenever a year block claims the frame, so a year
+          # that forgets its own draws NOTHING -- silently, because the feed
+          # is a box that is legitimately empty for the first few rounds of
+          # some years. bc17 shipped exactly that and the harness reported
+          # `feed_lines: 0` against 1-8 for all nine other years, and
+          # nothing read the number (r1-F15). Gated on bc17 only, because
+          # this round's scope is bc17 and the other nine are measured
+          # green without a gate.
+          # PLAYBACK OPENS AT THE GAME START, AND EVERY SEEK CLAMPS
+          # THERE (checklist item 13's last bullet). This runtime has NO
+          # LOBBY: `newDeriver` enumerates frames `for r in 1 ..
+          # gameRecord(index).rounds` (src/battlecode/replay.nim:270-276),
+          # so frame 0 is the state AFTER round 1 has been stepped and no
+          # pre-gameStart frame can be recorded at all; every year's chrome
+          # emits `"lob": 0` and `ph` only ever "playing" or "gameover", so
+          # `chrome_common.js:420`'s `s.ph === 'lobby'` branch is
+          # unreachable from a recording; and `Deriver.seek` clamps to
+          # `[0, totalFrames - 1]`. The checklist's suggested probe -- a
+          # replay recorded with a large `lobbyJoinTimeoutTicks` -- does not
+          # apply to a runtime with no join phase, so the claim is settled
+          # HERE, on the two numbers a browser can actually report: the
+          # first drawn frame's round, and where the playhead lands when
+          # the scrubber is driven back to its left edge AFTER the 100 %
+          # seek.
+          ff="$(jq -r '.first_frame.tick // ""' viewer-smoke.json)"
+          rw="$(jq -r '[.scrub[] | select(.at == "0%-rewind")] | last
+                       | .tick // ""' viewer-smoke.json)"
+          echo "first drawn frame: ${ff}   after a rewind seek: ${rw}"
+          if [ "${replay}" = "dist/smoke/replay-bc17.json" ]; then
+            ff_round="${ff#round }"; ff_round="${ff_round%% *}"
+            rw_round="${rw#round }"; rw_round="${rw_round%% *}"
+            total="${ff##*/ }"
+            case "${ff}" in
+              "round "*) ;;
+              *) echo "::error::the bc17 first drawn frame read '${ff}',"
+                 echo "::error::not 'round N / M' -- #tick-clock is the only"
+                 echo "::error::readout that says which round is on screen."
+                 exit 1;;
+            esac
+            test "${ff_round}" = "1" || {
+              echo "::error::the bc17 viewer opened on round ${ff_round},"
+              echo "::error::not round 1. Playback must open at the game"
+              echo "::error::start; a recording whose first drawn frame is"
+              echo "::error::not its opening round is one this deriver could"
+              echo "::error::not have produced."
+              exit 1; }
+            case "${rw}" in
+              "round "*) ;;
+              *) echo "::error::the bc17 rewind seek read '${rw}'; the"
+                 echo "::error::scrubber could not pull the match back from"
+                 echo "::error::the end."
+                 exit 1;;
+            esac
+            test "${rw_round}" -ge 1 || {
+              echo "::error::a rewind seek landed on round ${rw_round}."
+              echo "::error::Round 1 is the floor: there is no frame before"
+              echo "::error::it and a seek must clamp there."
+              exit 1; }
+            limit=$(( total / 20 + 25 ))
+            test "${rw_round}" -le "${limit}" || {
+              echo "::error::a rewind to the scrubber's left edge landed on"
+              echo "::error::round ${rw_round} of ${total}, past the ${limit}"
+              echo "::error::the 700 ms settle can account for. The seek did"
+              echo "::error::not clamp at the game start."
+              exit 1; }
+          fi
+          feed="$(jq -r '.feed_lines // 0' viewer-smoke.json)"
+          echo "killfeed lines at the first drawn frame: ${feed}"
+          if [ "${replay}" = "dist/smoke/replay-bc17.json" ] && \
+             [ "${feed}" -lt 1 ]; then
+            echo "::error::the bc17 killfeed drew ${feed} lines at the first"
+            echo "::error::frame. The committed fixture carries 292 events"
+            echo "::error::over 19 kinds and both doctrine beats land on"
+            echo "::error::frame 0 (tests/test_bc17_beats.nim), so zero means"
+            echo "::error::the year block has no renderFeed and the"
+            echo "::error::inherited one is skipped for it."
+            exit 1
+          fi
           mv viewer-smoke.json "viewer-smoke-$(basename "${replay}" .json).json"
           mv viewer-smoke.png "viewer-smoke-$(basename "${replay}" .json).png"
           done
@@ -5685,7 +5908,9 @@ jobs:
           # same function. A wasm32 divergence in ANY of that shows up here
           # as a hash-chain mismatch and nowhere else. NOTE that this smoke
           # steps 200 FRAMES, so its `mismatch_round: -1` covers the first
-          # 200 rounds only.
+          # 200 rounds only -- the WHOLE-recording re-derivation is asserted
+          # by tests/test_bc17_replay.nim (r1-F1), which also compares the
+          # deriver's per-tick state against the recorder's frame by frame.
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \
             "${{ github.workspace }}/dist/smoke/replay-bc17.json"
           node tools/wasm_replay_smoke.cjs dist/static-replay-viewer \

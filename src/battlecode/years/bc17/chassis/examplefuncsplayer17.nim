@@ -5,9 +5,12 @@
 ## `battlecode/battlecode-scaffold-2017/src/examplefuncsplayer/RobotPlayer.java`
 ## at commit `76e7b51e` (**AGPL-3.0**, credited in `NOTICE`), with the ONE
 ## committed patch hunk of `tools/oracle/bc17/examplefuncsplayer17/
-## determinism.patch` applied: the stock bot's three `Math.random()` call
-## sites become `rng.nextDouble()` on a **`java.util.Random` seeded with the
-## robot's own `rc.getID()`**, created once per robot.
+## determinism.patch` applied: the stock bot's **four** `Math.random()` call
+## sites -- the archon's hire gate, the gardener's two build gates and
+## `randomDirection()` -- become `rng.nextDouble()` on a **`java.util.Random`
+## seeded with the robot's own `rc.getID()`**, created once per robot. FOUR
+## AND NOT THREE: the design note said three and the scaffold has four
+## (`docs/PARITY.md` §"The three engine patches" item 3).
 ##
 ## **WHY THE PATCH.** The stock line draws from the wall-clock-seeded global
 ## RNG, so the stock bot is not reproducible even against itself and no
