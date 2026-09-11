@@ -4089,8 +4089,9 @@ html:not([data-year="bc17"]) #bc17-fund { display: none !important; }
   font: 400 10px/1.2 ui-monospace, monospace; z-index: 33;
 }
 
-/* The endcard's Fund panel. `#endcard` is opaque over the board and the
-   `#bc17-*` boxes are hidden while it shows (the bc23 finding). */
+/* The endcard's Fund panel. `#endcard` is NOT opaque over the board -- its
+   background is a radial gradient at 0.82-0.95 alpha -- so the `#bc17-*`
+   boxes have to be hidden while it shows (the bc23 finding). */
 #bc17-fund {
   display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
   max-height: calc(100vh - var(--band, 0px) - var(--topband, 0px) - 24px);
@@ -4098,10 +4099,24 @@ html:not([data-year="bc17"]) #bc17-fund { display: none !important; }
   font: 400 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #d8e8d8;
 }
-html[data-year="bc17"].endcard-open #bc17-vp,
-html[data-year="bc17"].endcard-open #bc17-bullets,
-html[data-year="bc17"].endcard-open #bc17-econ,
-html[data-year="bc17"].endcard-open #bc17-units { visibility: hidden; }
+
+/* THE HUD MAY NOT BLEED THROUGH THE ENDCARD (the bc23 finding).
+   PARENT-SCOPED and keyed on `.on`, THE CLASS THE PAGE ACTUALLY TOGGLES
+   (`$('endcard').classList.add('on')`), and not on `endcard-open`, which
+   nothing in this tree has ever set -- the bc16 r1-F1 defect returning
+   verbatim (r1-F3). `#chrome:has(#endcard.on)` is direction-free and keys on
+   the class that exists.
+   The gate for this is a COMPUTED STYLE, not a text grep:
+   `tools/ci/renderer_fixture.html` raises `#endcard` and reads
+   `getComputedStyle(...).visibility` on all five boxes, so a rule that
+   cannot match is RED. A grep could not see the defect above and did not. */
+html[data-year="bc17"] #chrome:has(#endcard.on) #bc17-vp,
+html[data-year="bc17"] #chrome:has(#endcard.on) #bc17-bullets,
+html[data-year="bc17"] #chrome:has(#endcard.on) #bc17-econ,
+html[data-year="bc17"] #chrome:has(#endcard.on) #bc17-units,
+html[data-year="bc17"] #chrome:has(#endcard.on) #bc17-doctrines {
+  visibility: hidden;
+}
 
 /* EVERY BEAT KIND THE SIM EMITS HAS A RULE, and every rule is scoped to
    this year. Nine of the thirteen kinds are emitted by the committed
