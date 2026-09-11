@@ -253,6 +253,40 @@ knob whose default encodes the year's biggest surprise.
   and SCOUT have no `case` in its switch at all — so `run()` returns and the
   robot dies.
 
+## Playback pacing, measured
+
+**`docker-smoke` prints `sim_seconds / rounds` and this section records the
+measured value.** On CI run **34536659753** the bc17 smoke episode — seed 5,
+`HouseDivided` (30×30, one archon a side, 41 neutral trees), 899 rounds of
+`orchard` against `examplefuncsplayer17` — printed
+
+```
+bc17 smoke: sim_seconds=0.113 rounds=899 wall=0.213s
+```
+
+i.e. **0.126 ms a round**, against the design note's estimate of 3–12 ms and
+its 15 ms/round trigger. The trigger is the one that matters: *if the measured
+value exceeds 15 ms/round, the fix is to lower the smoke episode's `maxRounds`
+rather than the soak*, because the soak must still outlast the replay (the
+ecos 2026-08-23 scar), and 900 rounds at 25 fps is ~36 s of playback against a
+15 s soak. At 0.126 ms/round there is nothing to lower.
+
+The heavier boards cost more and are measured too, in `tests/test_bc17_perf.nim`:
+a full 2 999-round game on `Chess` (64×64, 924 neutral trees — the board that
+maximises the per-bullet candidate count) is **4.1 s in release, 1.4 ms a
+round**, and `LineOfFire` (100×30, 1 228 trees) is 4.9 s. The committed gate is
+60 s, fourteen times the measurement, because a shared CI runner is not a
+sandbox.
+
+**Why bc17 still takes the heavy viewer probe.** The per-round cost is small;
+the ROUND COUNT is not. A bc17 game is **2 999 rounds** — the joint longest in
+this repository, with bc16 — and the Worker re-simulates from the start of the
+game on every seek, so a 100 % seek replays the whole of it. `ci.yml`'s
+`wasm-viewer` job therefore runs the bc17 replay at **`--timeout 120 --soak
+15`**, joining bc16/bc22/bc23/bc24/bc25, and the phase-60 check-8 dispatch for
+bc17 uses **`settle=20000 soak=15`**. Decided from this measurement rather
+than discovered at phase 60, and cited from `ci.yml:5256` and `:5519`.
+
 ## Scoring
 
 ```
