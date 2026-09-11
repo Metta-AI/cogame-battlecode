@@ -524,11 +524,29 @@ const READOUT_SCRIPT = `(() => {
   // that is DISPLAYED -- a card raised with a class its stylesheet does not
   // style is drawn into the DOM and stays display:none forever (battlecode
   // r1-B1, 2026-09-04).
+  //
+  // THE CAPTURE IS 3000 CHARACTERS, NOT 400, AND THE NUMBER IS MEASURED.
+  // 400 cut every year's capture off inside the second doctrine line, so a
+  // year's endcard WAR PANEL -- the part a spectator reads to find out how
+  // the match was won, and the part that is most likely to be missing --
+  // never reached a log. Laid out at both seats' full rune caps and each
+  // year's measured-widest numbers in tools/ci/renderer_fixture.html, the
+  // ten years' cards are 611 / 678 / 840 / 926 / 964 / 1039 / 1094 / 2074 /
+  // 2363 / 2612 characters (bc26, bc20, bc21, bc24, bc23, bc25, bc22, bc17,
+  // bc16, bc19), so 3000 holds the widest with room and is still a BOUNDED
+  // slice rather than a dump. THIS IS EVIDENCE CAPTURE ONLY: nothing reads
+  // endcard.text except ci.yml's "grep -qi clan", which matches inside the
+  // first thirty characters of every year's card, and no failure path in
+  // this file touches it -- endcardFailure is computed from scrollHeight
+  // against clientHeight and nothing else.
+  // (NO BACKTICKS IN THIS COMMENT: it lives inside READOUT_SCRIPT, which is
+  // a template literal, and one would end the string.)
+  const ENDCARD_TEXT_CAP = 3000;
   const endcardEl = document.querySelector("#endcard, .endcard, [id$='-endcard']");
   const endcard = endcardEl ? {
     display: getComputedStyle(endcardEl).display,
     shown: getComputedStyle(endcardEl).display !== "none",
-    text: (endcardEl.innerText || endcardEl.textContent || "").replace(/\s+/g, " ").trim().slice(0, 400),
+    text: (endcardEl.innerText || endcardEl.textContent || "").replace(/\s+/g, " ").trim().slice(0, ENDCARD_TEXT_CAP),
   } : null;
   // THE BOARD IS THE PICTURE. A panel that opens over the board and never
   // closes is a replay that renders nothing as far as a spectator is
