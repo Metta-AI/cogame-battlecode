@@ -1956,6 +1956,51 @@ block:
   check("by this block's own endcard renderer",
     "function renderEndcardExtras" in page and
     "renderEndcardExtras(s);" in page)
+  ## **EVERY BC17 ID THE STYLESHEET NAMES IS AN ELEMENT THAT EXISTS**, and
+  ## the list is DERIVED FROM THE STYLESHEET rather than written out here.
+  ## `#bc17-doctrines-toggle` shipped with a positional rule at `:4101`, a
+  ## year-scoping rule at `:4010` and two `$('bc17-doctrines-toggle')`
+  ## bindings -- and NO ELEMENT ANYWHERE IN THE PAGE, so the chip that
+  ## re-opens a dismissed doctrine panel was CSS and JS pointing at nothing
+  ## and the panel could never come back (the r1-F3 defect class, on an
+  ## absent element instead of a dead class). A hand-written id list could
+  ## not see that and did not; this derives the requirement from the rules
+  ## the page actually ships, so ANY bc17 id that is styled and never
+  ## instantiated is red.
+  block:
+    let styleStart = page.find("<style>")
+    let styleEnd = page.find("</style>")
+    check("the page has a <style> block to derive from",
+      styleStart >= 0 and styleEnd > styleStart)
+    ## COMMENTS STRIPPED FIRST: this asks what the RULES name, not what the
+    ## prose mentions, and the block's own comments talk about `#bc17-*`.
+    var sheet = ""
+    var raw = page[styleStart ..< styleEnd]
+    var i = 0
+    while i < raw.len:
+      if i + 1 < raw.len and raw[i] == '/' and raw[i + 1] == '*':
+        let close = raw.find("*/", i)
+        i = (if close < 0: raw.len else: close + 2)
+      else:
+        sheet.add(raw[i])
+        i += 1
+    var styled: seq[string]
+    var at = 0
+    while true:
+      let hit = sheet.find("#bc17-", at)
+      if hit < 0: break
+      var stop = hit + 1
+      while stop < sheet.len and
+          (sheet[stop].isAlphaNumeric() or sheet[stop] == '-'): stop += 1
+      let name = sheet[hit + 1 ..< stop]
+      if name.len > len("bc17-") and name[^1] != '-' and name notin styled:
+        styled.add(name)
+      at = stop
+    check("the stylesheet really names bc17 ids (" & $styled.len & ")",
+      styled.len >= 6)
+    for name in styled:
+      check("#" & name & " is styled, so the page must CARRY it",
+        "id=\"" & name & "\"" in page)
   check("the doctrines panel is DISMISSIBLE",
     "id=\"bc17-doctrines-close\"" in page and
     "aria-label=\"Dismiss doctrines\"" in page)
