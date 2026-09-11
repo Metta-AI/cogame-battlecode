@@ -94,7 +94,7 @@ type
     weakRng*: JavaRandom
       ## `examplefuncsplayer17`'s per-robot `java.util.Random(rc.getID())`,
       ## which the one committed patch hunk puts in place of the stock bot's
-      ## three `Math.random()` calls. Tier A" is therefore also a test of
+      ## FOUR `Math.random()` calls. Tier A" is therefore also a test of
       ## `src/battlecode/rng.nim`.
     weakRngReady*: bool
 

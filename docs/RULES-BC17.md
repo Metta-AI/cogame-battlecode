@@ -247,8 +247,14 @@ knob whose default encodes the year's biggest surprise.
 * **`examplefuncsplayer17`** — the deliberately weak floor and the parity
   oracle's other side: a statement-for-statement port of the AGPL-3.0
   scaffold's `RobotPlayer.java` with the one committed determinism hunk (a
-  per-robot `java.util.Random(rc.getID())` in place of three `Math.random()`
-  calls, **with the `&&` short-circuit draw order preserved**). **It may not
+  per-robot `java.util.Random(rc.getID())` in place of **four**
+  `Math.random()` calls — the archon's hire gate, the gardener's two build
+  gates and `randomDirection()` — **with the `&&` short-circuit draw order
+  preserved**). **FOUR AND NOT THREE**: the design note said three, phase 20
+  measured four in the scaffold's own file, and `docs/PARITY.md` §"The three
+  engine patches" item 3 records the correction; `build_oracle.sh` asserts
+  the count of surviving global draws is zero, so three of four would leave
+  the bot irreproducible. **It may not
   gain behaviour**: it never plants, waters, shakes, chops or donates, and TANK
   and SCOUT have no `case` in its switch at all — so `run()` returns and the
   robot dies.
