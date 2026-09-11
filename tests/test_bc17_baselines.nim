@@ -31,6 +31,7 @@ import harness
 import bc17_fixture
 import battlecode/[baselines, sheet]
 import battlecode/years/bc17/[constants, world, rules, maps]
+import battlecode/years/bc17/chassis/examplefuncsplayer17
 
 # --- (a) both PLAYER_SCRIPTED resolutions give a VALID sheet ---------------
 block:
@@ -174,5 +175,48 @@ block:
   check("`orchard` dealt real damage", dealt > 0)
   check("and its own-tree damage is a small fraction of it (" &
     $ownTrees & " of " & $dealt & ")", ownTrees * 4 <= dealt)
+
+# --- the TANK/SCOUT fall-through, the one branch no game reaches ----------
+block:
+  ## §Tests item 19's *"the TANK/SCOUT fall-through killing the robot on its
+  ## first turn"*. Tier A" proves the weak floor's RNG stream differentially
+  ## over nine whole 2 999-round games, which is stronger evidence than any
+  ## unit test -- but it cannot reach THIS branch, because
+  ## `examplefuncsplayer17` never builds a TANK or a SCOUT and the parity
+  ## job's `types=` column never lists either. `build_oracle.sh` greps the
+  ## Java copy for `RobotType.TANK` and `RobotType.SCOUT` and FAILS ON A HIT,
+  ## so the branch can never be reached from a game and can only be reached
+  ## synthetically (r1-F11).
+  ##
+  ## The rule is `RobotPlayer.java:8-10`: **"If this method returns, the
+  ## robot dies!"** The switch has no `case` for either type, so `run()`
+  ## returns on the robot's very first turn and the engine destroys it.
+  for kind in [rtTank, rtScout]:
+    var w = newWorld(loadMap("Alone"), gameDefaultRounds)
+    let o = w.rect.origin
+    let victim = w.spawnRobot(kind, loc(o.x + 50'f32, o.y + 50'f32), tA)
+    let survivor = w.spawnRobot(rtSoldier, loc(o.x + 60'f32, o.y + 50'f32),
+                                tA)
+    let id = victim.id
+    let before = victim.loc
+    let lostBefore = w.stats.unitsLost[ord(tA)]
+    check($kind & " is on the board before its turn", w.robots.hasKey(id))
+    w.processBeginningOfTurn(victim)
+    runExamplefuncsplayer17(w, victim)
+    check("a " & $kind & " handed to the weak floor is DEAD on its first " &
+      "turn -- the switch has no case for it and run() returns",
+      not w.robots.hasKey(id))
+    check("and the sim counted the loss", w.stats.unitsLost[ord(tA)] ==
+      lostBefore + 1)
+    check("it never moved first", before == victim.loc)
+    checkEq("it fired nothing", w.stats.bulletsFired[ord(tA)], 0)
+    checkEq("and broadcast nothing", w.stats.broadcasts[ord(tA)], 0)
+    ## The contrast that makes the assertion mean something: a type the
+    ## switch DOES handle survives the same call.
+    w.processBeginningOfTurn(survivor)
+    survivor.roundsAlive = 21
+    runExamplefuncsplayer17(w, survivor)
+    check("while a SOLDIER, which the switch does handle, survives the " &
+      "same call", w.robots.hasKey(survivor.id))
 
 finish("test_bc17_baselines")
