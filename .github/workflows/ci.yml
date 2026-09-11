@@ -5730,6 +5730,28 @@ jobs:
             echo "::error::a panel that opens over them must dismiss itself."
             exit 1
           fi
+          # THE KILLFEED IS DRAWN AT ALL. `onText`'s
+          # `if (!isBc16 && !isBc17 && ...)` guard skips the inherited
+          # `renderFeed` whenever a year block claims the frame, so a year
+          # that forgets its own draws NOTHING -- silently, because the feed
+          # is a box that is legitimately empty for the first few rounds of
+          # some years. bc17 shipped exactly that and the harness reported
+          # `feed_lines: 0` against 1-8 for all nine other years, and
+          # nothing read the number (r1-F15). Gated on bc17 only, because
+          # this round's scope is bc17 and the other nine are measured
+          # green without a gate.
+          feed="$(jq -r '.feed_lines // 0' viewer-smoke.json)"
+          echo "killfeed lines at the first drawn frame: ${feed}"
+          if [ "${replay}" = "dist/smoke/replay-bc17.json" ] && \
+             [ "${feed}" -lt 1 ]; then
+            echo "::error::the bc17 killfeed drew ${feed} lines at the first"
+            echo "::error::frame. The committed fixture carries 292 events"
+            echo "::error::over 19 kinds and both doctrine beats land on"
+            echo "::error::frame 0 (tests/test_bc17_beats.nim), so zero means"
+            echo "::error::the year block has no renderFeed and the"
+            echo "::error::inherited one is skipped for it."
+            exit 1
+          fi
           mv viewer-smoke.json "viewer-smoke-$(basename "${replay}" .json).json"
           mv viewer-smoke.png "viewer-smoke-$(basename "${replay}" .json).png"
           done

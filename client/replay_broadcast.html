@@ -8406,6 +8406,35 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
     body.innerHTML = html;
   }
 
+  /* ---- the killfeed ---------------------------------------------------
+     THE INHERITED `renderFeed` IS NOT CALLED FOR THIS YEAR. `onText`'s
+     `if (!isBc16 && !isBc17 && ...)` guard skips the bc26 block's feed
+     whenever a year block claims the frame, so every year block draws its
+     own -- and bc17's did not exist, which is why the viewer smoke reported
+     `feed_lines: 0` for bc17 against 1-8 for all nine other years (r1-F15).
+     An empty killfeed is what phase 60 would have found on softmax.com.
+
+     This is bc19's shape: a REBUILD from the beats at or behind the
+     playhead, tail of seven. A rebuild and not an append, so a BACKWARD
+     seek takes lines away again; and spoiler-safe by construction, because
+     a beat ahead of the playhead is never in the list. */
+  function renderFeed(s) {
+    var feed = $('killfeed');
+    if (!feed || !s.beats) return;
+    var lines = [];
+    s.beats.forEach(function (b) {
+      if (b.t > s.t) return;
+      if (!b.label) return;
+      lines.push(b);
+    });
+    var tail = lines.slice(-7);
+    var html = '';
+    tail.forEach(function (b) {
+      html += '<div class="kf ' + esc(b.k) + '">' + esc(b.label) + '</div>';
+    });
+    feed.innerHTML = html;
+  }
+
   /* ---- the endcard Fund panel ----------------------------------------
      Per faction: the points bought AND WHAT THEY COST (bullets donated
      over points gained, so a spectator sees who bought cheap), the farm
@@ -8522,6 +8551,7 @@ html[data-year="bc19"] .beat-marker.end      { background: #ffffff; }
       renderEcon(s);
       renderUnits(s);
       renderDoctrines(s);
+      renderFeed(s);
       renderEndcardExtras(s);
       applyBc17BeatSpoilers(s);
     }
