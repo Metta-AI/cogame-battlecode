@@ -68,19 +68,23 @@
   // panels.
   var SIZES = [[360, 640], [720, 900], [1280, 720]];
   var YEARS = ['bc26', 'bc20', 'bc21', 'bc24', 'bc25', 'bc23', 'bc22',
-               'bc16', 'bc19'];
+               'bc16', 'bc19', 'bc17'];
   // The readouts a year's own CSS must suppress while the endcard is up,
   // because `#endcard`'s background is a radial gradient at 0.82-0.95 alpha
   // and is therefore NOT opaque over the board: a box left visible under it
-  // shows through the score screen. bc16 is the only year in this page with
-  // such a rule (`grep -c 'visibility: hidden'` → 1), and it shipped keyed on
-  // a class the page never sets and on the wrong sibling direction (r1-F1).
-  // A year that adds one adds an entry here and gets the check for free.
+  // shows through the score screen. bc16 shipped its rule keyed on a class
+  // the page never sets and on the wrong sibling direction (r1-F1), and
+  // bc17 shipped the SAME defect a second time, keyed on `endcard-open`
+  // (r1-F3) — which is why this check is a computed style and not a grep.
+  // A year that adds such a rule adds an entry here and gets the check for
+  // free.
   var SUPPRESSED_BY_ENDCARD = {
     bc16: ['bc16-archons', 'bc16-horde', 'bc16-econ', 'bc16-units',
            'bc16-doctrines'],
     bc19: ['bc19-castles', 'bc19-fuel', 'bc19-econ', 'bc19-units',
-           'bc19-doctrines']
+           'bc19-doctrines'],
+    bc17: ['bc17-vp', 'bc17-bullets', 'bc17-econ', 'bc17-units',
+           'bc17-doctrines']
   };
 
   function runes(text) { return Array.from(text); }
@@ -733,6 +737,138 @@
     '<span>net worth 10149 to 9004</span> \u00b7 engine win condition 1 ' +
     '\u00b7 castles started 14.0 to 78.1 apart</div>';
 
+  // ------------------------------------------------------------------
+  //  bc17 -- Battlecode 2017 "Robotic Wildlife Fund"
+  // ------------------------------------------------------------------
+  // `#bc17-doctrines-body` is the element that draws bc17's 280-rune LLM
+  // `notes`, and the scorebug plate draws its 48-rune `motto`. Until this
+  // row existed NO GATE had ever rendered either with a full-cap string at
+  // any width (r1-F2; the design note asked for this row in as many words:
+  // "The fixture gains a bc17 row"). The markup below is renderVp /
+  // renderBullets / renderEcon / renderUnits / renderDoctrines /
+  // renderEndcardExtras in client/replay_broadcast.html reproduced element
+  // for element and class for class, so the fixture measures the real rules
+  // and not a lookalike.
+  //
+  // The WORDS are `plainWords17()`'s own output, both poles, and they are
+  // the WIDEST and the NARROWEST it can emit: for every one of the eleven
+  // knobs the value whose clause is longest, against the value whose clause
+  // is shortest -- 557 characters over eleven clauses against 471. A
+  // doctrine card sized for the median sheet is a card that reads short on
+  // the widest one.
+  var BC17_WORDS = [
+    ['parks scouts on their trees where nothing can reach',
+     'wants 7 gardeners for every archon',
+     'rings its archon with trees and leaves four lanes',
+     'spends 100 percent of its army money on tanks',
+     'spends 100 percent of what is left on lumberjacks',
+     'spends 100 percent of the rest on scouts',
+     'never buys a victory point and plays for annihilation',
+     'never spends a turn shaking a neutral tree',
+     'chops the trees with robots inside them',
+     'keeps 1500 bullets in the bank before it spends on war',
+     'answers anything within 40 of a gardener, an archon or a tree'],
+    ['farms first and fights later',
+     'wants 1 gardeners for every archon',
+     'packs its trees six to a gardener',
+     'spends 0 percent of its army money on tanks',
+     'spends 0 percent of what is left on lumberjacks',
+     'spends 0 percent of the rest on scouts',
+     'buys victory points from round one',
+     'sends a scout on a shaking circuit',
+     'never chops, and only strikes',
+     'keeps 0 bullets in the bank before it spends on war',
+     'answers anything within 1 of a gardener, an archon or a tree']
+  ];
+  // EVERY NUMBER BELOW IS MEASURED, not invented: the widest value each
+  // field reached on ANY round of a six-board match between the league's
+  // two doctrine poles (the rush_1000 farm against the tank/lumberjack
+  // army) over `Whirligig`, `GreenHouse`, `Interference`, `Chess`,
+  // `LineOfFire` and `HouseDivided` at the engine's full 3 000-round cap,
+  // read straight off the frames `broadcast.nim` emits -- victory points
+  // 1000, price 19.9, bullets still needed 19723.5, bullets banked
+  // 15130.8, mature trees 29, tree income 24.5, spent 3620.0 units /
+  // 2350.0 trees / 1096.0 shots / 15889.7 donations, trees 47 planted /
+  // 37 standing / 32 lost, from trees 17577.1, shaken 1859.0, trickled
+  // 4589.2, water 11368, shake 363, chop 1196, felled 76, released 1,
+  // archons 3, gardeners 12, soldiers 8, tanks 4, scouts 6, lumberjacks 4,
+  // dormant 4, 17 bullets in flight, 38 built, 33 lost, damage 1374.0,
+  // friendly fire 360.0, own trees 149.5, kills 33, bullet worth 16365.1,
+  // 1228 neutral trees. A readout sized for four digits and fed six is a
+  // readout that reads short.
+  var bc17Vp = '<span class="ash">CLAN ASH 1000 ' +
+    '\u25ae\u25ae\u25ae\u25ae\u25ae\u25ae\u25ae\u25ae</span>' +
+    '<span class="basil">CLAN BASIL 1000 ' +
+    '\u25ae\u25ae\u25ae\u25ae\u25ae\u25ae\u25ae\u25ae</span>' +
+    '<span class="price">VP costs 19.9 bullets</span>' +
+    '<span class="price">Ash needs 19723.5</span>' +
+    '<span class="price">Basil needs 19723.5</span>';
+  var bc17Bullets = '';
+  for (var b17 = 0; b17 < 2; b17++) {
+    bc17Bullets += '<span>' + ALIASES[b17].slice(5) + ' \u25c615130.8</span>' +
+      '<span>\ud83c\udf33 29 \u2192 +24.5/round</span>' +
+      '<span class="off">trickle pays while you hold under 200</span>' +
+      '<span class="lbl">units 3620.0 / trees 2350.0 / shots 1096.0 / ' +
+      'donated 15889.7</span>';
+  }
+  bc17Bullets += '<span>ROUND 2998 / 2999</span>';
+  var bc17Econ = '';
+  for (var e17 = 0; e17 < 2; e17++) {
+    bc17Econ += '<div class="row"><span class="who">' + ALIASES[e17] +
+      '</span><span>trees 47 planted / 37 up / 29 mature / 32 lost</span>' +
+      '<span class="lbl">from trees 17577.1 \u00b7 shaken 1859.0 \u00b7 ' +
+      'trickled 4589.2</span>' +
+      '<span class="lbl">water 11368 \u00b7 shake 363 \u00b7 chop 1196 ' +
+      '\u00b7 felled 76 \u00b7 released 1</span></div>';
+  }
+  var bc17Units = '';
+  for (var u17 = 0; u17 < 2; u17++) {
+    bc17Units += '<div class="row"><span class="who">' + ALIASES[u17] +
+      '</span><span><b>3 archon</b> \u00b7 12 gard \u00b7 8 sol \u00b7 ' +
+      '4 tank \u00b7 6 scout \u00b7 4 lj</span>' +
+      '<span class="lbl">dormant 4 \u00b7 in flight 17 \u00b7 built 38 ' +
+      '\u00b7 lost 33</span>' +
+      '<span class="lbl">damage 1374.0 \u00b7 own fire 360.0 \u00b7 ' +
+      'own trees 149.5</span></div>';
+  }
+  // BOTH SEATS AT THE FULL 280-RUNE CAP AT ONCE, plus the fallback badge,
+  // the SUBMITTED-VS-APPLIED badge and the 120-rune submitted sheet: the
+  // widest line `#bc17-doctrines` can ever be asked to hold.
+  var bc17Doctrines = '';
+  for (var m17 = 0; m17 < 2; m17++) {
+    bc17Doctrines += '<div class="dline"><span class="dname">' +
+      ALIASES[m17] + '</span> (' + NAMES[m17] + ')' +
+      (m17 === 1 ? ' <span class="dfall">[fallback: timeout]</span>' : '') +
+      ' <span class="dbadge">envelope: doctrine \u00b7 11 of 11 knobs ' +
+      'defaulted</span><ul><li>' +
+      BC17_WORDS[m17].join('</li><li>') + '</li></ul>' +
+      '<i>' + notes + '</i>' +
+      '<div class="dsub">what the cog actually sent: ' +
+      notes.slice(0, 120) + '</div></div>';
+  }
+  // `renderEndcardExtras()`'s own markup at the same measured numbers. It
+  // belongs INSIDE the card because that is where the page puts it, and the
+  // Fund panel is most of what makes a real bc17 endcard taller than the
+  // board region.
+  var bc17Fund = '';
+  for (var g17 = 0; g17 < 2; g17++) {
+    bc17Fund += '<div class="clan"><b>' + ALIASES[g17] + '</b>: 1000 ' +
+      'victory points for 15889.7 bullets (19.5 a point)' +
+      '<br>trees: 47 planted, 29 mature at the end, 32 lost' +
+      '<br>units: 38 built, 33 lost \u00b7 33 kills' +
+      '<br>damage dealt 1374.0' +
+      '<br><span class="ff">friendly fire 360.0 \u00b7 own trees 149.5' +
+      '</span>' +
+      '<br>neutral trees felled 76 \u00b7 robots released 1' +
+      '<br>bullets left 15130.8 \u00b7 worth 16365.1</div>';
+  }
+  bc17Fund += '<div class="ladder">round 3000 ladder (PHILANTROPIED):' +
+    '<br><span class="won">more victory points: 1000 vs 723 ' +
+    '\u2190 decided it</span>' +
+    '<br><span>more bullet trees: 29 vs 17</span>' +
+    '<br><span>more bullet worth: 16365.1 vs 8229.0</span>' +
+    '<br><span>highest id: 13318 vs 14055</span></div>';
+
   // --- the ENDCARD, WITH SOMETHING ON IT (r2-E2) -------------------------
   // `#endcard` was laid out EMPTY here, purely so the HUD-suppression rule
   // could be read off the browser. An empty card cannot show what a full one
@@ -749,7 +885,8 @@
     bc26: WORDS, bc20: BC20_WORDS, bc21: BC21_WORDS, bc24: BC24_WORDS,
     bc25: BC25_WORDS, bc23: BC23_WORDS, bc22: BC22_WORDS,
     bc16: [BC16_WORDS[0].join(', '), BC16_WORDS[1].join(', ')],
-    bc19: [BC19_WORDS[0].join(', '), BC19_WORDS[1].join(', ')]
+    bc19: [BC19_WORDS[0].join(', '), BC19_WORDS[1].join(', ')],
+    bc17: [BC17_WORDS[0].join(', '), BC17_WORDS[1].join(', ')]
   };
   // renderEndcard()'s own markup: `<b>alias</b> name`, the year's words joined
   // into one sentence, and the motto in quotes when there is one.
@@ -798,6 +935,7 @@
     '<div class="ec-teams" id="ec-teams">' + endcardTeams + '</div>' +
     '<div id="bc16-siege">' + bc16Siege + '</div>' +
     '<div id="bc19-crusade">' + bc19Crusade + '</div>' +
+    '<div id="bc17-fund">' + bc17Fund + '</div>' +
     '<div class="ec-replay" id="ec-replay">replay <b>3000</b> rounds \u00b7 ' +
       '<b>2</b> games</div>';
 
@@ -900,6 +1038,14 @@
         '<button type="button" id="bc19-doctrines-close" ' +
         'aria-label="Dismiss doctrines">&times;</button>' +
         '<div id="bc19-doctrines-body">' + bc19Doctrines + '</div></div>' +
+      '<div id="bc17-vp">' + bc17Vp + '</div>' +
+      '<div id="bc17-bullets">' + bc17Bullets + '</div>' +
+      '<div id="bc17-units">' + bc17Units + '</div>' +
+      '<div id="bc17-econ">' + bc17Econ + '</div>' +
+      '<div id="bc17-doctrines" role="region" aria-label="Doctrines">' +
+        '<button type="button" id="bc17-doctrines-close" ' +
+        'aria-label="Dismiss doctrines">&times;</button>' +
+        '<div id="bc17-doctrines-body">' + bc17Doctrines + '</div></div>' +
       // The page's own endcard, `display: none` until a check raises it. It is
       // here so the HUD-suppression rule can be read off the browser rather
       // than off a text grep (r1-F1), and it must be a CHILD OF #chrome
@@ -1055,7 +1201,10 @@
       bc16: '#scorebug .plate, #scorebug .plate *, #bc16-archons, ' +
         '#bc16-archons *, #bc16-horde, #bc16-horde *, #bc16-econ, ' +
         '#bc16-econ *, #bc16-units, #bc16-units *, #bc16-doctrines, ' +
-        '#bc16-doctrines *'
+        '#bc16-doctrines *',
+      bc17: '#scorebug .plate, #scorebug .plate *, #bc17-vp, #bc17-vp *, ' +
+        '#bc17-bullets, #bc17-bullets *, #bc17-econ, #bc17-econ *, ' +
+        '#bc17-units, #bc17-units *, #bc17-doctrines, #bc17-doctrines *'
     };
     var filled = document.querySelectorAll(FILLED[year]);
     for (var j = 0; j < filled.length; j++) {

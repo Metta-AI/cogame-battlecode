@@ -4020,13 +4020,21 @@ html:not([data-year="bc17"]) #bc17-fund { display: none !important; }
 #bc17-vp {
   position: absolute; left: 50%; transform: translateX(-50%);
   top: calc(var(--topband, 0px) + 6px);
-  display: flex; gap: 10px; align-items: center;
+  display: flex; gap: 10px; align-items: center; justify-content: center;
   padding: 5px 12px; border-radius: 12px;
   background: rgba(8, 14, 10, .82); border: 1px solid #2f4a34;
   font: 700 12px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #d8e8d8; z-index: 30; pointer-events: none;
-  max-width: 96vw; white-space: nowrap;
+  /* `max-width: 96vw` and `white-space: nowrap` ON THE CONTAINER are a
+     contradiction: the cap cannot be honoured without a break, so the row
+     ran off the right edge instead. The nowrap belongs on the CHILDREN, so
+     a number is never broken in half, and the row wraps between them. At
+     the measured widest -- two 1000-point bars, a 19.9 price and two
+     19723.5 shortfalls -- this is the difference between three legible
+     lines and a readout that leaves the screen (r1-F2). */
+  max-width: 96vw; flex-wrap: wrap;
 }
+#bc17-vp > span { white-space: nowrap; }
 #bc17-vp .ash { color: #e8c07f; }
 #bc17-vp .basil { color: #9fd4a8; }
 #bc17-vp .price { color: #a8b8a8; font-weight: 400; }
@@ -4042,13 +4050,17 @@ html:not([data-year="bc17"]) #bc17-fund { display: none !important; }
 #bc17-bullets {
   position: absolute; left: 50%; transform: translateX(-50%);
   top: calc(var(--topband, 0px) + 40px);
-  display: flex; gap: 10px; align-items: center;
+  display: flex; gap: 10px; align-items: center; justify-content: center;
   padding: 4px 10px; border-radius: 10px;
   background: rgba(8, 14, 10, .74); border: 1px solid #24381f;
   font: 400 11px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #cfe0cf; z-index: 29; pointer-events: none; max-width: 96vw;
-  white-space: nowrap;
+  /* The same repair, and this one escapes at 1280 px too: both seats'
+     banked bullets, mature-tree income and the plain-words trickle reason
+     are 150 characters of monospace on one line (r1-F2). */
+  flex-wrap: wrap;
 }
+#bc17-bullets > span { white-space: nowrap; }
 #bc17-bullets .off { color: #6d7a6d; }
 
 /* The two stat boxes `relayout()` measures for `--statrail`, so the
