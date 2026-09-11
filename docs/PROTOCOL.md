@@ -72,6 +72,7 @@ squeaks and positions between robots.
 | field | cap | on violation |
 | --- | --- | --- |
 | whole reply | 16 KB | unparseable → retry once → scripted doctrine |
+| model output cap sent as `max_tokens` | `maxOutputTokens` (1 200; bc19 **3 000**) | the reply stops mid-structure and reads as unparseable JSON |
 | `sheet` | ≤ 32 keys, each value type- and range-checked | bad field → that field's default |
 | `notes` | **280 runes** | truncated |
 | `motto` | **48 runes** | truncated |
@@ -114,6 +115,20 @@ both doctrine attempts for one seat timed out against the bedrock sidecar in
 league rounds 1 and 2 while the provider answered `200 OK` to every request.
 Its worst case is 30 + 75 + 200 (`matchBudgetSeconds`) + 30 = 335 s, still
 inside 720 s.
+
+**bc19 is also the one year with a raised reply cap** — `maxOutputTokens`
+3 000, where every other year inherits `defaultGameConfig()`'s 1 200. It was
+raised after bc19 league **round 3**, the first round to run the raised
+deadlines above: both doctrine attempts for one seat returned *inside* those
+deadlines (27.5 s against 40 000, then 13.1 s against 24 000) but were long
+pretty-printed replies that stopped mid-structure
+(`input(40, 40) Error: ] expected`, then `input(40, 5) Error: } expected`,
+against a successful sheet's single line of ~245 characters), and a truncated
+reply cannot be detected by the existing `max_tokens` guard because the
+assistant turn is prefilled with `{`, so the guard's `'{' notin result`
+condition is never true and the truncation surfaces as an ordinary parse error
+instead. A reply cap is not a deadline: the 75 s doctrine phase and the 335 s
+worst case above are unchanged.
 
 ## HTTP surface
 
