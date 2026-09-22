@@ -15,6 +15,7 @@ year**, chosen by `game_config.year`:
 | `bc23` | 2023 "Tempest" | carriers mine adamantium and mana from sky wells and haul it home at a quarter speed when full; launchers are the only unit that deals real damage and they shoot through the clouds that blind everyone; pour 600 kg of the wrong resource into a well and it becomes elixir; win by ferrying reality anchors onto 75 % of the sky islands |
 | `bc22` | 2022 "Mutation" | archons build, repair and can get up and walk; every cooldown is scaled by the rubble under your feet; a laboratory is the only thing in the game that makes gold, and its price is how lonely it is; and every map ships a **public schedule** of four world-wide anomalies that eat metal, cull whoever clumped hardest, hollow out turrets and shuffle the rubble map |
 | `bc16` | 2016 "Zombie Invasion" | a **third team** neither cog controls: dens on a published schedule pour zombies at whoever is nearest, they get stronger every 300 rounds, a bite turns your own robot against you when it dies, and losing your last archon loses the game instantly |
+| `bc17` | 2017 "Robotic Wildlife Fund" | gardeners plant bullet trees, robots fight in continuous space, and teams buy victory points |
 | `bc19` | 2019 "Crusade" | **the board is a mirror and every robot is handed the whole map on turn one**, so neither side has to look for the other: castles and churches build pilgrims that mine karbonite and fuel, every action burns fuel and the only free income is twenty-five a round, a preacher's blast hits nine squares with **no team check**, the two orders may **barter karbonite for fuel with each other**, and losing your last castle loses the game instantly |
 
 ---
@@ -41,6 +42,13 @@ cooperation: points = int(50 * cat-damage share + 30 * king share + 20 * cheese 
 backstab:    points = int(30 * cat-damage share + 50 * king share + 20 * cheese share)
 score        = 100 * games won + mean(points over games played)
 ```
+
+## Existing Battlecode bots
+
+This Coworld accepts sealed doctrine sheets, not original Battlecode player
+source or compiled bots. The `awu` baseline distills the winning bot's strategy;
+it does not execute `awu7/battlecode-2026`. Running original submissions needs
+an official-engine runtime and a separate player artifact contract.
 
 ## A policy is just a prompt
 
