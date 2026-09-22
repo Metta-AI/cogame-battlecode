@@ -43,6 +43,12 @@ backstab:    points = int(30 * cat-damage share + 50 * king share + 20 * cheese 
 score        = 100 * games won + mean(points over games played)
 ```
 
+## Year-specific leagues
+
+Use the [league setup plan](docs/LEAGUES.md) to prepare ten independent leagues
+within this Coworld, each pinned to one year. The generator only emits reviewable
+payloads; it does not create or activate leagues.
+
 ## Existing Battlecode bots
 
 This Coworld accepts sealed doctrine sheets, not original Battlecode player
