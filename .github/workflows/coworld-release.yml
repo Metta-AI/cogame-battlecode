@@ -164,6 +164,8 @@ jobs:
                   raise SystemExit(f"policy {row['name']!r}: env must be an object")
           print(f"{len(rows)} policies: " + ", ".join(r["name"] for r in rows))
           PY
+          python3 -m unittest discover -s tools/ci -p 'test_resolve_policy_players.py'
+          python3 tools/ci/resolve_policy_players.py "$RR/policies_input.json" --package "$COWORLD_PKG"
 
       - name: Build the Coworld manifest
         env:
@@ -231,8 +233,6 @@ jobs:
         run: |
           set -euo pipefail
           echo "Upload the policies" > "$RR/current_step"
-          python3 -m unittest discover -s tools/ci -p 'test_resolve_policy_players.py'
-          python3 tools/ci/resolve_policy_players.py "$RR/policies_input.json" --package "$COWORLD_PKG"
           python3 - "$RR" "${IMAGE}:latest" "$COWORLD_PKG" <<'PY'
           import json, re, shlex, subprocess, sys
 

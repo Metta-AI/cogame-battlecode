@@ -56,8 +56,12 @@ def main():
     def command(*argv):
         completed = subprocess.run(
             ["uvx", "--from", args.package, "coworld", "player", *argv, "--json"],
-            check=True, capture_output=True, text=True,
+            capture_output=True, text=True,
         )
+        if completed.returncode:
+            raise RuntimeError(
+                f"player {argv[0]} failed: {(completed.stderr or completed.stdout).strip()[-3000:]}"
+            )
         return json.loads(completed.stdout)
 
     resolved = resolve_players(rows, command("list"), lambda name: command("create", name))
