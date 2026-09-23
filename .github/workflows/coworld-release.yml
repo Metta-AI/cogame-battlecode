@@ -36,6 +36,11 @@ on:
         required: false
         default: ""
         type: string
+      elevated_players:
+        description: "Use team privileges to create named players and raise this account's league allowance"
+        required: false
+        default: false
+        type: boolean
       secret_key_name:
         description: "Coworld secret key to write ANTHROPIC_API_KEY into"
         required: false
@@ -165,7 +170,11 @@ jobs:
           print(f"{len(rows)} policies: " + ", ".join(r["name"] for r in rows))
           PY
           python3 -m unittest discover -s tools/ci -p 'test_resolve_policy_players.py'
-          python3 tools/ci/resolve_policy_players.py "$RR/policies_input.json" --package "$COWORLD_PKG"
+          if [ "${{ inputs.elevated_players }}" = "true" ]; then
+            uv run --no-project --with "$COWORLD_PKG" python tools/ci/prepare_contender_players.py "$RR/policies_input.json"
+          else
+            python3 tools/ci/resolve_policy_players.py "$RR/policies_input.json" --package "$COWORLD_PKG"
+          fi
 
       - name: Build the Coworld manifest
         env:
