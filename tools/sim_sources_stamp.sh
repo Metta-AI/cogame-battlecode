@@ -31,7 +31,7 @@ cd "${repo_dir}"
 # birth: build_stamp.nim was untracked at bundle-build time, and the stamp
 # silently excluded it).
 git ls-files -z --cached --others --exclude-standard \
-    -- 'src/*.nim' 'replay-viewer/*.nim' nimby.lock \
+    -- 'src/*.nim' 'replay-viewer/*.nim' nimby.lock config.nims \
   | LC_ALL=C sort -zu \
   | {
       while IFS= read -r -d '' file; do
