@@ -72,9 +72,10 @@ The `(Nim)` display suffix and policy notes identify these as adaptations.
 
 ## Release and registration
 
-`tools/ci/bc25-contender-policies.json` contains the four release rows; the same
-rows are in the general release catalog. The `player_name` field is resolved
-by `tools/ci/resolve_policy_players.py` immediately before policy upload. It
+`tools/ci/bc25-contender-policies.json` contains the four candidate release rows.
+They are intentionally excluded from the general release catalog until the
+game-owned identity/upload path is available. The `player_name` field is resolved
+by `tools/ci/resolve_policy_players.py` before building or uploading. It
 reuses exact owned names, creates missing identities, rejects ambiguous or
 disabled names, and assigns four distinct `player` IDs. The release job then
 switches identity before each upload and clears it afterwards. Releasing again
@@ -87,11 +88,24 @@ its `policies` input, certification enabled, and `put_secret=false` for a
 scripted-only release. Wait for its canonical-version readback. The release
 artifact records the exact `name:vN` and owning player ID.
 
-Resolve the live league whose Coworld is `battlecode` and default variant is
-`bc25`. Submit each recorded immutable version under its owning identity to
-that league, then read back submissions, active memberships and champion flags.
-No league settings or existing entrants need to change. A source change or
-successful policy upload alone does not establish a leaderboard entry.
+Registration is currently blocked. The release attempt on 2026-09-23 passed
+certification and four complete container episodes, but player creation returned
+HTTP 409: `Users are limited to 2 active players`. No contender policies or new
+game version were uploaded, and none of these players are on the leaderboard.
+The diagnostic retry failed before building, with the same account limit.
+
+The platform supports Coworld-owned player and policy ownership, but the current
+CLI creates/selects personal players. Simply lifting the creation limit is not
+sufficient: the league also limits active personal players per user, which can
+bench other entries. Permanent built-in baselines need a supported creation,
+upload and update path for four Coworld-owned identities. Do not submit these
+four as personal players or change league limits to work around this constraint.
+
+Once that path is available, resolve the live league whose Coworld is
+`battlecode` and default variant is `bc25`. Submit each exact immutable version
+with its matching game-owned identity, then read back submissions, active
+memberships and champion flags. A source change or successful policy upload
+alone does not establish a leaderboard entry.
 
 ## Validation
 
