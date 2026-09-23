@@ -1,6 +1,7 @@
 import unittest
 
 from resolve_policy_players import resolve_players
+from prepare_contender_players import required_allowance
 
 
 class PlayerIdentityTests(unittest.TestCase):
@@ -18,6 +19,13 @@ class PlayerIdentityTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(len({r["player"] for r in first}), 4)
         self.assertTrue(all("player_name" in r for r in rows))
+
+    def test_allowance_preserves_existing_players_and_larger_overrides(self):
+        rows = [{"player_name": f"entrant-{i}"} for i in range(4)]
+        players = [{"name": "existing-a"}, {"name": "existing-b"}]
+        self.assertEqual(required_allowance(rows, players, None, 2), 6)
+        self.assertEqual(required_allowance(rows, players, 20, 2), 20)
+        self.assertEqual(required_allowance(rows, players + [{"name": r["player_name"]} for r in rows], 6, 2), 6)
 
     def test_legacy_rows_unchanged(self):
         rows = [{"name": "default"}, {"name": "other", "player": "ply_existing"}]

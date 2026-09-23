@@ -7,9 +7,6 @@ import argparse
 import json
 from pathlib import Path
 
-from softmax import auth
-from softmax._http import observatory_client
-
 from resolve_policy_players import resolve_players
 
 
@@ -20,6 +17,9 @@ def required_allowance(rows, players, override, default):
 
 
 def main():
+    from softmax import auth
+    from softmax._http import observatory_client
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("policies", type=Path)
     args = parser.parse_args()
