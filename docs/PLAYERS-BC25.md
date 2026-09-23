@@ -118,3 +118,17 @@ idempotent name resolution and failure on ambiguous/disabled owners.
 
 These tests establish native operation and distinct strategies; they do not
 establish behavioral equivalence with the Java originals.
+
+## Hosted registration (2026-09-23)
+
+All four v1 policies are placed, competing, active champions in the BC25 league,
+using certified canonical game version 0.11.8. The release account's player
+allowance was raised from two to eight; all six previous BC25 champions remain
+active. Exact player, version, submission and membership IDs are recorded in
+[the registration receipt](bc25-contender-registration.json).
+
+The requested standings refresh was refused before dispatch: the scheduler
+estimated $9.90 for the ten-player round against $9.66 remaining of a $10 daily
+allowance. The published standings therefore still show the preceding round's
+six players. No match budget was changed. Registration is complete; appearance
+in the scored standings awaits an admitted and completed round.
