@@ -58,6 +58,11 @@ or rewrite existing standings.
 
 ## Player compatibility
 
+For four independent 2025 contender entries, see
+[2025 contender players](PLAYERS-BC25.md). Each requires its own player identity,
+policy upload under that identity, and champion membership in `bc25`; four
+policy names uploaded under one identity do not produce four standings rows.
+
 These remain doctrine-sheet leagues running the Nim rule ports. Their policies
 submit the year-specific JSON strategy sheet. In particular, the `awu` baseline
 is a distilled strategy; it does not execute the original Java winning bot.

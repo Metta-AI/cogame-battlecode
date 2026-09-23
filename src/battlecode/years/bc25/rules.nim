@@ -30,7 +30,7 @@ import std/[algorithm, monotimes, strutils, times]
 import ../../sim_types
 import ../../sheet
 import world, towers, comms, maps, knobs, patterns
-import chassis/[kit, spaark, scaffold25]
+import chassis/[kit, spaark, scaffold25, contenders25]
 
 export world, towers, comms, maps, knobs, kit
 
@@ -38,6 +38,10 @@ type
   ChassisKind25* = enum
     ckSpaark = "spaark"
     ckExamplefuncsplayer25 = "examplefuncsplayer25"
+    ckConfused25 = "confused"
+    ckJustWokeUp25 = "just-woke-up"
+    ckOmNom25 = "om-nom"
+    ckSpaark2025 = "spaark-2025"
 
   GameOutcome25* = object
     index*: int
@@ -99,6 +103,10 @@ proc parseChassisKind25*(name: string): ChassisKind25 =
   ## the strong published doctrine, not the deliberately weak floor
   ## (§Decisions).
   case name
+  of "confused": ckConfused25
+  of "just-woke-up": ckJustWokeUp25
+  of "om-nom": ckOmNom25
+  of "spaark-2025": ckSpaark2025
   of "examplefuncsplayer25", "examplefuncsplayer", "scaffold", "example":
     ckExamplefuncsplayer25
   else: ckSpaark
@@ -107,6 +115,10 @@ proc chassisKindFor*(sc: ScriptedChassis): ChassisKind25 =
   ## The year-neutral `ScriptedChassis` mapped into bc25's own kind. A name
   ## belonging to another year falls back to bc25's STRONG chassis.
   case sc
+  of scConfused25: ckConfused25
+  of scJustWokeUp25: ckJustWokeUp25
+  of scOmNom25: ckOmNom25
+  of scSpaark2025: ckSpaark2025
   of scExamplefuncsplayer25: ckExamplefuncsplayer25
   else: ckSpaark
 
@@ -124,6 +136,10 @@ proc runControllerFor*(w: World, sides: array[2, Side],
   case chassis[ord(r.team)]
   of ckSpaark: runSpaark(w, side, r)
   of ckExamplefuncsplayer25: runScaffold25(w, side, r)
+  of ckConfused25: runContender25(w, side, r, ctConfused)
+  of ckJustWokeUp25: runContender25(w, side, r, ctJustWokeUp)
+  of ckOmNom25: runContender25(w, side, r, ctOmNom)
+  of ckSpaark2025: runContender25(w, side, r, ctSpaark)
 
 # ---------------------------------------------------------------------------
 #  The end-of-match ladder, in the engine's own order

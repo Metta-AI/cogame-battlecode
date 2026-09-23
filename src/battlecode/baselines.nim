@@ -14,6 +14,7 @@
 import std/strutils
 import sheet
 import years/dispatch
+import years/bc25/contenders
 
 type
   Baseline* = enum
@@ -37,6 +38,10 @@ type
     blExamplefuncsplayer19 = "examplefuncsplayer19"
     blOrchard = "orchard"
     blExamplefuncsplayer17 = "examplefuncsplayer17"
+    blConfused25 = "confused"
+    blJustWokeUp25 = "just-woke-up"
+    blOmNom25 = "om-nom"
+    blSpaark2025 = "spaark-2025"
 
 proc defaultBaselineFor*(year: string): Baseline =
   ## A seat that says nothing useful plays the year's STRONG published
@@ -74,6 +79,10 @@ proc baselineFor*(year, name: string): Baseline =
     else: blGoneSharkin
   of yBc25:
     case key
+    of "confused": blConfused25
+    of "just-woke-up": blJustWokeUp25
+    of "om-nom": blOmNom25
+    of "spaark-2025": blSpaark2025
     of "scaffold", "examplefuncsplayer", "examplefuncsplayer25", "example":
       blExamplefuncsplayer25
     else: blSpaark
@@ -146,6 +155,10 @@ proc baselineChassis*(kind: Baseline): ScriptedChassis =
   of blGoneSharkin: scGoneSharkin
   of blExamplefuncsplayer24: scExamplefuncsplayer24
   of blSpaark: scSpaark
+  of blConfused25: scConfused25
+  of blJustWokeUp25: scJustWokeUp25
+  of blOmNom25: scOmNom25
+  of blSpaark2025: scSpaark2025
   of blExamplefuncsplayer25: scExamplefuncsplayer25
   of blLemonade: scLemonade
   of blExamplefuncsplayer23: scExamplefuncsplayer23
@@ -171,6 +184,10 @@ proc baselineReply*(kind: Baseline): string =
   of blAwu:
     """{"sheet":{},"notes":"default awu doctrine",
         "motto":"Cheese first."}"""
+  of blConfused25: ContenderReplies25[ctConfused]
+  of blJustWokeUp25: ContenderReplies25[ctJustWokeUp]
+  of blOmNom25: ContenderReplies25[ctOmNom]
+  of blSpaark2025: ContenderReplies25[ctSpaark]
   of blScaffold:
     """{"sheet":{},"notes":"scaffold baseline",
         "motto":"Forward."}"""
