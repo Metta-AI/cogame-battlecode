@@ -31,3 +31,10 @@ uv run --package metta-posttrain --extra train python -m metta_posttrain.train \
 The dataset teaches doctrine replies for the fixed champion chassis. It does
 not train per-robot actions; those are executed by the game's deterministic
 year-specific chassis after the doctrine decision.
+
+Ten `bc26` matches yielded 16 training and four validation decisions. All
+20 examples were 875 tokens with the local WordLevel smoke tokenizer and fit
+within 4,096 tokens. One CPU optimizer step reduced four-example validation
+loss from 1.78646 to 1.78020. This verifies the post-training path; it does
+not establish improved play. The other nine year variants are being checked
+with the same exporter.
