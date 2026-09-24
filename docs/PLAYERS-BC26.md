@@ -63,3 +63,16 @@ seven distinct trajectories. Replay tests serialize and rederive each controller
 with matching per-round hashes. Container smoke checks exercise every selector
 through actual player registration and require complete games without fallback.
 These tests establish native operation; they do not establish Java equivalence.
+
+## Hosted registration (2026-09-24)
+
+All seven v1 policies are placed, competing, active champions in the BC26 league,
+using certified canonical game version 0.11.9. Each has exactly one submission
+and one membership across all leagues, both in `bc26`. The release account's
+player allowance was raised from eight to fifteen, and all six previous BC26
+champions remain active. Exact IDs are recorded in
+[the registration receipt](bc26-contender-registration.json).
+
+Round `round_d563634a-04e2-4f07-abc0-950982de061f` completed all
+26 matches with all seven new policies included. The scored leaderboard now
+contains thirteen players, including all seven new entries. No match spending limit was changed.

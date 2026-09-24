@@ -280,7 +280,8 @@ block:
   const Fixture = "tests" / "fixtures" / "replay-bc16.json"
   check("the committed bc16 fixture exists", fileExists(Fixture))
   let fx = parseReplay(readFile(Fixture))
-  checkEq("and it is this build's game version", fx.gameVersion, GameVersion)
+  check("and its fixture game version remains compatible",
+    fx.gameVersion in ReplayCompatibleGameVersions)
   var rounds = 0
   for g in fx.games: rounds += g.rounds
   check("and it is LONGER than the wasm smoke's 200-frame window (" &

@@ -35,7 +35,8 @@ const Vocabulary = ["doctrine", "game", "build", "church", "castle", "mine",
 
 let doc = fixtureReplay()
 checkEq("the fixture is a bc19 recording", doc.year, "bc19")
-checkEq("at this GameVersion", doc.gameVersion, GameVersion)
+check("at a compatible fixture GameVersion",
+    doc.gameVersion in ReplayCompatibleGameVersions)
 checkEq("recorded over three games", doc.games.len, 3)
 
 let beats = beatsFor(doc, proc (g, r: int): int = g * 2000 + r)

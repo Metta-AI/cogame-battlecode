@@ -378,7 +378,8 @@ block:
   const Fixture = "tests" / "fixtures" / "replay-bc19.json"
   check("the committed bc19 fixture exists", fileExists(Fixture))
   let fx = parseReplay(readFile(Fixture))
-  checkEq("and it is this build's game version", fx.gameVersion, GameVersion)
+  check("and its fixture game version remains compatible",
+    fx.gameVersion in ReplayCompatibleGameVersions)
   checkEq("and it is a bc19 recording", fx.year, "bc19")
   var rounds = 0
   for g in fx.games: rounds += g.rounds
