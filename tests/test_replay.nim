@@ -6,8 +6,8 @@ import harness
 import battlecode/[baselines, broadcast, match, replay, results, sheet, sim_types]
 import battlecode/years/bc26/[maps, rules]
 
-proc buildDoc(mapName: string, notes, motto: string): (ReplayDoc, GameOutcome) =
-  var sheets = [baselineSheet(blAwu), baselineSheet(blScaffold)]
+proc buildDoc(mapName: string, notes, motto: string, kind = blAwu): (ReplayDoc, GameOutcome) =
+  var sheets = [baselineSheet(kind), baselineSheet(blScaffold)]
   sheets[0].notes = notes
   sheets[0].motto = motto
   ## Through the YEAR BOUNDARY, exactly as the server does, so the document
@@ -225,5 +225,17 @@ block:
   checkEq("e jumps to the end", view.seekFrame, 99)
   view.applyCommand(100, "\x01\x02")
   check("an unknown command is ignored", view.speed == 16)
+
+for kind in [blProofOfConcept, blSpaark2026, blGravy, blPowerpuffGirls,
+             blComplexMerlin, blTspaark, blOldButGold]:
+  let (doc, outcome) = buildDoc("DefaultSmall", "contender replay", "Cheese.", kind)
+  let parsed = parseReplay($doc.toJson())
+  checkEq("contender chassis roundtrip " & $kind,
+          parsed.seats[0].sheet.doctrine.chassis, chassisFor(kind))
+  let deriver = newDeriver(parsed)
+  var frames = 0
+  while deriver.advance(): inc frames
+  checkEq("contender replay length " & $kind, frames, outcome.roundsPlayed)
+  checkEq("contender replay exact hashes " & $kind, deriver.mismatchRound, -1)
 
 finish("test_replay")

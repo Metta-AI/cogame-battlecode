@@ -59,9 +59,10 @@
     }
   ],
   "standings_refresh": {
-    "round_id": "round_5aeaa55b-8442-439e-80e1-7893c8e7674d",
-    "status": "failed",
-    "error": "coworld daily budget: no episodes dispatched; estimated cost $9.90 (90 seats) exceeds $9.66 remaining of the $10.00 daily envelope for Battlecode 2025 \u2014 Chromatic Conflict; budget resets at 2026-09-24T07:00:00Z",
-    "budget_changed": false
+    "round_id": "round_9eebd506-08ea-4c03-ae7f-8a8ef5784e0c",
+    "status": "completed",
+    "completed_at": "2026-09-24T00:12:35.402166Z",
+    "published_player_count": 10,
+    "budget_changed_by_agent": false
   }
 }

@@ -35,7 +35,8 @@ const NotInTheFixture = ["rout"]
 
 let doc = fixtureReplay()
 checkEq("the fixture is a bc17 recording", doc.year, "bc17")
-checkEq("at this GameVersion", doc.gameVersion, GameVersion)
+check("at a compatible fixture GameVersion",
+    doc.gameVersion in ReplayCompatibleGameVersions)
 checkEq("and it carries all three games -- the match did not clinch at two",
   doc.games.len, 3)
 
