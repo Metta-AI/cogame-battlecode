@@ -83,7 +83,8 @@ proc digOut(w: World, clan: Clan, r: Robot): bool =
       return true
   false
 
-proc runKing*(w: World, clan: Clan, r: Robot) =
+proc runKing*(w: World, clan: Clan, r: Robot,
+              customSpawn = false, spawnAllowed = false) =
   ## Kings do four things: eat what is underfoot, bite what is adjacent,
   ## build, and tell the clan where the cheese is.
   if r.spend(4):
@@ -100,8 +101,10 @@ proc runKing*(w: World, clan: Clan, r: Robot) =
   ## Build while the bank is over the curve's threshold AND there is room.
   if r.canActCooldown and r.spend(8):
     let want = spawnThreshold(w, clan)
-    if w.teamInfo.numBabyRats[ord(clan.team)] < ratCap(clan) and
-        w.teamInfo.globalCheese[ord(clan.team)] >= want:
+    let maySpawn = if customSpawn: spawnAllowed else:
+      w.teamInfo.numBabyRats[ord(clan.team)] < ratCap(clan) and
+        w.teamInfo.globalCheese[ord(clan.team)] >= want
+    if maySpawn:
       for d in NonCenterDirs:
         let spot = r.loc + d + d
         if w.canBuildRat(r, spot):

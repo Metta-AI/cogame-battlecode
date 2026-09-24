@@ -18,7 +18,7 @@ import std/[monotimes, strutils, times]
 import ../../sim_types
 import ../../sheet
 import constants, world, cats
-import chassis/[kit, awu, scaffold]
+import chassis/[kit, awu, scaffold, contenders26]
 
 export world, constants, kit
 
@@ -67,6 +67,7 @@ proc runControllerFor*(w: World, clans: array[2, Clan], r: Robot) =
   case clan.doctrine.chassis
   of chAwu: runAwu(w, clan, r)
   of chScaffold: runScaffold(w, clan, r)
+  else: runContender26(w, clan, r)
 
 proc endOfTurnFor*(w: World, clans: array[2, Clan], r: Robot) =
   if not r.isGrabbedByRobot and not r.isThrown:

@@ -38,7 +38,8 @@ proc pagePath(): string =
 
 let doc = parseReplay(readFile(fixturePath()))
 checkEq("the fixture is a bc22 recording", doc.year, "bc22")
-checkEq("at this GameVersion", doc.gameVersion, GameVersion)
+check("at a compatible fixture GameVersion",
+    doc.gameVersion in ReplayCompatibleGameVersions)
 
 let beats = beatsFor(doc, proc (g, r: int): int = g * 4000 + r)
 

@@ -17,6 +17,13 @@ type
   Chassis* = enum
     chAwu = "awu"
     chScaffold = "scaffold"
+    chProofOfConcept = "proof-of-concept-2026"
+    chSpaark2026 = "spaark-2026"
+    chGravy = "gravy-2026"
+    chPowerpuffGirls = "powerpuff-girls-2026"
+    chComplexMerlin = "complex-merlin-2026"
+    chTspaark = "tspaark-2026"
+    chOldButGold = "old-but-gold-2026"
 
   BackstabPolicy* = enum
     bpNever = "never"
@@ -97,7 +104,7 @@ proc parseChassis*(text: string): Chassis =
   ## unrecognised is `awu`, the chassis every LLM doctrine runs.
   let key = normalizeKey(text)
   for value in Chassis:
-    if $value == key:
+    if normalizeKey($value) == key:
       return value
   chAwu
 
