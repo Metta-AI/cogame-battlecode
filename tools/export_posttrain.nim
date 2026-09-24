@@ -29,7 +29,11 @@ when isMainModule:
     runs = newJArray()
   for seed in 1 .. episodes:
     variantConfig["seed"] = %seed
-    let config = parseConfig($variantConfig)
+    var config = parseConfig($variantConfig)
+    ## Offline collection has no hosted wall-clock deadline. Preserve every
+    ## year rule and round limit while allowing a slow machine to finish.
+    config.perGameBudgetSeconds = 3600
+    config.matchBudgetSeconds = 10800
     let teacher = defaultBaselineFor(config.year)
     let reply = baselineReply(teacher)
     let accepted = parseReply(reply, config.year)
@@ -53,7 +57,8 @@ when isMainModule:
       }))
     var events: seq[MatchEvent]
     let (games, reason) = playMatch(config, plan, events)
-    doAssert reason == epComplete and games.len > 0
+    doAssert reason == epComplete and games.len > 0,
+      variant & " seed=" & $seed & " reason=" & $reason
     let scores = scoresFor(games, config.year)
     if seed mod 5 == 0:
       validationRows.add(rows)
@@ -69,6 +74,8 @@ when isMainModule:
     "variant": variant,
     "source_revision": revision,
     "teacher": baselineName(defaultBaselineFor(variant)),
+    "offline_per_game_budget_seconds": 3600,
+    "offline_match_budget_seconds": 10800,
     "train_examples": trainRows.len,
     "validation_examples": validationRows.len,
     "runs": runs

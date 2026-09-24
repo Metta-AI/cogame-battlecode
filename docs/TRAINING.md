@@ -5,7 +5,9 @@ scripted doctrine for each year. Each row pairs the model-facing system
 preamble and seat-specific public brief with that year's scripted reply.
 Both seats' prompts are captured before the match. The completed game is
 scored by the production rules. Matches are split between training and
-validation by seed.
+validation by seed. Offline collection extends the game's wall-clock limits
+to one hour per game and three hours per match so slow hardware can finish
+the same year rules and round limits without recording deadline outcomes.
 
 ```sh
 nimby sync nimby.lock
