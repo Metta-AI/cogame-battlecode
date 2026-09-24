@@ -1,0 +1,42 @@
+[
+  {
+    "name": "battlecode-bc25-confused",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "confused",
+      "PLAYER_POLICY_LABEL": "confused (Nim)"
+    },
+    "player_name": "BC25 confused (Nim)"
+  },
+  {
+    "name": "battlecode-bc25-just-woke-up",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "just-woke-up",
+      "PLAYER_POLICY_LABEL": "Just Woke Up (Nim)"
+    },
+    "player_name": "BC25 Just Woke Up (Nim)"
+  },
+  {
+    "name": "battlecode-bc25-om-nom",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "om-nom",
+      "PLAYER_POLICY_LABEL": "Om Nom (Nim)"
+    },
+    "player_name": "BC25 Om Nom (Nim)"
+  },
+  {
+    "name": "battlecode-bc25-spaark-2025",
+    "run": "/bin/battlecode-player",
+    "image": "cogame-battlecode-player:latest",
+    "env": {
+      "PLAYER_SCRIPTED": "spaark-2025",
+      "PLAYER_POLICY_LABEL": "SPAARK (Nim)"
+    },
+    "player_name": "BC25 SPAARK (Nim)"
+  }
+]

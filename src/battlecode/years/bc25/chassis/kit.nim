@@ -25,6 +25,13 @@ import ../world, ../towers, ../comms, ../knobs
 export world, towers, comms, knobs
 
 type
+  ContenderTowerMemory* = ref object
+    born*, lastSpawn*, lastDefense*, lastEnemy*, previousMoney*: int
+    soldiers*, moppers*, splashers*, spawned*, defenseMoppers*: int
+    soldierWeight*, mopperWeight*, splasherWeight*: float
+    plan*, planCursor*: int
+    planCursors*: array[4, int]
+
   Side* = ref object
     ## The per-team memory every unit shares. None of it is world state: a
     ## rule never reads it, and two clans with the same doctrine on the same
@@ -74,6 +81,8 @@ type
     censusRound*: int
     soldiers*, moppers*, splashers*: int
     towersHeld*: int
+    contenderTowers*: Table[int, ContenderTowerMemory]
+    contenderRefilling*: Table[int, bool]
 
 proc newSide*(team: Team, doctrine: Doctrine25): Side =
   Side(team: team, doctrine: doctrine, mix: normalisedMix(doctrine.unitMix),

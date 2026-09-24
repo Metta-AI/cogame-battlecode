@@ -1,0 +1,67 @@
+{
+  "verified_at": "2026-09-23",
+  "league_id": "league_7edecd14-58d2-4a23-aadb-491577a60935",
+  "division_id": "div_a5c7f237-a2e2-484a-9e97-f1fd9b8dfd97",
+  "coworld_id": "cow_de3775fc-9ae0-4711-9483-df14de44758c",
+  "game_version": "0.11.8",
+  "canonical": true,
+  "release_run": "https://github.com/Metta-AI/cogame-battlecode/actions/runs/35933420130",
+  "account_league_allowance": 8,
+  "existing_six_champions_preserved": true,
+  "players": [
+    {
+      "name": "BC25 confused (Nim)",
+      "player_id": "ply_4b350f10-0595-4f5d-85cb-ccf5ef853ac3",
+      "policy": "battlecode-bc25-confused:v1",
+      "policy_version_id": "df2e70f8-fc92-441e-bae5-097cf8b0c8f3",
+      "submission_id": "sub_8c816cb0-e0a6-4f01-ab85-4ff14a722dbb",
+      "submission_status": "placed",
+      "membership_id": "lpm_0543c0fc-4ed7-4160-9c30-a0d3267b3808",
+      "membership_status": "competing",
+      "membership_substatus": "active",
+      "is_champion": true
+    },
+    {
+      "name": "BC25 Just Woke Up (Nim)",
+      "player_id": "ply_cbbbe94d-9f46-4839-a37e-8a9a4b39f327",
+      "policy": "battlecode-bc25-just-woke-up:v1",
+      "policy_version_id": "3eb1003d-bf8f-4f02-8b74-0f23d8354f2b",
+      "submission_id": "sub_747015f5-0c3a-4a1e-9c36-a05758d41f84",
+      "submission_status": "placed",
+      "membership_id": "lpm_490f4cfd-3321-4e5e-a9e8-4e40ab20f246",
+      "membership_status": "competing",
+      "membership_substatus": "active",
+      "is_champion": true
+    },
+    {
+      "name": "BC25 Om Nom (Nim)",
+      "player_id": "ply_2fa42aa7-e36b-4b22-b877-bb4469ae708c",
+      "policy": "battlecode-bc25-om-nom:v1",
+      "policy_version_id": "b5dd985f-c892-48c6-a74c-a3faaa95143e",
+      "submission_id": "sub_800624e1-2103-47f8-9851-0d30149703d6",
+      "submission_status": "placed",
+      "membership_id": "lpm_8e0dfbd6-20f6-431a-903b-308f97d40fd0",
+      "membership_status": "competing",
+      "membership_substatus": "active",
+      "is_champion": true
+    },
+    {
+      "name": "BC25 SPAARK (Nim)",
+      "player_id": "ply_399e3b61-8a43-475c-bff9-37470103729f",
+      "policy": "battlecode-bc25-spaark-2025:v1",
+      "policy_version_id": "c1155a72-f2df-43c8-a2ce-e39f9ce298d5",
+      "submission_id": "sub_e29b95e4-7bb9-4b89-b26c-28c52a885835",
+      "submission_status": "placed",
+      "membership_id": "lpm_b9d44874-415e-4326-af4b-f81c3f5400d1",
+      "membership_status": "competing",
+      "membership_substatus": "active",
+      "is_champion": true
+    }
+  ],
+  "standings_refresh": {
+    "round_id": "round_5aeaa55b-8442-439e-80e1-7893c8e7674d",
+    "status": "failed",
+    "error": "coworld daily budget: no episodes dispatched; estimated cost $9.90 (90 seats) exceeds $9.66 remaining of the $10.00 daily envelope for Battlecode 2025 \u2014 Chromatic Conflict; budget resets at 2026-09-24T07:00:00Z",
+    "budget_changed": false
+  }
+}

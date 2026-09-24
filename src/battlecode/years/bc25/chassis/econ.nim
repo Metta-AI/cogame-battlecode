@@ -210,7 +210,7 @@ proc upgradePick*(w: World, side: Side, r: Robot): Loc =
 #  Special Resource Patterns
 # ---------------------------------------------------------------------------
 
-proc srpBudget*(w: World, side: Side): bool =
+proc srpBudget*(w: World, side: Side, earliestRound = 0): bool =
   ## The percentage of chip INCOME reserved for `completeResourcePattern`
   ## (200 chips each) and for the soldier-turns that paint the 25 tiles.
   ##
@@ -221,7 +221,8 @@ proc srpBudget*(w: World, side: Side): bool =
   let d = side.doctrine
   if d.srpPriority <= 0: return false
   let p = plan(side, w.currentRound)
-  if w.currentRound < p.srpFromRound: return false
+  let start = if earliestRound > 0: earliestRound else: p.srpFromRound
+  if w.currentRound < start: return false
   ## The reserve scales with the knob: at 100 a bare 200 chips is enough, at
   ## 10 the clan wants a comfortable cushion first.
   let cushion = CompleteResourcePatternCost +

@@ -217,6 +217,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Test policy player identity resolution
+        run: python3 -m unittest discover -s tools/ci -p 'test_resolve_policy_players.py'
+
       - name: Cache nimby toolchain and nimcache
         uses: actions/cache@v4
         with:

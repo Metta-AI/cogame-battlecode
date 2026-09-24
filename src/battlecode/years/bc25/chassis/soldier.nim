@@ -247,7 +247,7 @@ proc workClaim*(w: World, side: Side, r: Robot): bool =
 #  Special Resource Patterns
 # ---------------------------------------------------------------------------
 
-proc workSrp*(w: World, side: Side, r: Robot): bool =
+proc workSrp*(w: World, side: Side, r: Robot, earliestRound = 0): bool =
   ## Lay the 25 tiles of a funded pattern and complete it. `srp_priority`
   ## decides whether one is ever funded; nothing else in the chassis competes
   ## for the soldier-turns it takes.
@@ -256,7 +256,7 @@ proc workSrp*(w: World, side: Side, r: Robot): bool =
   ## middle, and the centre is the ONLY tile from which all 25 are inside a
   ## soldier's r2 <= 9 action radius (the corners are 8 away from it and 13 to
   ## 18 away from anywhere else).
-  if not srpBudget(w, side): return false
+  if not srpBudget(w, side, earliestRound): return false
   if not side.srpFunded:
     let centre = pickSrpCentre(w, side, r)
     if centre.x < 0: return false

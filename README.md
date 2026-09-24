@@ -51,6 +51,12 @@ payloads; it does not create or activate leagues.
 
 ## Existing Battlecode bots
 
+The four [2025 contender adaptations](docs/PLAYERS-BC25.md) are independently
+selectable as `confused`, `just-woke-up`, `om-nom`, and `spaark-2025`. Their
+release entries assign distinct player identities so they can occupy separate
+leaderboard rows. They are source-informed native adaptations, not verified
+functional duplicates of the Java submissions.
+
 This Coworld accepts sealed doctrine sheets, not original Battlecode player
 source or compiled bots. The `awu` baseline distills the winning bot's strategy;
 it does not execute `awu7/battlecode-2026`. Running original submissions needs

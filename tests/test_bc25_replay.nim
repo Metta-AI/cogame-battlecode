@@ -45,14 +45,15 @@ block:
 
 # --- record -> re-derive, for every end reason ------------------------------
 proc record(mapName: string, rounds: int, s: array[2, Sheet],
-            abandonAfter = -1): (ReplayDoc, string) =
+            abandonAfter = -1,
+            kinds: array[2, ScriptedChassis] = Chassis): (ReplayDoc, string) =
   var config = defaultGameConfig()
   config.year = "bc25"
   config.pool = "small"
   config.gamesPerMatch = 1
   config.maxRounds = rounds
   var plan = buildPlan(config, s, 3)
-  plan.chassis = Chassis
+  plan.chassis = kinds
   plan.maps = @[mapName]
   plan.sideAslots = @[0]
   plan.abandonAfter = @[abandonAfter]
@@ -62,7 +63,7 @@ proc record(mapName: string, rounds: int, s: array[2, Sheet],
   for slot in 0 .. 1:
     seats[slot] = SeatReport(name: "seat" & $slot, alias: aliasFor(slot),
       policyKind: "scripted", sheet: s[slot],
-      chassis: (if slot == 0: "spaark" else: "examplefuncsplayer25"))
+      chassis: $kinds[slot])
   var doc = ReplayDoc(gameVersion: GameVersion, year: "bc25",
     config: %*{"seed": 3, "year": "bc25"}, seed: 3, seats: seats,
     events: events,
@@ -79,6 +80,14 @@ proc rederives(text: string): int =
   let d = newDeriver(parseReplay(text))
   while d.advance(): discard
   d.mismatchRound
+
+block:
+  for b in [blConfused25, blJustWokeUp25, blOmNom25, blSpaark2025]:
+    let kinds = [baselineChassis(b), scExamplefuncsplayer25]
+    let s = [baselineSheet("bc25", b), baselineSheet("bc25", blExamplefuncsplayer25)]
+    let (_, text) = record("Filter", 150, s, kinds = kinds)
+    checkEq($b & " recorded chassis survives parsing", parseReplay(text).plan.chassis, kinds)
+    checkEq($b & " recorded game re-derives", rederives(text), -1)
 
 block:
   ## Every end reason a bc25 game can reach, recorded and re-derived.

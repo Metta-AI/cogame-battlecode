@@ -977,3 +977,28 @@ ENUMERATION is what is shipped.) **`sprites/*_neutral.png`,
 `sprites/unknown.png`, `src/static/img/controls/`, `yellow_star.png` and
 `map/tiled_1.jpg` are NOT used, NOT cut and NOT shipped.** No client code is
 shipped, embedded or built.
+
+2025 contender strategy adaptations (2026-09-23)
+------------------------------------------------
+The new src/battlecode/years/bc25/chassis/contenders25.nim adapts tower
+production and targeting decisions from the following AGPL-3.0 archives:
+
+* confused — battlecode-archive/2025-confused,
+  bb21870cec74c9991c6a880cead3b24e5c0c7ac9, java/src/finals/Tower.java and
+  Soldier.java. https://github.com/battlecode-archive/2025-confused
+* Just Woke Up — battlecode-archive/2025-Just-Woke-Up,
+  ba5976b09bd230d43b8c87efc4c34a1680592202, java/src/v57_Optimaler/Tower.java,
+  Unit.java and Units/Soldier.java.
+  https://github.com/battlecode-archive/2025-Just-Woke-Up
+* Om Nom — battlecode-archive/2025-Om-Nom,
+  bc2f945b13c78cfaf8331f59fabcd7e16d53c71f, templates/Tower.java.jinja2 and
+  templates/Soldier.java.jinja2. https://github.com/battlecode-archive/2025-Om-Nom
+* SPAARK — battlecode-archive/2025-SPAARK,
+  63165da768ad1e087e3f8e4f6ee84e1a51d3a014, src/SPAARK/Tower.java and Soldier.java.
+  https://github.com/battlecode-archive/2025-SPAARK
+
+Copyright remains with the respective upstream contributors. These adaptations
+are distributed under this repository's AGPL-3.0 license. No upstream Java is
+executed at runtime. This attribution does not imply endorsement or equivalent
+competition performance. docs/PLAYERS-BC25.md records the implementation scope
+and the behavior that remains native to this repository.
