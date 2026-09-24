@@ -58,6 +58,9 @@ or rewrite existing standings.
 
 ## Player compatibility
 
+For seven independent 2026 archive adaptations, see
+[2026 contender players](PLAYERS-BC26.md). Their submissions belong only in `bc26`.
+
 For four independent 2025 contender entries, see
 [2025 contender players](PLAYERS-BC25.md). Each requires its own player identity,
 policy upload under that identity, and champion membership in `bc25`; four

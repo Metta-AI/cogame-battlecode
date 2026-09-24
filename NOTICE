@@ -1002,3 +1002,24 @@ are distributed under this repository's AGPL-3.0 license. No upstream Java is
 executed at runtime. This attribution does not imply endorsement or equivalent
 competition performance. docs/PLAYERS-BC25.md records the implementation scope
 and the behavior that remains native to this repository.
+
+2026 contender strategy adaptations (2026-09-23)
+------------------------------------------------
+The king-economy adaptations in src/battlecode/years/bc26/chassis/contenders26.nim
+are informed by seven battlecode-archive repositories. Exact revisions, source
+paths, selected algorithms and fidelity limits are recorded in docs/PLAYERS-BC26.md.
+
+* ProofOfConcept — 2026-ProofOfConcept, efcfcdc9b2394d120c2245c7234725fe7af86814
+* SPAARK — 2026-SPAARK, a16431207623fa18c30e29b1ddf01e43276f31a1
+* Gravy — 2026-Gravy, f9c268abc53d235b09a767c407300ecdad66bfbf
+* Powerpuff Girls — 2026-Powerpuff-Girls, 91fdddbb1c015a2e8cd7ebcb8eebc8319b7ce06d
+* The Complex Merlin — 2026-The-Complex-Merlin, 76fe3873ccf6bad4510ca151f6415ffb6629de18
+* TSPAARK — 2026-TSPAARK, 64c3257a929f52c9824e60a330a7acf5a3670ef1
+* Old But Gold — 2026-Old-But-Gold, 70b3f40cebefcca9dc858771715d78088e7ae520
+
+ProofOfConcept's battlecode26 subtree, Gravy, Powerpuff Girls, The Complex Merlin
+and TSPAARK contain AGPL-3.0 license files. SPAARK and Old But Gold contain no
+license file at these revisions; no upstream Java files or model weights are
+vendored. This is a native implementation of selected production algorithms.
+Upstream contributors retain their copyrights. This repository's native code
+is AGPL-3.0. No endorsement or equivalent competition performance is implied.
