@@ -15,6 +15,7 @@ import std/strutils
 import sheet
 import years/dispatch
 import years/bc25/contenders
+import years/bc26/contenders
 
 type
   Baseline* = enum
@@ -42,6 +43,13 @@ type
     blJustWokeUp25 = "just-woke-up"
     blOmNom25 = "om-nom"
     blSpaark2025 = "spaark-2025"
+    blProofOfConcept = "proof-of-concept-2026"
+    blSpaark2026 = "spaark-2026"
+    blGravy = "gravy-2026"
+    blPowerpuffGirls = "powerpuff-girls-2026"
+    blComplexMerlin = "complex-merlin-2026"
+    blTspaark = "tspaark-2026"
+    blOldButGold = "old-but-gold-2026"
 
 proc defaultBaselineFor*(year: string): Baseline =
   ## A seat that says nothing useful plays the year's STRONG published
@@ -124,12 +132,19 @@ proc baselineFor*(year, name: string): Baseline =
     else: blOrchard
   of yBc26:
     case key
+    of "proof-of-concept-2026": blProofOfConcept
+    of "spaark-2026": blSpaark2026
+    of "gravy-2026": blGravy
+    of "powerpuff-girls-2026": blPowerpuffGirls
+    of "complex-merlin-2026": blComplexMerlin
+    of "tspaark-2026": blTspaark
+    of "old-but-gold-2026": blOldButGold
     of "scaffold", "examplefuncsplayer", "example": blScaffold
     else: blAwu
 
 proc parseBaseline*(text: string): Baseline =
   ## Year-free reading, kept for the bc26 call sites that predate the year
-  ## module boundary. bc26's own two names are the only ones it can return.
+  ## module boundary. Only bc26 controller names are recognized here.
   baselineFor("bc26", text)
 
 proc chassisFor*(kind: Baseline): Chassis =
@@ -139,6 +154,13 @@ proc chassisFor*(kind: Baseline): Chassis =
   ## `PLAYER_SCRIPTED=scaffold`.
   case kind
   of blScaffold: chScaffold
+  of blProofOfConcept: chProofOfConcept
+  of blSpaark2026: chSpaark2026
+  of blGravy: chGravy
+  of blPowerpuffGirls: chPowerpuffGirls
+  of blComplexMerlin: chComplexMerlin
+  of blTspaark: chTspaark
+  of blOldButGold: chOldButGold
   else: chAwu
 
 proc baselineChassis*(kind: Baseline): ScriptedChassis =
@@ -171,6 +193,13 @@ proc baselineChassis*(kind: Baseline): ScriptedChassis =
   of blOrchard: scOrchard
   of blExamplefuncsplayer17: scExamplefuncsplayer17
   of blAwu: scAwu
+  of blProofOfConcept: scProofOfConcept
+  of blSpaark2026: scSpaark2026
+  of blGravy: scGravy
+  of blPowerpuffGirls: scPowerpuffGirls
+  of blComplexMerlin: scComplexMerlin
+  of blTspaark: scTspaark
+  of blOldButGold: scOldButGold
 
 proc baselineReply*(kind: Baseline): string =
   ## The exact JSON a scripted seat "answers" with. Emitted as text and then
@@ -184,6 +213,13 @@ proc baselineReply*(kind: Baseline): string =
   of blAwu:
     """{"sheet":{},"notes":"default awu doctrine",
         "motto":"Cheese first."}"""
+  of blProofOfConcept: ContenderReplies26[ctProofOfConcept]
+  of blSpaark2026: ContenderReplies26[ctSpaark2026]
+  of blGravy: ContenderReplies26[ctGravy]
+  of blPowerpuffGirls: ContenderReplies26[ctPowerpuffGirls]
+  of blComplexMerlin: ContenderReplies26[ctComplexMerlin]
+  of blTspaark: ContenderReplies26[ctTspaark]
+  of blOldButGold: ContenderReplies26[ctOldButGold]
   of blConfused25: ContenderReplies25[ctConfused]
   of blJustWokeUp25: ContenderReplies25[ctJustWokeUp]
   of blOmNom25: ContenderReplies25[ctOmNom]

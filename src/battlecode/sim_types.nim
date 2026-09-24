@@ -13,12 +13,14 @@ import std/[strutils, unicode]
 const
   GameName* = "battlecode"
 
-  GameVersion* = "GV15" ## Four independently selectable bc25 contender adaptations.
+  GameVersion* = "GV16" ## Seven independently selectable bc26 contender adaptations.
     ## PREPEND-ONLY CHANGELOG. Anything that changes what a policy sees, how a
     ## seat is scored, or how a round resolves bumps this in the SAME commit,
     ## and `tools/ci/check_gameversion.sh` compares the headline (not the
     ## digits) against the base branch — a number alone cannot detect two
     ## branches claiming the same version for different rules.
+    ##
+    ## GV16 — add seven source-informed bc26 contender controllers; legacy behavior unchanged.
     ##
     ## GV15 — add confused, just-woke-up, om-nom and spaark-2025 controllers.
     ##        Existing controller behavior and old replay names are unchanged.
@@ -305,13 +307,13 @@ const
 
   ReplayCompatibleGameVersions* = ["GV04", "GV05", "GV06", "GV07", "GV08",
                                    "GV09", "GV10", "GV11", "GV12", "GV13", "GV14",
-                                   GameVersion]
+                                   "GV15", GameVersion]
     ## Versions whose recordings this build can still re-derive, for every
     ## year EXCEPT bc26 (see below). A replay carrying anything else is
     ## refused with a readable message rather than silently re-simulated
     ## under different rules.
 
-  Bc26ReplayCompatibleGameVersions* = ["GV14", GameVersion]
+  Bc26ReplayCompatibleGameVersions* = ["GV14", "GV15", GameVersion]
     ## The bc26 list is SHORTER: GV14 changed how a cat resolves a re-found
     ## target, so a bc26 game recorded at GV04..GV13 re-simulates
     ## differently from the round of the first such re-find. Those recordings
@@ -371,6 +373,13 @@ type
     scJustWokeUp25 = "just-woke-up"
     scOmNom25 = "om-nom"
     scSpaark2025 = "spaark-2025"
+    scProofOfConcept = "proof-of-concept-2026"
+    scSpaark2026 = "spaark-2026"
+    scGravy = "gravy-2026"
+    scPowerpuffGirls = "powerpuff-girls-2026"
+    scComplexMerlin = "complex-merlin-2026"
+    scTspaark = "tspaark-2026"
+    scOldButGold = "old-but-gold-2026"
 
   ConfigError* = object of CatchableError
     ## An unusable `game_config`. The container exits 2 on this, per ctf.

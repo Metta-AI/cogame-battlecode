@@ -127,8 +127,7 @@ allowance was raised from two to eight; all six previous BC25 champions remain
 active. Exact player, version, submission and membership IDs are recorded in
 [the registration receipt](bc25-contender-registration.json).
 
-The requested standings refresh was refused before dispatch: the scheduler
-estimated $9.90 for the ten-player round against $9.66 remaining of a $10 daily
-allowance. The published standings therefore still show the preceding round's
-six players. No match budget was changed. Registration is complete; appearance
-in the scored standings awaits an admitted and completed round.
+The first standings refresh was refused on budget. After the user increased the
+budget, round `round_9eebd506-08ea-4c03-ae7f-8a8ef5784e0c` completed at
+2026-09-24 00:12:35 UTC. The published leaderboard now contains all ten players,
+including the four new adaptations. No spending limit was changed by the agent.

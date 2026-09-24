@@ -40,7 +40,8 @@ let page = readFile(Page)
 
 block:
   checkEq("the committed fixture is a bc16 recording", doc.year, "bc16")
-  checkEq("at this GameVersion", doc.gameVersion, GameVersion)
+  check("at a compatible fixture GameVersion",
+    doc.gameVersion in ReplayCompatibleGameVersions)
   check("with a real event stream", doc.events.len >= 100)
 
 ## The frame mapping the game block uses: game index and round -> absolute

@@ -27,6 +27,14 @@ type
     target*: Loc
     knownMine*: Loc
     hasKnownMine*: bool
+    contenderInitialized*: bool
+    costSamples*: array[100, int]
+    costTotal*: int
+    previousCheese*: int
+    breedAllowed*: bool
+    contenderMines*: seq[Loc]
+    gainSamples*: seq[int]
+    gainIndex*, gainCount*, gainTotal*: int
 
   Clan* = ref object
     team*: Team

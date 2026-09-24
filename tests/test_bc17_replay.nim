@@ -521,7 +521,8 @@ block:
   const Fixture = "tests" / "fixtures" / "replay-bc17.json"
   check("the committed bc17 fixture exists", fileExists(Fixture))
   let fx = parseReplay(readFile(Fixture))
-  checkEq("and it is this build's game version", fx.gameVersion, GameVersion)
+  check("and its fixture game version remains compatible",
+    fx.gameVersion in ReplayCompatibleGameVersions)
   checkEq("the bytes are STRICT UTF-8", readFile(Fixture).validateUtf8(), -1)
   var rounds = 0
   for g in fx.games: rounds += g.rounds
