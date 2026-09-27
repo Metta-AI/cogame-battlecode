@@ -23,6 +23,13 @@ type
   AppState = object
     lock: Lock
     registered: array[2, bool]
+    sockets: array[2, WebSocket]
+    socketOpen: array[2, bool]
+    replies: array[2, string]
+    causes: array[2, string]
+    details: array[2, string]
+    received: array[2, bool]
+    requestId: int
     policy: array[2, SeatPolicy]
     phase: string
     resultsDoc: string
@@ -90,38 +97,52 @@ proc joinError(slot: int, token: string): string {.gcsafe.} =
   {.gcsafe.}:
     return seatJoinError(seatTokens, slot, token)
 
-proc applyRegistration(slot: int, payload: string) =
+proc applyPlayerMessage(websocket: WebSocket, payload: string) =
+  if payload.len == 0 or payload[0] != '{':
+    return
   var node: JsonNode
   try:
     node = parseJson(payload)
   except CatchableError:
-    echo "battlecode: seat ", slot, " sent an unreadable registration"
-    return
-  if node{"type"}.getStr() != "register":
+    echo "battlecode: seat sent unreadable player data"
     return
   {.gcsafe.}:
     withLock app.lock:
-      if app.registered[slot]:
+      var slot = -1
+      for candidate in 0 .. 1:
+        if app.socketOpen[candidate] and
+            $app.sockets[candidate] == $websocket:
+          slot = candidate
+      if slot < 0:
         return
-      app.registered[slot] = true
-      let prompt = node{"prompt"}.getStr().strip()
-      let scripted =
-        if node{"scripted"} != nil and node["scripted"].kind == JString:
-          node["scripted"].getStr().strip()
-        else: ""
-      app.policy[slot].registered = true
-      app.policy[slot].prompt = prompt
-      app.policy[slot].isLlm = prompt.len > 0
-      app.policy[slot].scripted = scripted
-      app.policy[slot].label = block:
-        let explicit = node{"policy"}.getStr().strip()
-        if explicit.len > 0: explicit
-        elif prompt.len > 0: "prompt"
-        elif scripted.len > 0: scripted
-        else: "awu"
-  echo "battlecode: seat ", slot, " registered kind=",
-    (if node{"prompt"}.getStr().strip().len > 0: "llm" else: "scripted"),
-    " label=", node{"policy"}.getStr()
+      case node{"type"}.getStr()
+      of "register":
+        if app.registered[slot]:
+          return
+        app.registered[slot] = true
+        let scripted =
+          if node{"scripted"} != nil and node["scripted"].kind == JString:
+            node["scripted"].getStr().strip()
+          else: ""
+        app.policy[slot].registered = true
+        app.policy[slot].scripted = scripted
+        app.policy[slot].label = block:
+          let explicit = node{"policy"}.getStr().strip()
+          if explicit.len > 0: explicit
+          elif scripted.len > 0: scripted
+          else: "player"
+        echo "battlecode: seat ", slot, " registered kind=",
+          (if scripted.len > 0: "scripted" else: "player"),
+          " label=", app.policy[slot].label
+      of "action":
+        if app.registered[slot] and
+            node{"request_id"}.getInt(-1) == app.requestId and
+            not app.received[slot]:
+          app.replies[slot] = node{"reply"}.getStr()
+          app.causes[slot] = node{"cause"}.getStr()
+          app.details[slot] = node{"detail"}.getStr()
+          app.received[slot] = true
+      else: discard
 
 # ---------------------------------------------------------------------------
 #  HTTP / websocket surface
@@ -193,7 +214,11 @@ proc handlePlayerSocket(request: Request) =
     request.respond(403, headers, refusal & "\n")
     echo "battlecode: refused a seat-", slot, " connection: ", refusal
     return
-  discard request.upgradeToWebSocket()
+  let websocket = request.upgradeToWebSocket()
+  {.gcsafe.}:
+    withLock app.lock:
+      app.sockets[slot] = websocket
+      app.socketOpen[slot] = true
   echo "battlecode: seat ", slot, " connected"
 
 proc websocketHandler(
@@ -212,20 +237,14 @@ proc websocketHandler(
       return
     let text = readSpriteInputText(message.data)
     let payload = if text.len > 0: text else: message.data
-    if not payload.contains("\"register\""):
-      return
-    ## The seat number rides IN the registration blob, read by the player
-    ## from its own `COWORLD_PLAYER_WS_URL` query. Deriving it from socket
-    ## bookkeeping instead is what makes two seats race for one identity.
-    var slot = 0
-    try:
-      let node = parseJson(payload)
-      slot = clamp(node{"slot"}.getInt(0), 0, 1)
-    except CatchableError:
-      slot = 0
-    applyRegistration(slot, payload)
+    applyPlayerMessage(websocket, payload)
   of ErrorEvent, CloseEvent:
     {.gcsafe.}:
+      withLock app.lock:
+        for slot in 0 .. 1:
+          if app.socketOpen[slot] and $app.sockets[slot] == $websocket:
+            app.socketOpen[slot] = false
+            app.sockets[slot] = default(WebSocket)
       withLock viewerLock:
         for i in countdown(viewers.high, 0):
           if $viewers[i] == $websocket:
@@ -324,6 +343,85 @@ proc randomSeed(): int =
   (int(buf[0]) shl 24 or int(buf[1]) shl 16 or
     int(buf[2]) shl 8 or int(buf[3])) and 0x7FFF_FFFF
 
+proc collectDoctrines(
+  config: GameConfig, plan: MatchPlan, policy: array[2, SeatPolicy]
+): DecisionResult =
+  var actions: array[2, PlayerAction]
+  var pending: array[2, bool]
+  var exchangeEvents: seq[MatchEvent]
+  for slot in 0 .. 1:
+    pending[slot] = policy[slot].registered
+
+  let phaseDeadline = getMonoTime() + initDuration(
+    milliseconds = max(1, config.doctrineBudgetMs))
+  for attempt in 1 .. 2:
+    var anyPending = false
+    for slot in 0 .. 1:
+      if pending[slot]: anyPending = true
+    if not anyPending: break
+    let remaining = (phaseDeadline - getMonoTime()).inMilliseconds.int
+    if remaining <= 0: break
+    let deadlineMs = min(remaining,
+      if attempt == 1: config.attempt1Ms else: config.retryMs)
+    var sockets: array[2, WebSocket]
+    var connected: array[2, bool]
+    var requestId: int
+    {.gcsafe.}:
+      withLock app.lock:
+        inc app.requestId
+        requestId = app.requestId
+        for slot in 0 .. 1:
+          if pending[slot]:
+            app.received[slot] = false
+            connected[slot] = app.socketOpen[slot]
+            sockets[slot] = app.sockets[slot]
+    let sentAt = getMonoTime()
+    for slot in 0 .. 1:
+      if pending[slot] and connected[slot]:
+        let request = %*{
+          "type": "observation", "request_id": requestId,
+          "year": config.year, "slot": slot,
+          "brief": parseJson(briefFor(config, plan, slot)),
+          "preamble": preambleFor(config.year),
+          "deadline_ms": deadlineMs,
+          "max_output_tokens": config.maxOutputTokens,
+          "attempt": attempt}
+        sockets[slot].send($request, TextMessage)
+        if attempt == 1:
+          exchangeEvents.add(ev("doctrine_requested", ms = 0,
+            fields = %*{"slot": slot, "attempt": attempt,
+              "deadline_ms": deadlineMs}))
+    let attemptDeadline = sentAt + initDuration(milliseconds = deadlineMs)
+    while getMonoTime() < attemptDeadline:
+      var waiting = false
+      {.gcsafe.}:
+        withLock app.lock:
+          for slot in 0 .. 1:
+            if pending[slot] and not app.received[slot] and
+                app.socketOpen[slot]:
+              waiting = true
+      if not waiting: break
+      sleep(10)
+    {.gcsafe.}:
+      withLock app.lock:
+        for slot in 0 .. 1:
+          if pending[slot] and app.received[slot]:
+            actions[slot] = PlayerAction(
+              reply: app.replies[slot], cause: app.causes[slot],
+              detail: app.details[slot], received: true,
+              latencyMs: (getMonoTime() - sentAt).inMilliseconds.int)
+    let trial = decide(config, plan, policy, actions, record = false)
+    for slot in 0 .. 1:
+      if pending[slot]:
+        pending[slot] = trial.fallback[slot].len > 0 and attempt == 1 and
+          trial.fallback[slot] notin ["no_credentials", "throttled", "auth"]
+        if pending[slot]:
+          exchangeEvents.add(ev("doctrine_retry", ms = actions[slot].latencyMs,
+            fields = %*{"slot": slot, "cause": trial.fallback[slot]}))
+          actions[slot] = PlayerAction()
+  result = decide(config, plan, policy, actions)
+  result.events = exchangeEvents & result.events
+
 proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
   let episodeStart = getMonoTime()
   var reason = epComplete
@@ -354,7 +452,7 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
     "aliases": [AliasA, AliasB]}))
 
   setPhase("doctrine")
-  let decision = decide(config, plan, policy)
+  let decision = collectDoctrines(config, plan, policy)
   for e in decision.events: events.add(e)
   plan.sheets = decision.sheets
 
@@ -422,6 +520,13 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
   except CatchableError as error:
     echo "::error::battlecode: could not write the replay: ", error.msg
 
+  {.gcsafe.}:
+    withLock app.lock:
+      for slot in 0 .. 1:
+        if app.socketOpen[slot]:
+          app.sockets[slot].send($(%*{"type": "final", "reason": $reason}),
+            TextMessage)
+
   echo "battlecode: reason=", reason, " games=", games.len,
     " scores=", scoresFor(games, config.year), " sim=", simSeconds, "s wall=", wallClock, "s"
 
@@ -472,4 +577,9 @@ proc runServer*(runtimeConfig: RuntimeConfig, config: GameConfig) =
                 except CatchableError: 20000
   sleep(max(0, graceMs))
   viewersRunning = false
+  {.gcsafe.}:
+    withLock app.lock:
+      for slot in 0 .. 1:
+        app.socketOpen[slot] = false
+        app.sockets[slot] = default(WebSocket)
   server.close()
