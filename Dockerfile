@@ -1,5 +1,5 @@
 # ONE image, TWO entrypoints: /bin/battlecode (the game server) and
-# /bin/battlecode-player (the thin seat registrar). The policy set is
+# /bin/battlecode-player (the ordinary doctrine policy). The bundled policy is
 # env-switched inside this same image (PLAYER_PROMPT vs PLAYER_SCRIPTED),
 # which is what keeps a champion and a scripted filler byte-identical apart
 # from their environment.

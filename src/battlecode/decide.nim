@@ -1,19 +1,9 @@
-## The decision layer: ONE sealed, simultaneous doctrine turn per episode.
-##
-## Both seats are asked at the same moment and their two provider calls go out
-## as ONE PARALLEL BATCH (`curly.makeRequests`, coworld-ctf's `decide.nim`
-## shape) with the same deadline. Seats are never queried one after another.
-##
-## DEGRADE, NEVER HANG. Every wait is bounded: attempt 1 gets `attempt1Ms`,
-## the single retry gets `retryMs`, and the whole phase is wrapped in a
-## monotonic `doctrineBudgetMs` deadline. A provider throttle with no other
-## candidate model skips the retry outright (it cannot land). On a second
-## failure the seat plays its scripted doctrine and a `doctrine_fallback`
-## event names the cause. No failure mode leaves a seat without a doctrine.
+## Public doctrine descriptions and game-owned validation of ordinary player replies.
+## Both seats receive private briefs and answer with complete sealed sheets.
+## A missing or malformed answer falls back to the year's scripted doctrine.
 
-import std/[json, monotimes, strutils, times]
-import curly
-import sim_types, sheet, baselines, llm, match
+import std/json
+import sim_types, sheet, baselines, match
 import years/dispatch
 from years/bc25/patterns as pat25 import
   patternRows, pkMoneyTower, pkPaintTower, pkDefenseTower, pkResource
@@ -22,8 +12,6 @@ type
   SeatPolicy* = object
     ## What one seat registered as. A seat that registers with neither field
     ## — or never registers at all — is `awu`.
-    isLlm*: bool
-    prompt*: string
     scripted*: string
       ## The raw `PLAYER_SCRIPTED` value. Resolved to a `Baseline` PER YEAR at
       ## episode time by `baselineForSeat`, because `bowl-of-chowder` means
@@ -32,22 +20,29 @@ type
     label*: string
     registered*: bool
 
+  PlayerAction* = object
+    reply*: string
+    cause*: string
+    detail*: string
+    latencyMs*: int
+    received*: bool
+
   DecisionResult* = object
     sheets*: array[2, Sheet]
     decisionMs*: array[2, int]
     fallback*: array[2, string]
     fallbackDetail*: array[2, string]
-      ## The provider's own last words for this seat, one line, capped at
+      ## The player's own last words for this seat, one line, capped at
       ## `MaxFallbackDetailRunes`. Recorded in the replay beside the one-word
       ## cause so a fallback can be read after the fact.
     briefs*: array[2, string]
-      ## The prompt payload composed for this seat, verbatim — the "observation"
-      ## of a game whose decisions are taken server-side. Recorded in the replay.
+      ## The private observation sent to this seat, recorded in the replay.
     policyKind*: array[2, string]
     events*: seq[MatchEvent]
 
 proc baselineForSeat*(year: string, seat: SeatPolicy): Baseline =
-  if seat.scripted.len > 0: baselineFor(year, seat.scripted)
+  if seat.scripted.len > 0 and seat.scripted != "default":
+    baselineFor(year, seat.scripted)
   else: defaultBaselineFor(year)
 
 proc chassisForSeat*(year: string, seat: SeatPolicy): ScriptedChassis =
@@ -55,13 +50,13 @@ proc chassisForSeat*(year: string, seat: SeatPolicy): ScriptedChassis =
   ## chassis its `PLAYER_SCRIPTED` names; an LLM seat drives the year's fixed
   ## champion chassis — `bowl-of-chowder` on bc20, `california-roll` on bc21,
   ## `gone-sharkin` on bc24.
-  if seat.isLlm: strongChassisFor(year)
+  if seat.registered and seat.scripted.len == 0: strongChassisFor(year)
   else: baselineChassis(baselineForSeat(year, seat))
 
 proc chassisNameFor*(year: string, seat: SeatPolicy, sheet: Sheet): string =
   case yearIdOf(year)
   of yBc20, yBc21, yBc22, yBc24, yBc25, yBc23, yBc16, yBc19, yBc17:
-    (if seat.isLlm: $strongChassisFor(year)
+    (if seat.registered and seat.scripted.len == 0: $strongChassisFor(year)
      else: baselineName(baselineForSeat(year, seat)))
   of yBc26: $sheet.doctrine.chassis
 
@@ -1575,128 +1570,45 @@ proc briefFor*(
   $payload
 
 proc decide*(
-  config: GameConfig, plan: MatchPlan, seats: array[2, SeatPolicy]
+  config: GameConfig, plan: MatchPlan, seats: array[2, SeatPolicy],
+  actions: array[2, PlayerAction], record = true
 ): DecisionResult =
-  ## The one decision turn. Returns a legal sheet for both seats no matter
-  ## what the provider does.
-  let client = newLlmClient(config)
-  let started = getMonoTime()
-  let budget = initDuration(milliseconds = max(1, config.doctrineBudgetMs))
-
-  var open: seq[int]
+  ## The same validator is used for scripted, prompt, trained, and Jev players.
   for slot in 0 .. 1:
     result.sheets[slot] = baselineSheet(config.year,
       baselineForSeat(config.year, seats[slot]))
-    result.policyKind[slot] = if seats[slot].isLlm: "llm" else: "scripted"
-    if seats[slot].isLlm and not client.disabled:
-      open.add(slot)
-      result.events.add(ev("doctrine_requested", ms = 0, fields = %*{
-        "slot": slot, "attempt": 1, "deadline_ms": config.attempt1Ms}))
-    elif seats[slot].isLlm:
-      ## An LLM seat that CANNOT call the provider is a FALLBACK, not a
-      ## scripted policy. Recording it is what makes the two countable.
-      result.fallback[slot] = "no_credentials"
-      result.events.add(ev("doctrine_fallback", ms = 0, fields = %*{
-        "slot": slot, "cause": "no_credentials"}))
-      echo "battlecode llm: seat ", slot,
-        " falling back to the scripted doctrine (no_credentials)"
-
-  var attempt = 0
-  while open.len > 0 and attempt < 2:
-    if client.disabled: break
-    if getMonoTime() - started >= budget:
-      ## The phase budget is spent. These seats fall back with the cause that
-      ## actually stopped them, and `open` is CLEARED: the tail loop below
-      ## records one `doctrine_fallback` per still-open seat, so leaving them
-      ## open recorded a second event for the same seat and overwrote the
-      ## surviving cause with "parse" — a budget timeout that reads as a
-      ## malformed reply in both the replay and the log.
-      for slot in open:
-        result.fallback[slot] = "timeout"
-        result.events.add(ev("doctrine_fallback", ms = 0, fields = %*{
-          "slot": slot, "cause": "timeout"}))
-        ## "falling back" is the phrase phase 60 greps the GAME log for.
-        echo "battlecode llm: seat ", slot,
-          " falling back to the scripted doctrine (timeout)"
-      open.setLen(0)
-      break
-    let deadlineMs =
-      if attempt == 0: config.attempt1Ms else: config.retryMs
-    var batch: RequestBatch
-    for slot in open:
-      var user = briefFor(config, plan, slot)
-      ## The observation, as sent. `SystemPreamble` (the rules digest and the
-      ## sheet schema the note's payload lists) is the same for both seats and
-      ## is recorded once, at the document level.
-      if result.briefs[slot].len == 0: result.briefs[slot] = user
-      if attempt > 0:
-        user.add("\n\nYour previous reply was not usable. Reply with ONLY " &
-          "the JSON object described above, starting with '{'.")
-      let request = client.requestFor(
-        preambleFor(config.year), userMessage(seats[slot].prompt, user))
-      batch.post(request.url, request.headers, request.body, $slot)
-    let batchStart = getMonoTime()
-    ## ONE parallel batch. curly hands the deadline to CURLOPT_TIMEOUT, whose
-    ## granularity is WHOLE SECONDS, so this conversion floors — which is why
-    ## the config values are all whole seconds.
-    let responses = client.curl.makeRequests(batch, max(1, deadlineMs div 1000))
-    let latency = (getMonoTime() - batchStart).inMilliseconds.int
-    var stillOpen: seq[int]
-    for position, slot in open:
-      var cause = "parse"
+    result.policyKind[slot] =
+      if seats[slot].scripted.len > 0 or not seats[slot].registered:
+        "scripted"
+      else:
+        "player"
+    if seats[slot].registered:
+      result.briefs[slot] = briefFor(config, plan, slot)
+    if actions[slot].received and actions[slot].cause.len == 0:
       try:
-        let text = client.textOf(responses[position].response,
-          responses[position].error, batch[position].url)
-        result.sheets[slot] = parseReply(text, config.year)
-        result.decisionMs[slot] = latency
-        result.fallback[slot] = ""
-        ## `chassis` is not a knob (sheet.KnownKeys). A reply that still sends
-        ## one is already recorded in `unknownFields` and ignored — the clan
-        ## runs the chassis the OPERATOR fixed — but a silent ignore is how
-        ## round 1's champion came to idle three games, so the seat that tried
-        ## is named in the log, along with the chassis it actually drives.
-        if "chassis" in result.sheets[slot].unknownFields:
-          echo "battlecode llm: seat ", slot,
-            " sent `chassis`, which is not a doctrine knob: ignored, the clan",
-            " runs the ",
-            chassisNameFor(config.year, seats[slot], result.sheets[slot]),
-            " chassis"
-        result.events.add(ev("doctrine_received", ms = latency, fields = %*{
-          "slot": slot, "attempt": attempt + 1, "latency_ms": latency,
-          "defaults_applied": result.sheets[slot].defaultsApplied.len,
-          "unknown_fields": result.sheets[slot].unknownFields.len}))
+        result.sheets[slot] = parseReply(actions[slot].reply, config.year)
+        result.decisionMs[slot] = actions[slot].latencyMs
+        result.events.add(ev("doctrine_received", ms = actions[slot].latencyMs,
+          fields = %*{"slot": slot, "latency_ms": actions[slot].latencyMs,
+            "defaults_applied": result.sheets[slot].defaultsApplied.len,
+            "unknown_fields": result.sheets[slot].unknownFields.len}))
+        if record and "chassis" in result.sheets[slot].unknownFields:
+          echo "battlecode: seat ", slot,
+            " sent `chassis`, which is not a doctrine knob: ignored"
+        continue
       except CatchableError as error:
-        if responses[position].error.len > 0:
-          cause = if "timeout" in responses[position].error.toLowerAscii():
-                    "timeout" else: "transport"
-        elif error.msg.startsWith("llm throttled"):
-          cause = "throttled"
         result.fallbackDetail[slot] =
           sanitizeLine(error.msg, MaxFallbackDetailRunes)
-        result.events.add(ev("doctrine_retry", ms = latency, fields = %*{
-          "slot": slot, "cause": cause}))
-        echo "battlecode llm: seat ", slot, " attempt ", attempt + 1,
-          " failed, will retry: ", error.msg.truncateRunes(MaxFallbackDetailRunes)
-        stillOpen.add(slot)
-    open = stillOpen
-    inc attempt
-    if client.throttled and open.len > 0:
-      ## FAIL FAST: the only model left answered 429, so the retry batch
-      ## would be refused the same way.
-      echo "battlecode llm: provider throttled with no other candidate; ",
-        open.len, " seat(s) fall back"
-      break
-
-  for slot in open:
-    result.sheets[slot] = baselineSheet(config.year,
-      baselineForSeat(config.year, seats[slot]))
     let cause =
-      if client.disabled or client.transport == ltNone: "no_credentials"
-      elif client.throttled: "throttled"
-      else: "parse"
+      if actions[slot].cause.len > 0: actions[slot].cause
+      elif actions[slot].received: "parse"
+      else: "timeout"
     result.fallback[slot] = cause
+    if actions[slot].detail.len > 0:
+      result.fallbackDetail[slot] =
+        sanitizeLine(actions[slot].detail, MaxFallbackDetailRunes)
     result.events.add(ev("doctrine_fallback", ms = 0, fields = %*{
       "slot": slot, "cause": cause}))
-    ## "falling back" is the phrase phase 60 greps the GAME log for.
-    echo "battlecode llm: seat ", slot,
-      " falling back to the scripted doctrine (", cause, ")"
+    if record:
+      echo "battlecode: seat ", slot,
+        " falling back to the scripted doctrine (", cause, ")"

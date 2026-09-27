@@ -1,11 +1,5 @@
-## `/bin/battlecode-player` — the thin seat registrar.
-##
-## Deliberately thin: it dials its seat, sends ONE registration blob and then
-## only receives until the socket closes, then exits 0. Every decision happens
-## inside the GAME container, because that is the only container the platform
-## injects the `anthropic_api_key` coworld secret into, and because keeping
-## the control layer server-side is what makes a recorded doctrine
-## reproducible with no network in the loop.
+## `/bin/battlecode-player` — one ordinary doctrine policy per seat.
+## The game sends a private brief and accepts a complete JSON doctrine reply.
 ##
 ##   PLAYER_PROMPT        a doctrine brief in plain English -> an LLM seat
 ##   PLAYER_SCRIPTED      awu | scaffold                    -> a scripted seat
@@ -19,7 +13,9 @@
 
 import std/[json, options, os, strutils]
 import bitworld/spriteprotocol
+import curly
 import whisky
+import battlecode/[baselines, llm, sim_types]
 
 const
   ConnectAttempts = 240        ## 240 x 500 ms = 2 minutes of dialling.
@@ -41,11 +37,10 @@ proc slotFromUrl(url: string): int =
   if digits.len == 0: return 0
   try: clamp(parseInt(digits), 0, 15) except CatchableError: 0
 
-proc registrationBlob(slot: int, prompt, scripted, policy: string): string =
+proc registrationBlob(slot: int, scripted, policy: string): string =
   var node = %*{
     "type": "register",
     "slot": slot,
-    "prompt": prompt,
     "policy": policy
   }
   if scripted.len > 0:
@@ -65,16 +60,20 @@ when isMainModule:
   let
     slot = slotFromUrl(url)
     prompt = getEnv("PLAYER_PROMPT").strip()
-    scripted = getEnv("PLAYER_SCRIPTED").strip()
+    configuredScripted = getEnv("PLAYER_SCRIPTED").strip()
+    scripted =
+      if prompt.len > 0: ""
+      elif configuredScripted.len > 0: configuredScripted
+      else: "default"
     label = block:
       let explicit = getEnv("PLAYER_POLICY_LABEL").strip()
       if explicit.len > 0: explicit
       elif prompt.len > 0: "prompt"
       elif scripted.len > 0: scripted
-      else: "awu"
+      else: "default"
   echo "battlecode player: slot=", slot, " kind=",
-    (if prompt.len > 0: "llm" else: "scripted"),
-    " baseline=", (if scripted.len > 0: scripted else: "awu"),
+    (if prompt.len > 0: "prompt" else: "scripted"),
+    " baseline=", (if scripted.len > 0: scripted else: "default"),
     " label=", label
 
   proc dial(attempts: int): WebSocket =
@@ -103,7 +102,7 @@ when isMainModule:
   while true:
     var sessionFrames = 0
     try:
-      socket.send(registrationBlob(slot, prompt, scripted, label), BinaryMessage)
+      socket.send(registrationBlob(slot, scripted, label), BinaryMessage)
       var resends = 0
       while true:
         let received = socket.receiveMessage()
@@ -113,8 +112,51 @@ when isMainModule:
         if resends < RegistrationResends and
             sessionFrames mod ResendEveryFrames == 1:
           inc resends
-          socket.send(registrationBlob(slot, prompt, scripted, label),
+          socket.send(registrationBlob(slot, scripted, label),
             BinaryMessage)
+        let data = received.get().data
+        if data.len > 0 and data[0] == '{':
+          let observation = parseJson(data)
+          if observation{"type"}.getStr() == "observation":
+            let year = observation["year"].getStr()
+            var reply: string
+            var cause = ""
+            if prompt.len == 0:
+              let baseline =
+                if scripted == "default": defaultBaselineFor(year)
+                else: baselineFor(year, scripted)
+              reply = baselineReply(baseline)
+            else:
+              var config = defaultGameConfig()
+              config.model = getEnv("PLAYER_MODEL").strip()
+              config.maxOutputTokens = observation["max_output_tokens"].getInt()
+              let client = newLlmClient(config, slot)
+              if client.disabled:
+                reply = baselineReply(defaultBaselineFor(year))
+                cause = "no_credentials"
+              else:
+                let request = client.requestFor(observation["preamble"].getStr(),
+                  userMessage(prompt, $observation["brief"]))
+                var batch: RequestBatch
+                batch.post(request.url, request.headers, request.body, $slot)
+                let responses = client.curl.makeRequests(batch,
+                  max(1, observation["deadline_ms"].getInt() div 1000))
+                let response = responses[0]
+                if response.error.len > 0:
+                  cause =
+                    if "timeout" in response.error.toLowerAscii(): "timeout"
+                    else: "transport"
+                elif response.response.code == 429:
+                  cause = "throttled"
+                elif response.response.code == 401 or response.response.code == 403:
+                  cause = "auth"
+                elif response.response.code < 200 or response.response.code >= 300:
+                  cause = "transport"
+                else:
+                  reply = client.textOf(response.response, "", request.url)
+            socket.send($(%*{"type": "action",
+              "request_id": observation["request_id"].getInt(),
+              "reply": reply, "cause": cause}), TextMessage)
         socket.send(readyBlob(), BinaryMessage)
     except CatchableError as error:
       echo "battlecode player: socket closed (", error.msg, ")"

@@ -62,10 +62,10 @@ source or compiled bots. The `awu` baseline distills the winning bot's strategy;
 it does not execute `awu7/battlecode-2026`. Running original submissions needs
 an official-engine runtime and a separate player artifact contract.
 
-## A policy is just a prompt
+## Ordinary doctrine players
 
-Both champions are LLM policies on the same chassis, differing only in the
-doctrine their prompt asks for:
+Both champions use the same ordinary private observation and complete sheet
+action. Their player-side prompts request different doctrines:
 
 | policy | doctrine |
 | --- | --- |
@@ -240,7 +240,8 @@ bit-exact, with an empty divergence ledger.**
 | `src/battlecode/years/bc19/` | the 2019 rule set: `world.nim` (the turn queue as a plain ARRAY with `robin` and by-value removal), `units.nim`, `mt19937.nim` (the year's own generator -- 2019 uses a Mersenne Twister, not `java.util.Random`), `vision.nim`, `actions.nim` (the validation ladder and the enact dispatch, in one file because the `temp_fuel` handoff between them is the easiest thing in this year to get wrong), `resources.nim`, `rules.nim`, `maps.nim`, `knobs.nim`, `chassis/` |
 | `src/battlecode/years/{registry,dispatch}.nim` | the year boundary: the ONE place the year-neutral machinery meets a year module |
 | `src/battlecode/rng.nim` | `java.util.Random` and `IDGenerator`, bit-exact |
-| `src/battlecode/{sheet,decide,llm,baselines}.nim` | the doctrine schema, the one sealed parallel batch, the provider ladder, the scripted table |
+| `src/battlecode/{sheet,decide,baselines}.nim` | the doctrine schema, game-side reply validation, and scripted table |
+| `src/battlecode/llm.nim`, `src/battlecode_player.nim` | player-side provider transport and ordinary socket decisions |
 | `src/battlecode/{replay,results,broadcast,render,server}.nim` | the JSON replay, the closed results document, the chrome channel, the sprite packets, the container |
 | `replay-viewer/` | the **same sim module** compiled to wasm; the browser re-derives every round |
 | `data/` | the committed sprite atlas and the converted maps |
