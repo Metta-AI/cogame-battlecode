@@ -520,6 +520,13 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
   except CatchableError as error:
     echo "::error::battlecode: could not write the replay: ", error.msg
 
+  {.gcsafe.}:
+    withLock app.lock:
+      for slot in 0 .. 1:
+        if app.socketOpen[slot]:
+          app.sockets[slot].send($(%*{"type": "final", "reason": $reason}),
+            TextMessage)
+
   echo "battlecode: reason=", reason, " games=", games.len,
     " scores=", scoresFor(games, config.year), " sim=", simSeconds, "s wall=", wallClock, "s"
 

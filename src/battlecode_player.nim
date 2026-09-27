@@ -117,6 +117,8 @@ when isMainModule:
         let data = received.get().data
         if data.len > 0 and data[0] == '{':
           let observation = parseJson(data)
+          if observation{"type"}.getStr() == "final":
+            quit(0)
           if observation{"type"}.getStr() == "observation":
             let year = observation["year"].getStr()
             var reply: string

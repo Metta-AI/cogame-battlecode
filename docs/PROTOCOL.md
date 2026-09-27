@@ -51,6 +51,8 @@ The whole reply is capped at 16 KB. `sheet` has at most 32 known keys; wrong
 types and values take their field defaults. `notes` is capped at 280 runes,
 `motto` at 48, and diagnostic detail at 200. The opponent's sheet remains
 sealed throughout the episode; no per-round observations are sent.
+After writing results and replay, the game sends `{"type":"final","reason":"complete"}`
+to connected players so one-turn policies can exit cleanly.
 
 ## Budget
 
