@@ -49,7 +49,7 @@ Use the [league setup plan](docs/LEAGUES.md) to prepare ten independent leagues
 within this Coworld, each pinned to one year. The generator only emits reviewable
 payloads; it does not create or activate leagues.
 
-## Existing Battlecode bots
+## Adaptations of existing Battlecode bots
 
 The four [2025 contender adaptations](docs/PLAYERS-BC25.md) are independently
 selectable as `confused`, `just-woke-up`, `om-nom`, and `spaark-2025`. Their
@@ -57,10 +57,20 @@ release entries assign distinct player identities so they can occupy separate
 leaderboard rows. They are source-informed native adaptations, not verified
 functional duplicates of the Java submissions.
 
+**These standings do not compare Softmax policies against the original MIT
+Battlecode competitors.** Shared native tactics replace substantial parts of
+the archived bots. See [the fidelity audit](docs/FIDELITY-AUDIT.md).
+
 This Coworld accepts sealed doctrine sheets, not original Battlecode player
 source or compiled bots. The `awu` baseline distills the winning bot's strategy;
 it does not execute `awu7/battlecode-2026`. Running original submissions needs
 an official-engine runtime and a separate player artifact contract.
+
+The separate [complete-archive Coworlds](tools/official/README.md#separate-hosted-archive-coworlds)
+provide that runtime for nine licensed archived implementations. They execute
+their full Java code on the published engines, independently of these doctrine
+leagues. The local audit runner also tests two archives excluded from the
+published image because their pinned revisions have no license files.
 
 ## A policy is just a prompt
 

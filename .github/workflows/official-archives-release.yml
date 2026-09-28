@@ -1,0 +1,79 @@
+name: Release official archived competitors
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    secrets:
+      SOFTMAX_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version of the separate 2025 and 2026 archive Coworlds
+        required: true
+        default: '0.1.0'
+        type: string
+
+concurrency:
+  group: official-archives-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - uses: docker/setup-buildx-action@v3
+      - name: Authenticate the release account
+        env:
+          SOFTMAX_TOKEN: ${{ secrets.SOFTMAX_TOKEN }}
+        run: uvx --from 'coworld[auth]==0.1.53' softmax set-token "$SOFTMAX_TOKEN"
+      - name: Build the separate archive Coworld
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          for year in bc25 bc26; do
+            uvx --from 'coworld[auth]==0.1.53' coworld build --version "$VERSION" \
+              --project "official-coworld/$year" --compose compose.yaml \
+              --template coworld_manifest_template.json --output dist/coworld_manifest.json
+          done
+      - name: Certify game, file seats, and replay server
+        run: |
+          for year in bc25 bc26; do
+            uvx --from 'coworld[auth]==0.1.53' coworld certify "official-coworld/$year/dist/coworld_manifest.json" \
+              --no-open-report --timeout-seconds 600
+          done
+      - name: Seat every complete archive in both positions
+        run: |
+          uv run --no-project --with pydantic python tools/official/container_smoke.py
+      - name: Pin published source and documentation to this release commit
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          for year in ('bc25', 'bc26'):
+              path = Path('official-coworld') / year / 'dist/coworld_manifest.json'
+              repo = 'https://github.com/Metta-AI/cogame-battlecode'
+              text = path.read_text().replace(repo + '/blob/main/', repo + '/blob/' + os.environ['GITHUB_SHA'] + '/')
+              text = text.replace(repo + '/tree/main/', repo + '/tree/' + os.environ['GITHUB_SHA'] + '/')
+              path.write_text(json.dumps(json.loads(text), indent=2) + '\n')
+          PY
+      - name: Publish and wait for hosted certification
+        run: |
+          for year in bc25 bc26; do
+            uvx --from 'coworld[auth]==0.1.53' coworld upload-coworld \
+              "official-coworld/$year/dist/coworld_manifest.json" --wait-hosted-smoke \
+              --hosted-smoke-timeout-seconds 1800
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: official-coworld-release-proof
+          path: |
+            official-coworld/*/dist/
+            official-coworld/smoke/

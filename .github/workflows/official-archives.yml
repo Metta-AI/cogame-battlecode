@@ -1,0 +1,44 @@
+name: Official archived competitors
+
+on:
+  pull_request:
+    paths:
+      - tools/official/**
+      - official-coworld/**
+      - .github/workflows/official-archives.yml
+  push:
+    branches: [main]
+    paths:
+      - tools/official/**
+      - official-coworld/**
+      - .github/workflows/official-archives.yml
+  workflow_dispatch:
+
+jobs:
+  archived-players:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: astral-sh/setup-uv@v6
+      - name: Compile complete pinned sources
+        run: |
+          set -euo pipefail
+          players=$(python3 -c 'import json; print(" ".join(p["id"] for p in json.load(open("tools/official/sources.json"))["players"]))')
+          uv run --no-project --with pydantic --with jinja2 python tools/official/runner.py \
+            build $players --jdk "$JAVA_HOME/bin"
+      - name: Execute every archive in both seats
+        run: |
+          uv run --no-project --with pydantic python tools/official/smoke.py \
+            --build dist/official --output dist/official-matches --jdk "$JAVA_HOME/bin"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: official-match-proof
+          path: |
+            dist/official-matches/
+            dist/official/players/*/provenance.json

@@ -5,9 +5,9 @@
     "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_SCRIPTED": "proof-of-concept-2026",
-      "PLAYER_POLICY_LABEL": "ProofOfConcept (king adaptation)"
+      "PLAYER_POLICY_LABEL": "ProofOfConcept (king economy adaptation; no neural policy)"
     },
-    "player_name": "BC26 ProofOfConcept (king adaptation)"
+    "player_name": "BC26 ProofOfConcept (king economy adaptation; no neural policy)"
   },
   {
     "name": "battlecode-bc26-spaark",
@@ -15,9 +15,9 @@
     "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_SCRIPTED": "spaark-2026",
-      "PLAYER_POLICY_LABEL": "SPAARK (Nim)"
+      "PLAYER_POLICY_LABEL": "SPAARK (king economy adaptation)"
     },
-    "player_name": "BC26 SPAARK (Nim)"
+    "player_name": "BC26 SPAARK (king economy adaptation)"
   },
   {
     "name": "battlecode-bc26-gravy",
@@ -25,9 +25,9 @@
     "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_SCRIPTED": "gravy-2026",
-      "PLAYER_POLICY_LABEL": "Gravy (Nim)"
+      "PLAYER_POLICY_LABEL": "Gravy (king economy adaptation)"
     },
-    "player_name": "BC26 Gravy (Nim)"
+    "player_name": "BC26 Gravy (king economy adaptation)"
   },
   {
     "name": "battlecode-bc26-powerpuff-girls",
@@ -35,9 +35,9 @@
     "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_SCRIPTED": "powerpuff-girls-2026",
-      "PLAYER_POLICY_LABEL": "Powerpuff Girls (Nim)"
+      "PLAYER_POLICY_LABEL": "Powerpuff Girls (king economy adaptation)"
     },
-    "player_name": "BC26 Powerpuff Girls (Nim)"
+    "player_name": "BC26 Powerpuff Girls (king economy adaptation)"
   },
   {
     "name": "battlecode-bc26-complex-merlin",
@@ -45,9 +45,9 @@
     "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_SCRIPTED": "complex-merlin-2026",
-      "PLAYER_POLICY_LABEL": "The Complex Merlin (Nim)"
+      "PLAYER_POLICY_LABEL": "The Complex Merlin (king economy adaptation)"
     },
-    "player_name": "BC26 The Complex Merlin (Nim)"
+    "player_name": "BC26 The Complex Merlin (king economy adaptation)"
   },
   {
     "name": "battlecode-bc26-tspaark",
@@ -55,9 +55,9 @@
     "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_SCRIPTED": "tspaark-2026",
-      "PLAYER_POLICY_LABEL": "TSPAARK (Nim)"
+      "PLAYER_POLICY_LABEL": "TSPAARK (king economy adaptation)"
     },
-    "player_name": "BC26 TSPAARK (Nim)"
+    "player_name": "BC26 TSPAARK (king economy adaptation)"
   },
   {
     "name": "battlecode-bc26-old-but-gold",
@@ -65,8 +65,8 @@
     "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_SCRIPTED": "old-but-gold-2026",
-      "PLAYER_POLICY_LABEL": "Old But Gold (Nim)"
+      "PLAYER_POLICY_LABEL": "Old But Gold (king economy adaptation)"
     },
-    "player_name": "BC26 Old But Gold (Nim)"
+    "player_name": "BC26 Old But Gold (king economy adaptation)"
   }
 ]

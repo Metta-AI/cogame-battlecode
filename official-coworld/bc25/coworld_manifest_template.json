@@ -1,0 +1,175 @@
+{
+  "episode_timeout_minutes": 15,
+  "tags": [
+    "battlecode",
+    "official-engine",
+    "archived-bots"
+  ],
+  "game": {
+    "name": "battlecode-2025-archives",
+    "description": "Complete licensed Battlecode 2025 archived Java implementations, running on the unmodified official engine. Original navigation, combat, communications, and generated neural policies execute. Selected archives are not necessarily independently verified finals artifacts. Separate from the native doctrine leagues.",
+    "owner": "daveey@gmail.com",
+    "player_runtime": "game-hosted",
+    "protocols": {
+      "player": {
+        "type": "uri",
+        "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/tools/official/README.md"
+      },
+      "global": {
+        "type": "uri",
+        "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/tools/official/README.md"
+      }
+    },
+    "docs": {
+      "readme": {
+        "type": "uri",
+        "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/tools/official/README.md"
+      }
+    },
+    "config_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tokens",
+        "year",
+        "map"
+      ],
+      "properties": {
+        "tokens": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "string"
+          }
+        },
+        "year": {
+          "type": "string",
+          "enum": [
+            "bc25"
+          ]
+        },
+        "map": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]+$"
+        },
+        "num_agents": {
+          "type": "integer",
+          "const": 2,
+          "default": 2
+        }
+      }
+    },
+    "results_schema": {
+      "type": "object",
+      "required": [
+        "scores",
+        "winner",
+        "rounds",
+        "reason",
+        "width",
+        "height",
+        "bytecodes"
+      ],
+      "properties": {
+        "scores": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number"
+          }
+        },
+        "winner": {
+          "type": "string",
+          "enum": [
+            "A",
+            "B"
+          ]
+        },
+        "rounds": {
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer"
+        },
+        "height": {
+          "type": "integer"
+        },
+        "bytecodes": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "runnable": {
+      "type": "game",
+      "image": "{{GAME_IMAGE}}",
+      "run": [
+        "/venv/bin/python",
+        "/workspace/tools/official/server.py"
+      ],
+      "source_url": "https://github.com/Metta-AI/cogame-battlecode/tree/main/tools/official",
+      "resources": {
+        "requests": {
+          "memory": "4Gi",
+          "cpu": "2"
+        },
+        "limits": {
+          "memory": "4Gi",
+          "cpu": "2"
+        }
+      }
+    }
+  },
+  "player": [
+    {
+      "id": "bc25-confused",
+      "name": "bc25-confused (complete archive)",
+      "type": "player",
+      "description": "Complete java/src/finals at bb21870cec74c9991c6a880cead3b24e5c0c7ac9. Exact final submission identity is not implied.",
+      "file": "players/bc25-confused.json",
+      "source_url": "https://github.com/battlecode-archive/2025-confused/tree/bb21870cec74c9991c6a880cead3b24e5c0c7ac9"
+    },
+    {
+      "id": "bc25-om-nom",
+      "name": "bc25-om-nom (complete archive)",
+      "type": "player",
+      "description": "Complete templates at bc2f945b13c78cfaf8331f59fabcd7e16d53c71f. Exact final submission identity is not implied.",
+      "file": "players/bc25-om-nom.json",
+      "source_url": "https://github.com/battlecode-archive/2025-Om-Nom/tree/bc2f945b13c78cfaf8331f59fabcd7e16d53c71f"
+    }
+  ],
+  "variants": [
+    {
+      "id": "bc25",
+      "name": "Battlecode 2025 \u2014 complete archived bots",
+      "game_config": {
+        "year": "bc25",
+        "map": "AlarmClock",
+        "num_agents": 2
+      },
+      "description": "Complete selected archived Java controllers executing on the pinned official engine, without native tactical substitutions."
+    }
+  ],
+  "certification": {
+    "players": [
+      {
+        "player_id": "bc25-confused"
+      },
+      {
+        "player_id": "bc25-om-nom"
+      }
+    ],
+    "game_config": {
+      "year": "bc25",
+      "map": "AlarmClock",
+      "num_agents": 2
+    }
+  }
+}

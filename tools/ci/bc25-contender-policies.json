@@ -5,9 +5,9 @@
     "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_SCRIPTED": "confused",
-      "PLAYER_POLICY_LABEL": "confused (Nim)"
+      "PLAYER_POLICY_LABEL": "confused (strategy adaptation)"
     },
-    "player_name": "BC25 confused (Nim)"
+    "player_name": "BC25 confused (strategy adaptation)"
   },
   {
     "name": "battlecode-bc25-just-woke-up",
@@ -15,9 +15,9 @@
     "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_SCRIPTED": "just-woke-up",
-      "PLAYER_POLICY_LABEL": "Just Woke Up (Nim)"
+      "PLAYER_POLICY_LABEL": "Just Woke Up (strategy adaptation)"
     },
-    "player_name": "BC25 Just Woke Up (Nim)"
+    "player_name": "BC25 Just Woke Up (strategy adaptation)"
   },
   {
     "name": "battlecode-bc25-om-nom",
@@ -25,9 +25,9 @@
     "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_SCRIPTED": "om-nom",
-      "PLAYER_POLICY_LABEL": "Om Nom (Nim)"
+      "PLAYER_POLICY_LABEL": "Om Nom (strategy adaptation)"
     },
-    "player_name": "BC25 Om Nom (Nim)"
+    "player_name": "BC25 Om Nom (strategy adaptation)"
   },
   {
     "name": "battlecode-bc25-spaark-2025",
@@ -35,8 +35,8 @@
     "image": "cogame-battlecode-player:latest",
     "env": {
       "PLAYER_SCRIPTED": "spaark-2025",
-      "PLAYER_POLICY_LABEL": "SPAARK (Nim)"
+      "PLAYER_POLICY_LABEL": "SPAARK (strategy adaptation)"
     },
-    "player_name": "BC25 SPAARK (Nim)"
+    "player_name": "BC25 SPAARK (strategy adaptation)"
   }
 ]

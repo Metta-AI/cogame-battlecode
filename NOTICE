@@ -5,8 +5,11 @@ License v3.0** (see `LICENSE`). It is a derivative work of the two AGPL-3.0
 projects below, and it is public so that the source offer the AGPL requires is
 discharged by the repository itself.
 
-**No upstream Java source runs in any image this repository builds, and no
-JVM, JDK or JRE is installed in one.** The Java engines exist only inside the
+**The native doctrine images contain no JVM, JDK, JRE, or upstream Java source.**
+The separate `tools/official/Dockerfile` archive image executes published Java
+engines and complete licensed archive source. Statements below about Java
+being CI-only describe the native doctrine image, not this archive image.
+For the native port, the Java engines exist only inside the
 `parity-oracle`, `parity-oracle-bc16`, `-bc20`, `-bc21`, `-bc22`, `-bc23`,
 `-bc24` and `-bc25` jobs of `.github/workflows/ci.yml`, where they are fetched
 at CI time and used as differential oracles (see `docs/PARITY.md`).
@@ -365,8 +368,8 @@ swing-versus-single scoring) and the splasher aiming heuristic, in
 
 `IvanGeffner/BC25` carries **no licence** (verified: the GitHub API reports
 `license: null`) and is **not vendored, not ported, not compiled and not read
-into any file here**, in this year as in the others. Just Woke Up (the winner)
-and Om Nom (3rd) are not published anywhere and contribute nothing.
+into any file here**, in this year as in the others. The independently published
+Just Woke Up and Om Nom archives are attributed in the contender sections below.
 
 ## battlecode/battlecode23 engine — AGPL-3.0
 
@@ -1023,3 +1026,18 @@ license file at these revisions; no upstream Java files or model weights are
 vendored. This is a native implementation of selected production algorithms.
 Upstream contributors retain their copyrights. This repository's native code
 is AGPL-3.0. No endorsement or equivalent competition performance is implied.
+
+Complete archived-code runtime (2026-09-28)
+-----------------------------------------
+`tools/official/` observes complete archived implementations running on the
+published Battlecode 2025 3.1.0 and 2026 1.2.5 engines. `sources.json` pins
+engine hashes, archive revisions, source directories, and distribution choices.
+The game image retains complete selected source directories, generator inputs,
+and license files, excluding Git history and unrelated source trees.
+All four 2025 archives and ProofOfConcept's licensed battlecode26 subtree,
+Gravy, Powerpuff Girls, The Complex Merlin, and TSPAARK are AGPL-3.0.
+SPAARK 2026 and Old But Gold have no license files at these revisions. Their
+source and bytecode are excluded from the published archive image and bundled
+player catalog; the local audit tool can examine and execute their checkouts.
+Original authors retain their copyrights. No endorsement, verified final
+tournament artifact identity, or equivalent ranking is implied.

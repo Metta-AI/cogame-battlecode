@@ -1,0 +1,175 @@
+{
+  "episode_timeout_minutes": 15,
+  "tags": [
+    "battlecode",
+    "official-engine",
+    "archived-bots"
+  ],
+  "game": {
+    "name": "battlecode-2026-archives",
+    "description": "Complete licensed Battlecode 2026 archived Java implementations, running on the unmodified official engine. Original navigation, combat, communications, and generated neural policies execute. Selected archives are not necessarily independently verified finals artifacts. Separate from the native doctrine leagues.",
+    "owner": "daveey@gmail.com",
+    "player_runtime": "game-hosted",
+    "protocols": {
+      "player": {
+        "type": "uri",
+        "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/tools/official/README.md"
+      },
+      "global": {
+        "type": "uri",
+        "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/tools/official/README.md"
+      }
+    },
+    "docs": {
+      "readme": {
+        "type": "uri",
+        "value": "https://github.com/Metta-AI/cogame-battlecode/blob/main/tools/official/README.md"
+      }
+    },
+    "config_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tokens",
+        "year",
+        "map"
+      ],
+      "properties": {
+        "tokens": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "string"
+          }
+        },
+        "year": {
+          "type": "string",
+          "enum": [
+            "bc26"
+          ]
+        },
+        "map": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]+$"
+        },
+        "num_agents": {
+          "type": "integer",
+          "const": 2,
+          "default": 2
+        }
+      }
+    },
+    "results_schema": {
+      "type": "object",
+      "required": [
+        "scores",
+        "winner",
+        "rounds",
+        "reason",
+        "width",
+        "height",
+        "bytecodes"
+      ],
+      "properties": {
+        "scores": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number"
+          }
+        },
+        "winner": {
+          "type": "string",
+          "enum": [
+            "A",
+            "B"
+          ]
+        },
+        "rounds": {
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer"
+        },
+        "height": {
+          "type": "integer"
+        },
+        "bytecodes": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "runnable": {
+      "type": "game",
+      "image": "{{GAME_IMAGE}}",
+      "run": [
+        "/venv/bin/python",
+        "/workspace/tools/official/server.py"
+      ],
+      "source_url": "https://github.com/Metta-AI/cogame-battlecode/tree/main/tools/official",
+      "resources": {
+        "requests": {
+          "memory": "4Gi",
+          "cpu": "2"
+        },
+        "limits": {
+          "memory": "4Gi",
+          "cpu": "2"
+        }
+      }
+    }
+  },
+  "player": [
+    {
+      "id": "bc26-proofofconcept",
+      "name": "bc26-proofofconcept (complete archive)",
+      "type": "player",
+      "description": "Complete battlecode26/src/result_408 at efcfcdc9b2394d120c2245c7234725fe7af86814. Exact final submission identity is not implied.",
+      "file": "players/bc26-proofofconcept.json",
+      "source_url": "https://github.com/battlecode-archive/2026-ProofOfConcept/tree/efcfcdc9b2394d120c2245c7234725fe7af86814"
+    },
+    {
+      "id": "bc26-gravy",
+      "name": "bc26-gravy (complete archive)",
+      "type": "player",
+      "description": "Complete src/testplayer at f9c268abc53d235b09a767c407300ecdad66bfbf. Exact final submission identity is not implied.",
+      "file": "players/bc26-gravy.json",
+      "source_url": "https://github.com/battlecode-archive/2026-Gravy/tree/f9c268abc53d235b09a767c407300ecdad66bfbf"
+    }
+  ],
+  "variants": [
+    {
+      "id": "bc26",
+      "name": "Battlecode 2026 \u2014 complete archived bots",
+      "game_config": {
+        "year": "bc26",
+        "map": "DefaultSmall",
+        "num_agents": 2
+      },
+      "description": "Complete selected archived Java controllers executing on the pinned official engine, without native tactical substitutions."
+    }
+  ],
+  "certification": {
+    "players": [
+      {
+        "player_id": "bc26-proofofconcept"
+      },
+      {
+        "player_id": "bc26-gravy"
+      }
+    ],
+    "game_config": {
+      "year": "bc26",
+      "map": "DefaultSmall",
+      "num_agents": 2
+    }
+  }
+}
