@@ -94,7 +94,7 @@ map distribution or a strength evaluation against Softmax's doctrine entries.
 
 ```bash
 for year in bc25 bc26; do
-  coworld build --version 0.1.0 --project "official-coworld/$year" --compose compose.yaml \
+  coworld build --version 0.1.1 --project "official-coworld/$year" --compose compose.yaml \
     --template coworld_manifest_template.json --output dist/coworld_manifest.json
   coworld certify "official-coworld/$year/dist/coworld_manifest.json" --timeout-seconds 600 --no-open-report
 done
@@ -108,3 +108,6 @@ as file players for the corresponding year's game.
 The separate release workflow certifies both games, seats every archive in both positions,
 pins documentation URLs to the release commit, then publishes and waits for
 hosted certification. It does not change the existing doctrine leagues.
+
+Both games are hosted at certified canonical version **0.1.1**. See the
+[live verification receipt](../../docs/fidelity-release-verification.json).

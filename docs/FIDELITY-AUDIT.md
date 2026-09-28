@@ -85,6 +85,24 @@ and Old But Gold remain local audit targets because their pinned revisions lack
 license files. The observer replay exposes units and economy; the local
 runner also retains the full official-client replay.
 
+## Live verification — 2026-09-28
+
+The doctrine Coworld is certified and canonical at **0.11.10**. All eleven
+adaptation policies are active at **v2**, under their original registered player
+IDs. The BC25 and BC26 leagues retain 10 and 14 active champions, respectively;
+unrelated champions and both player rosters are preserved.
+
+Both complete-archive Coworlds are certified and canonical at **0.1.1**. Hosted
+confused versus Om Nom completed 322 rounds; ProofOfConcept versus Gravy completed
+236 rounds. All nine distributed archives also passed complete container
+episodes from both seats. These are execution checks, not strength estimates.
+
+The initial archive release passed matches but failed hosted replay loading.
+The corrected release loads hosted HTTP/HTTPS artifacts and gates full
+certification. Exact IDs, policy versions, submissions, source commits, hosted
+match telemetry, and distribution limits are in
+[the verification receipt](fidelity-release-verification.json).
+
 ## Recommended external correction
 
 “Coleman is right: our displayed entries were partial strategy adaptations,
