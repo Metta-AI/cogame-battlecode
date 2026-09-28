@@ -68,7 +68,8 @@ jobs:
           for year in bc25 bc26; do
             uvx --from 'coworld[auth]==0.1.53' coworld upload-coworld \
               "official-coworld/$year/dist/coworld_manifest.json" --wait-hosted-smoke \
-              --hosted-smoke-timeout-seconds 1800
+              --hosted-smoke-timeout-seconds 1800 --wait-certification \
+              --certification-timeout-seconds 1800
           done
       - uses: actions/upload-artifact@v4
         if: always()

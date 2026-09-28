@@ -85,7 +85,8 @@ all terrain, paint, traps, or action animations available in the official client
 The local tool retains the complete official replay for the official client.
 
 The game serves `/healthz`, `/global` with RFC 6455 Ping/Pong, `/client/global`,
-`/client/replay`, and `/replay`. Scores are `[1,0]` or `[0,1]`, directly from the
+`/client/replay`, and `/replay`. Replay mode loads both local file URIs and
+hosted HTTP/HTTPS artifacts. Scores are `[1,0]` or `[0,1]`, directly from the
 official winner. Default maps are `AlarmClock` (2025) and `DefaultSmall` (2026);
 `game_config.map` can select other maps bundled in the pinned official engine.
 This is execution infrastructure, not a recreation of the original tournament

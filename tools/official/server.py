@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import unquote, urlparse
 
-from aiohttp import web
+from aiohttp import ClientSession, ClientTimeout, web
 from pydantic import BaseModel, ConfigDict, Field
 from runner import CATALOG, Frame, MatchResult, run_match
 
@@ -61,7 +61,14 @@ async def serve() -> None:
     replay_uri = os.environ.get("COGAME_LOAD_REPLAY_URI")
     replay: Replay | None = None
     if replay_uri:
-        replay = Replay.model_validate_json(local_path(replay_uri).read_text())
+        if urlparse(replay_uri).scheme in ("http", "https"):
+            async with ClientSession(timeout=ClientTimeout(total=60)) as client:
+                async with client.get(replay_uri) as response:
+                    response.raise_for_status()
+                    raw = await response.read()
+        else:
+            raw = local_path(replay_uri).read_bytes()
+        replay = Replay.model_validate_json(raw)
 
     async def health(request: web.Request) -> web.Response:
         return web.Response(text="ok\n")

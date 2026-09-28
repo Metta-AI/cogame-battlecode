@@ -7,7 +7,7 @@
   ],
   "game": {
     "name": "battlecode-2025-archives",
-    "description": "Complete licensed Battlecode 2025 archived Java implementations, running on the unmodified official engine. Original navigation, combat, communications, and generated neural policies execute. Selected archives are not necessarily independently verified finals artifacts. Separate from the native doctrine leagues.",
+    "description": "Complete licensed Battlecode 2025 archived Java implementations, running on the unmodified official engine. Original navigation, combat, communications, and generated tactics execute. Selected archives are not necessarily independently verified finals artifacts. Separate from the native doctrine leagues.",
     "owner": "daveey@gmail.com",
     "player_runtime": "game-hosted",
     "protocols": {
