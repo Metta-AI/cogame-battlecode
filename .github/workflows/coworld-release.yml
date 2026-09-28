@@ -49,6 +49,11 @@ on:
         required: false
         default: false
         type: boolean
+      submit_contenders:
+        description: "Promote uploaded registered adaptations in their existing leagues"
+        required: false
+        default: false
+        type: boolean
       secret_key_name:
         description: "Coworld secret key to write ANTHROPIC_API_KEY into"
         required: false
@@ -456,6 +461,14 @@ jobs:
                 f"{cow_id} canonical; reporting the upload's own verdict")
           PY
 
+      - name: Promote the registered adaptation policies
+        if: ${{ inputs.submit_contenders == true }}
+        run: |
+          echo "Promote the registered adaptation policies" > "$RR/current_step"
+          python3 -c 'import json, os; assert json.load(open(os.environ["RR"] + "/upload.json"))["canonical"] == "yes"'
+          uv run --no-project --with "$COWORLD_PKG" python -m unittest discover -s tools/ci -p 'test_submit_registered_adaptations.py'
+          uv run --no-project --with "$COWORLD_PKG" python tools/ci/submit_registered_adaptations.py "$RR"
+
       - name: Put the Coworld secret
         # AFTER upload-coworld: the secret namespace is the Coworld's.
         if: ${{ inputs.put_secret != false }}
@@ -608,6 +621,7 @@ jobs:
           path: |
             ${{ env.RR }}/certify.log
             ${{ env.RR }}/upload.log
+            ${{ env.RR }}/adaptation-submissions.json
             dist/coworld_manifest.json
           # warn, not error: with skip_certify=true, or on a failure before
           # `coworld build`, some of these legitimately do not exist and the

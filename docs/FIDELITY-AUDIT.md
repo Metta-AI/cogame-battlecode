@@ -59,6 +59,11 @@ resolution. It preserves leaderboard membership and history instead of creating
 eleven replacement players. A missing owner, independent rename, disabled player,
 or name collision stops the release before its first rename.
 
+The release's explicit `submit_contenders` option promotes exact uploaded policy
+versions under those registered identities. It checks ownership and current
+champions first, records a submission ledger, avoids duplicate submissions,
+and verifies unchanged league rosters and unrelated champions after placement.
+
 The [official runner](../tools/official/README.md) compiles complete pinned archive
 source directories and executes them using the published 2025/2026 engines.
 Om Nom uses its own Jinja generator in production mode; ProofOfConcept includes
@@ -72,9 +77,9 @@ verified final artifact identity. Preserve that qualification even when their
 complete source executes. Engine versions and map pools also affect comparisons.
 
 The separate `battlecode-2025-archives` and `battlecode-2026-archives` Coworlds
-use game-hosted JSON selectors for
-these complete implementations. It shares neither player artifacts nor rankings
-with the doctrine game. It supports these pinned archives, not arbitrary new
+use game-hosted JSON selectors for these complete implementations. They share
+neither player artifacts nor rankings with the doctrine game. They support
+these pinned archives, not arbitrary new
 competitor submissions. Nine licensed archives are distributed; SPAARK 2026
 and Old But Gold remain local audit targets because their pinned revisions lack
 license files. The observer replay exposes units and economy; the local
