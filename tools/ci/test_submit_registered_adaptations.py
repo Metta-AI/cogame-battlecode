@@ -7,9 +7,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import UUID
 
-from coworld.api_client import PolicyVersionRow
-
 import submit_registered_adaptations as submit
+from coworld.api_client import PolicyVersionRow
 
 
 class SubmissionTests(unittest.TestCase):

@@ -7,10 +7,10 @@ from uuid import UUID
 
 from coworld.api_client import CoworldApiClient, PolicyVersionPublic, PolicyVersionRow
 from pydantic import BaseModel, TypeAdapter
+from relabel_contenders import OwnedPlayer, Receipt
+
 from softmax._http import observatory_client
 from softmax.auth import DEFAULT_API_SERVER, load_user_token
-
-from relabel_contenders import OwnedPlayer, Receipt
 
 
 class LeagueReceipt(Receipt):
@@ -119,7 +119,7 @@ def main() -> None:
                         raise RuntimeError(f"An unrelated champion changed: {player_id}")
             if not pending:
                 print(
-                    "All released adaptations are active; both league player rosters and unrelated champions are preserved."
+                    "All released adaptations are active; league player rosters and unrelated champions are preserved."
                 )
                 break
             if time.monotonic() >= deadline:
