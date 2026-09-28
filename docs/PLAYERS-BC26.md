@@ -13,6 +13,11 @@ mining, carrying, formation, traps, dirt and communications reuse the native
 chassis. The doctrine settings are adaptation choices, not upstream constants.
 No tournament ranking or equivalent playing strength is claimed.
 
+The separate [archive runtime](../tools/official/README.md) executes complete
+selected implementations on the official engine. Five licensed 2026 archives
+are included in its published image. SPAARK and Old But Gold remain local audit
+targets because their pinned revisions have no license files.
+
 ProofOfConcept needs particular care: its archive contains generated neural
 policies and experiments without a clearly identified final submission. This
 entry adapts only `result_408`'s hand-written king production rule. **Its neural

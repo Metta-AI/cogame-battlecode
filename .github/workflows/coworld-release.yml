@@ -25,6 +25,14 @@ name: Coworld release
 on:
   workflow_dispatch:
     inputs:
+      runtime:
+        description: "Publish doctrine adaptations or the separate complete-archive Coworld"
+        required: false
+        default: doctrine
+        type: choice
+        options:
+          - doctrine
+          - official-archives
       version:
         description: "Coworld version to publish, MAJOR.MINOR.PATCH (e.g. 0.1.0)"
         required: true
@@ -38,6 +46,11 @@ on:
         type: string
       elevated_players:
         description: "Use team privileges to create named players and raise this account's league allowance"
+        required: false
+        default: false
+        type: boolean
+      submit_contenders:
+        description: "Promote uploaded registered adaptations in their existing leagues"
         required: false
         default: false
         type: boolean
@@ -95,7 +108,14 @@ env:
   LIVENESS_MARKER: "Replay liveness: skipped (static replay bundle declared"
 
 jobs:
+  official-archives:
+    if: ${{ inputs.runtime == 'official-archives' }}
+    uses: ./.github/workflows/official-archives-release.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets: inherit
   release:
+    if: ${{ inputs.runtime != 'official-archives' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -170,6 +190,8 @@ jobs:
           print(f"{len(rows)} policies: " + ", ".join(r["name"] for r in rows))
           PY
           python3 -m unittest discover -s tools/ci -p 'test_resolve_policy_players.py'
+          uv run --no-project --with "$COWORLD_PKG" python -m unittest discover -s tools/ci -p 'test_relabel_contenders.py'
+          uv run --no-project --with "$COWORLD_PKG" python tools/ci/relabel_contenders.py "$RR/policies_input.json"
           if [ "${{ inputs.elevated_players }}" = "true" ]; then
             uv run --no-project --with "$COWORLD_PKG" python tools/ci/prepare_contender_players.py "$RR/policies_input.json"
           else
@@ -189,6 +211,15 @@ jobs:
             --template coworld_manifest_template.json \
             --output dist/coworld_manifest.json
           test -s dist/coworld_manifest.json
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path('dist/coworld_manifest.json')
+          repo = 'https://github.com/Metta-AI/cogame-battlecode'
+          text = path.read_text().replace(repo + '/blob/main/', repo + '/blob/' + os.environ['GITHUB_SHA'] + '/')
+          text = text.replace(repo + '/tree/main', repo + '/tree/' + os.environ['GITHUB_SHA'])
+          path.write_text(text)
+          PY
 
       - name: Certify locally
         if: ${{ inputs.skip_certify != true }}
@@ -430,6 +461,14 @@ jobs:
                 f"{cow_id} canonical; reporting the upload's own verdict")
           PY
 
+      - name: Promote the registered adaptation policies
+        if: ${{ inputs.submit_contenders == true }}
+        run: |
+          echo "Promote the registered adaptation policies" > "$RR/current_step"
+          python3 -c 'import json, os; assert json.load(open(os.environ["RR"] + "/upload.json"))["canonical"] == "yes"'
+          uv run --no-project --with "$COWORLD_PKG" python -m unittest discover -s tools/ci -p 'test_submit_registered_adaptations.py'
+          uv run --no-project --with "$COWORLD_PKG" python tools/ci/submit_registered_adaptations.py "$RR"
+
       - name: Put the Coworld secret
         # AFTER upload-coworld: the secret namespace is the Coworld's.
         if: ${{ inputs.put_secret != false }}
@@ -582,6 +621,7 @@ jobs:
           path: |
             ${{ env.RR }}/certify.log
             ${{ env.RR }}/upload.log
+            ${{ env.RR }}/adaptation-submissions.json
             dist/coworld_manifest.json
           # warn, not error: with skip_certify=true, or on a failure before
           # `coworld build`, some of these legitimately do not exist and the

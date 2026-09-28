@@ -1,0 +1,7 @@
+services:
+  game:
+    image: cogame-battlecode-archives:latest
+    platform: linux/amd64
+    build:
+      context: ../..
+      dockerfile: tools/official/Dockerfile

@@ -6,8 +6,8 @@ type
 
 const
   ContenderNames25* = ["confused", "just-woke-up", "om-nom", "spaark-2025"]
-  ContenderLabels25* = ["confused (Nim)", "Just Woke Up (Nim)",
-                        "Om Nom (Nim)", "SPAARK (Nim)"]
+  ContenderLabels25* = ["confused (strategy adaptation)", "Just Woke Up (strategy adaptation)",
+                        "Om Nom (strategy adaptation)", "SPAARK (strategy adaptation)"]
   ContenderReplies25*: array[Contender25, string] = [
     """{"sheet":{"opening":"tower_rush","srp_priority":35,
       "paint_reserve_floor":25,"ruin_claim_radius":20,

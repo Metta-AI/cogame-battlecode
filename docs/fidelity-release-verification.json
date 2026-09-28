@@ -1,0 +1,505 @@
+{
+  "verified_at": "2026-09-28T18:01:05.503129+00:00",
+  "native": {
+    "bc25": {
+      "league_id": "league_7edecd14-58d2-4a23-aadb-491577a60935",
+      "active_champions": 10,
+      "original_player_ids_preserved": true,
+      "unrelated_champions_preserved": true,
+      "entries": [
+        {
+          "player_id": "ply_399e3b61-8a43-475c-bff9-37470103729f",
+          "name": "BC25 SPAARK (strategy adaptation)",
+          "policy": "battlecode-bc25-spaark-2025:v2",
+          "policy_version_id": "e48acb85-5717-4ceb-9ed6-dcff6396936d",
+          "membership_id": "lpm_5695b629-e58b-4e28-8818-27f1d114f985"
+        },
+        {
+          "player_id": "ply_2fa42aa7-e36b-4b22-b877-bb4469ae708c",
+          "name": "BC25 Om Nom (strategy adaptation)",
+          "policy": "battlecode-bc25-om-nom:v2",
+          "policy_version_id": "8119f6c8-010b-4757-adc7-63644a284d0c",
+          "membership_id": "lpm_2dc5a190-57bf-42f9-a1a9-916eaf021a6a"
+        },
+        {
+          "player_id": "ply_cbbbe94d-9f46-4839-a37e-8a9a4b39f327",
+          "name": "BC25 Just Woke Up (strategy adaptation)",
+          "policy": "battlecode-bc25-just-woke-up:v2",
+          "policy_version_id": "8033d4f3-536c-4545-9ff4-103c3cf0b54a",
+          "membership_id": "lpm_4ef4d533-3c89-4d21-ac88-82dd228b385a"
+        },
+        {
+          "player_id": "ply_4b350f10-0595-4f5d-85cb-ccf5ef853ac3",
+          "name": "BC25 confused (strategy adaptation)",
+          "policy": "battlecode-bc25-confused:v2",
+          "policy_version_id": "9888ab13-6948-4e6d-a5f7-2ba86ad0bca3",
+          "membership_id": "lpm_21ecfd22-2b02-4b53-8608-a5e75f25baab"
+        }
+      ]
+    },
+    "bc26": {
+      "league_id": "league_24414477-8c64-4a71-b643-f8a1ef148e29",
+      "active_champions": 14,
+      "original_player_ids_preserved": true,
+      "unrelated_champions_preserved": true,
+      "entries": [
+        {
+          "player_id": "ply_fb00c0f9-e83d-4748-88ab-e11392f76c3b",
+          "name": "BC26 Old But Gold (king economy adaptation)",
+          "policy": "battlecode-bc26-old-but-gold:v2",
+          "policy_version_id": "388573b4-19fc-47b1-b377-d52a704f8a6f",
+          "membership_id": "lpm_aa4ebd8b-b84f-4254-8b6a-0c9eac62b5dd"
+        },
+        {
+          "player_id": "ply_7e815219-119d-49c5-8c26-923c126b4e7f",
+          "name": "BC26 TSPAARK (king economy adaptation)",
+          "policy": "battlecode-bc26-tspaark:v2",
+          "policy_version_id": "59fdebd4-d4b1-48e8-8416-aef80e605349",
+          "membership_id": "lpm_ca0dc661-fae8-4623-9892-3c8e33f5b59a"
+        },
+        {
+          "player_id": "ply_9c87e34e-e536-4012-b4d5-a4aae3f65d5b",
+          "name": "BC26 The Complex Merlin (king economy adaptation)",
+          "policy": "battlecode-bc26-complex-merlin:v2",
+          "policy_version_id": "a68e87b2-7442-4edd-933a-76f8ff33229e",
+          "membership_id": "lpm_5c756d01-9414-434a-8881-36a1c048de39"
+        },
+        {
+          "player_id": "ply_0fdb3280-6f1f-4a33-8cc5-d84d20b13048",
+          "name": "BC26 Powerpuff Girls (king economy adaptation)",
+          "policy": "battlecode-bc26-powerpuff-girls:v2",
+          "policy_version_id": "5f9a3ef1-877f-4f5a-8874-1a429c21fff0",
+          "membership_id": "lpm_b6489716-6031-431c-9f49-51a29608a0ec"
+        },
+        {
+          "player_id": "ply_174b9f3e-006e-4def-9297-962af2f7cbf7",
+          "name": "BC26 Gravy (king economy adaptation)",
+          "policy": "battlecode-bc26-gravy:v2",
+          "policy_version_id": "57e2050c-a8f3-43c3-b0ba-aeec5c0997d6",
+          "membership_id": "lpm_87fef018-6308-461e-8f14-69097608ec39"
+        },
+        {
+          "player_id": "ply_e4ee1911-7f7c-47e4-a74c-318c00030419",
+          "name": "BC26 SPAARK (king economy adaptation)",
+          "policy": "battlecode-bc26-spaark:v2",
+          "policy_version_id": "3da569da-42f0-468f-9101-47a78fd89d33",
+          "membership_id": "lpm_216532cf-c246-42cd-9ce8-f302802de123"
+        },
+        {
+          "player_id": "ply_8883c8af-3feb-43d6-ad29-530dd0c896a4",
+          "name": "BC26 ProofOfConcept (king economy adaptation; no neural policy)",
+          "policy": "battlecode-bc26-proof-of-concept:v2",
+          "policy_version_id": "405e0f32-1cad-491e-a9c9-2f01e0d1233b",
+          "membership_id": "lpm_95e7fc10-d574-4495-a5b4-08411e4a43dc"
+        }
+      ]
+    },
+    "coworld": {
+      "id": "cow_e086f472-5cfa-4d9f-8e35-b4e0a177b11d",
+      "version": "0.11.10",
+      "canonical": true,
+      "manifest_hash": "sha256:2cb563b26714b7b6126e3110cc867dcc0d0c0d6daa1578da7e5d0ebc2bafe59f"
+    },
+    "source_commit": "1d06580e95fe7e447935239b0c1f083f72550e6e",
+    "release_run": "https://github.com/Metta-AI/cogame-battlecode/actions/runs/36458141851",
+    "submission_ledger": [
+      {
+        "league_id": "league_7edecd14-58d2-4a23-aadb-491577a60935",
+        "player_id": "ply_4b350f10-0595-4f5d-85cb-ccf5ef853ac3",
+        "policy_version_id": "9888ab13-6948-4e6d-a5f7-2ba86ad0bca3",
+        "policy": "battlecode-bc25-confused:v2",
+        "submission_ids": [
+          "sub_d82901d9-7ee7-4ee9-8586-8859b80e04b9"
+        ]
+      },
+      {
+        "league_id": "league_7edecd14-58d2-4a23-aadb-491577a60935",
+        "player_id": "ply_cbbbe94d-9f46-4839-a37e-8a9a4b39f327",
+        "policy_version_id": "8033d4f3-536c-4545-9ff4-103c3cf0b54a",
+        "policy": "battlecode-bc25-just-woke-up:v2",
+        "submission_ids": [
+          "sub_3b06bc82-0b56-431d-a6e7-cec3f03e3d76"
+        ]
+      },
+      {
+        "league_id": "league_7edecd14-58d2-4a23-aadb-491577a60935",
+        "player_id": "ply_2fa42aa7-e36b-4b22-b877-bb4469ae708c",
+        "policy_version_id": "8119f6c8-010b-4757-adc7-63644a284d0c",
+        "policy": "battlecode-bc25-om-nom:v2",
+        "submission_ids": [
+          "sub_b333ab64-e159-4b25-ad74-625d0f98cde9"
+        ]
+      },
+      {
+        "league_id": "league_7edecd14-58d2-4a23-aadb-491577a60935",
+        "player_id": "ply_399e3b61-8a43-475c-bff9-37470103729f",
+        "policy_version_id": "e48acb85-5717-4ceb-9ed6-dcff6396936d",
+        "policy": "battlecode-bc25-spaark-2025:v2",
+        "submission_ids": [
+          "sub_e86688d8-39c7-4131-8e83-ba9692756e7c"
+        ]
+      },
+      {
+        "league_id": "league_24414477-8c64-4a71-b643-f8a1ef148e29",
+        "player_id": "ply_8883c8af-3feb-43d6-ad29-530dd0c896a4",
+        "policy_version_id": "405e0f32-1cad-491e-a9c9-2f01e0d1233b",
+        "policy": "battlecode-bc26-proof-of-concept:v2",
+        "submission_ids": [
+          "sub_37323d9b-8294-4f39-94a7-f71d3a40039e"
+        ]
+      },
+      {
+        "league_id": "league_24414477-8c64-4a71-b643-f8a1ef148e29",
+        "player_id": "ply_e4ee1911-7f7c-47e4-a74c-318c00030419",
+        "policy_version_id": "3da569da-42f0-468f-9101-47a78fd89d33",
+        "policy": "battlecode-bc26-spaark:v2",
+        "submission_ids": [
+          "sub_1f3fdca9-1675-4a0c-8319-7423fea80f12"
+        ]
+      },
+      {
+        "league_id": "league_24414477-8c64-4a71-b643-f8a1ef148e29",
+        "player_id": "ply_174b9f3e-006e-4def-9297-962af2f7cbf7",
+        "policy_version_id": "57e2050c-a8f3-43c3-b0ba-aeec5c0997d6",
+        "policy": "battlecode-bc26-gravy:v2",
+        "submission_ids": [
+          "sub_589ca45f-e6b3-4006-beb5-4f2a7f4489ec"
+        ]
+      },
+      {
+        "league_id": "league_24414477-8c64-4a71-b643-f8a1ef148e29",
+        "player_id": "ply_0fdb3280-6f1f-4a33-8cc5-d84d20b13048",
+        "policy_version_id": "5f9a3ef1-877f-4f5a-8874-1a429c21fff0",
+        "policy": "battlecode-bc26-powerpuff-girls:v2",
+        "submission_ids": [
+          "sub_161421fa-10eb-4f6b-aa03-0aecfef1b626"
+        ]
+      },
+      {
+        "league_id": "league_24414477-8c64-4a71-b643-f8a1ef148e29",
+        "player_id": "ply_9c87e34e-e536-4012-b4d5-a4aae3f65d5b",
+        "policy_version_id": "a68e87b2-7442-4edd-933a-76f8ff33229e",
+        "policy": "battlecode-bc26-complex-merlin:v2",
+        "submission_ids": [
+          "sub_f6d142dd-d859-473f-886a-ebc8c1a2ff8b"
+        ]
+      },
+      {
+        "league_id": "league_24414477-8c64-4a71-b643-f8a1ef148e29",
+        "player_id": "ply_7e815219-119d-49c5-8c26-923c126b4e7f",
+        "policy_version_id": "59fdebd4-d4b1-48e8-8416-aef80e605349",
+        "policy": "battlecode-bc26-tspaark:v2",
+        "submission_ids": [
+          "sub_2ca5b61f-6a38-43ac-9fc3-bda45b246aa5"
+        ]
+      },
+      {
+        "league_id": "league_24414477-8c64-4a71-b643-f8a1ef148e29",
+        "player_id": "ply_fb00c0f9-e83d-4748-88ab-e11392f76c3b",
+        "policy_version_id": "388573b4-19fc-47b1-b377-d52a704f8a6f",
+        "policy": "battlecode-bc26-old-but-gold:v2",
+        "submission_ids": [
+          "sub_a67a0e40-0097-479b-a05d-327906d10dc0"
+        ]
+      }
+    ]
+  },
+  "archives": [
+    {
+      "id": "cow_656c65ea-9e48-4cb1-a239-639ced5976ca",
+      "name": "battlecode-2025-archives",
+      "version": "0.1.1",
+      "canonical": true,
+      "manifest_hash": "sha256:fbc47b54d46c5642427e0b42121906a91db4236ca4c361c02f2876f44cf5afc1",
+      "source_commit": "52309c257b12be2e5e9d27074e81e65e5de1dfea",
+      "certification": {
+        "coworld_id": "cow_656c65ea-9e48-4cb1-a239-639ced5976ca",
+        "state": "certified",
+        "certified": true,
+        "contract_version": "main-63dab97a4d55",
+        "certification_job_id": "c3593b2a-2ea5-4a71-820f-98757eb05c8f",
+        "failed_step": null,
+        "failure": null,
+        "transcript_summary": [
+          {
+            "id": "matriculate",
+            "status": "pass"
+          },
+          {
+            "id": "source-resolves",
+            "status": "pass"
+          },
+          {
+            "id": "images-reachable",
+            "status": "pass"
+          },
+          {
+            "id": "fixture-conforms",
+            "status": "pass"
+          },
+          {
+            "id": "smoke-episode",
+            "status": "pass"
+          },
+          {
+            "id": "results-conform",
+            "status": "pass"
+          },
+          {
+            "id": "replay-present",
+            "status": "pass"
+          },
+          {
+            "id": "replay-loadable",
+            "status": "pass"
+          },
+          {
+            "id": "players-run",
+            "status": "pass"
+          },
+          {
+            "id": "supporting-roles",
+            "status": "pass"
+          }
+        ],
+        "completed_at": "2026-09-28T17:52:13.394446Z"
+      },
+      "hosted_match_proof": [
+        {
+          "episode_request_id": "ereq_b34922ac-db5c-4677-ad15-98581db4728d",
+          "players": [
+            "bc25-confused",
+            "bc25-om-nom"
+          ],
+          "frames": 322,
+          "result": {
+            "winner": "A",
+            "rounds": 322,
+            "reason": "DESTROY_ALL_UNITS",
+            "width": 35,
+            "height": 35,
+            "bytecodes": [
+              36738149,
+              22806052
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "cow_5e054204-66a6-490f-ad51-72d0a1fb8af5",
+      "name": "battlecode-2026-archives",
+      "version": "0.1.1",
+      "canonical": true,
+      "manifest_hash": "sha256:277df8023ecb652f12cba5468d10daf680d0bad7c9ab77323191e3a8e50754df",
+      "source_commit": "52309c257b12be2e5e9d27074e81e65e5de1dfea",
+      "certification": {
+        "coworld_id": "cow_5e054204-66a6-490f-ad51-72d0a1fb8af5",
+        "state": "certified",
+        "certified": true,
+        "contract_version": "main-63dab97a4d55",
+        "certification_job_id": "4887ba07-6227-4c8f-b044-d968054d43c4",
+        "failed_step": null,
+        "failure": null,
+        "transcript_summary": [
+          {
+            "id": "matriculate",
+            "status": "pass"
+          },
+          {
+            "id": "source-resolves",
+            "status": "pass"
+          },
+          {
+            "id": "images-reachable",
+            "status": "pass"
+          },
+          {
+            "id": "fixture-conforms",
+            "status": "pass"
+          },
+          {
+            "id": "smoke-episode",
+            "status": "pass"
+          },
+          {
+            "id": "results-conform",
+            "status": "pass"
+          },
+          {
+            "id": "replay-present",
+            "status": "pass"
+          },
+          {
+            "id": "replay-loadable",
+            "status": "pass"
+          },
+          {
+            "id": "players-run",
+            "status": "pass"
+          },
+          {
+            "id": "supporting-roles",
+            "status": "pass"
+          }
+        ],
+        "completed_at": "2026-09-28T17:56:27.484905Z"
+      },
+      "hosted_match_proof": [
+        {
+          "episode_request_id": "ereq_90e10c43-3465-495a-8fc9-33d356a92831",
+          "players": [
+            "bc26-proofofconcept",
+            "bc26-gravy"
+          ],
+          "frames": 236,
+          "result": {
+            "winner": "B",
+            "rounds": 236,
+            "reason": "KILL_ALL_RAT_KINGS",
+            "width": 30,
+            "height": 30,
+            "bytecodes": [
+              66691469,
+              31798755
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "archive_release_run": "https://github.com/Metta-AI/cogame-battlecode/actions/runs/36458732423",
+  "distributed_archives": [
+    "bc25-confused",
+    "bc25-just-woke-up",
+    "bc25-om-nom",
+    "bc25-spaark",
+    "bc26-proofofconcept",
+    "bc26-gravy",
+    "bc26-powerpuff-girls",
+    "bc26-the-complex-merlin",
+    "bc26-tspaark"
+  ],
+  "excluded_from_distribution": [
+    "bc26-spaark",
+    "bc26-old-but-gold"
+  ],
+  "direct_original_matches": 11,
+  "archive_container_matches": [
+    {
+      "players": [
+        "bc25-confused",
+        "bc25-just-woke-up"
+      ],
+      "year": "bc25",
+      "rounds": 369,
+      "bytecodes": [
+        63121497,
+        31664182
+      ]
+    },
+    {
+      "players": [
+        "bc25-just-woke-up",
+        "bc25-om-nom"
+      ],
+      "year": "bc25",
+      "rounds": 448,
+      "bytecodes": [
+        96957893,
+        75173219
+      ]
+    },
+    {
+      "players": [
+        "bc25-om-nom",
+        "bc25-spaark"
+      ],
+      "year": "bc25",
+      "rounds": 433,
+      "bytecodes": [
+        92646990,
+        36377868
+      ]
+    },
+    {
+      "players": [
+        "bc25-spaark",
+        "bc25-confused"
+      ],
+      "year": "bc25",
+      "rounds": 400,
+      "bytecodes": [
+        30065229,
+        55476982
+      ]
+    },
+    {
+      "players": [
+        "bc26-gravy",
+        "bc26-powerpuff-girls"
+      ],
+      "year": "bc26",
+      "rounds": 223,
+      "bytecodes": [
+        20111635,
+        23204933
+      ]
+    },
+    {
+      "players": [
+        "bc26-powerpuff-girls",
+        "bc26-the-complex-merlin"
+      ],
+      "year": "bc26",
+      "rounds": 135,
+      "bytecodes": [
+        17850272,
+        20466848
+      ]
+    },
+    {
+      "players": [
+        "bc26-proofofconcept",
+        "bc26-gravy"
+      ],
+      "year": "bc26",
+      "rounds": 236,
+      "bytecodes": [
+        66691469,
+        31798755
+      ]
+    },
+    {
+      "players": [
+        "bc26-the-complex-merlin",
+        "bc26-tspaark"
+      ],
+      "year": "bc26",
+      "rounds": 180,
+      "bytecodes": [
+        27316249,
+        14323439
+      ]
+    },
+    {
+      "players": [
+        "bc26-tspaark",
+        "bc26-proofofconcept"
+      ],
+      "year": "bc26",
+      "rounds": 47,
+      "bytecodes": [
+        7909328,
+        6233436
+      ]
+    }
+  ],
+  "limitations": [
+    "Selected archive revisions are not independently verified finals artifacts.",
+    "SPAARK 2026 and Old But Gold lack license files at their pinned revisions and are excluded from distribution.",
+    "Hosted runtime accepts built-in archive selectors, not arbitrary new competitor source.",
+    "Observer browser replay omits terrain, paint, traps, and action animations.",
+    "Validation establishes complete archived-code execution, not tournament strength."
+  ]
+}

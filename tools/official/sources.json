@@ -1,0 +1,137 @@
+{
+  "engines": {
+    "bc25": {
+      "url": "https://releases.battlecode.org/maven/org/battlecode/battlecode25-java/3.1.0/battlecode25-java-3.1.0.jar",
+      "version": "3.1.0",
+      "sha256": "d0cc775610d5221fc17b23d818bc881bb3e882076a809696d15f8d380b09520b"
+    },
+    "bc26": {
+      "url": "https://releases.battlecode.org/maven/org/battlecode/battlecode26-java/1.2.5/battlecode26-java-1.2.5.jar",
+      "version": "1.2.5",
+      "sha256": "b9f39d19a2a0bccd35540039747bacd0412b6016b2ef64c39846395989f20488"
+    }
+  },
+  "players": [
+    {
+      "id": "bc25-confused",
+      "year": "bc25",
+      "repository": "https://github.com/battlecode-archive/2025-confused.git",
+      "revision": "bb21870cec74c9991c6a880cead3b24e5c0c7ac9",
+      "source": "java/src/finals",
+      "package": "finals",
+      "generate": false,
+      "redistributable": true,
+      "license_file": "LICENSE"
+    },
+    {
+      "id": "bc25-just-woke-up",
+      "year": "bc25",
+      "repository": "https://github.com/battlecode-archive/2025-Just-Woke-Up.git",
+      "revision": "ba5976b09bd230d43b8c87efc4c34a1680592202",
+      "source": "java/src/v57_Optimaler",
+      "package": "v57_Optimaler",
+      "generate": false,
+      "redistributable": true,
+      "license_file": "LICENSE"
+    },
+    {
+      "id": "bc25-om-nom",
+      "year": "bc25",
+      "repository": "https://github.com/battlecode-archive/2025-Om-Nom.git",
+      "revision": "bc2f945b13c78cfaf8331f59fabcd7e16d53c71f",
+      "source": "templates",
+      "package": "current",
+      "generate": true,
+      "redistributable": true,
+      "license_file": "LICENSE"
+    },
+    {
+      "id": "bc25-spaark",
+      "year": "bc25",
+      "repository": "https://github.com/battlecode-archive/2025-SPAARK.git",
+      "revision": "63165da768ad1e087e3f8e4f6ee84e1a51d3a014",
+      "source": "src/SPAARK",
+      "package": "SPAARK",
+      "generate": false,
+      "redistributable": true,
+      "license_file": "LICENSE"
+    },
+    {
+      "id": "bc26-proofofconcept",
+      "year": "bc26",
+      "repository": "https://github.com/battlecode-archive/2026-ProofOfConcept.git",
+      "revision": "efcfcdc9b2394d120c2245c7234725fe7af86814",
+      "source": "battlecode26/src/result_408",
+      "package": "result_408",
+      "generate": false,
+      "redistributable": true,
+      "license_file": "battlecode26/LICENSE"
+    },
+    {
+      "id": "bc26-spaark",
+      "year": "bc26",
+      "repository": "https://github.com/battlecode-archive/2026-SPAARK.git",
+      "revision": "a16431207623fa18c30e29b1ddf01e43276f31a1",
+      "source": "src/SPAARK",
+      "package": "SPAARK",
+      "generate": false,
+      "redistributable": false,
+      "license_file": ""
+    },
+    {
+      "id": "bc26-gravy",
+      "year": "bc26",
+      "repository": "https://github.com/battlecode-archive/2026-Gravy.git",
+      "revision": "f9c268abc53d235b09a767c407300ecdad66bfbf",
+      "source": "src/testplayer",
+      "package": "testplayer",
+      "generate": false,
+      "redistributable": true,
+      "license_file": "LICENSE"
+    },
+    {
+      "id": "bc26-powerpuff-girls",
+      "year": "bc26",
+      "repository": "https://github.com/battlecode-archive/2026-Powerpuff-Girls.git",
+      "revision": "91fdddbb1c015a2e8cd7ebcb8eebc8319b7ce06d",
+      "source": "src/Finals",
+      "package": "Finals",
+      "generate": false,
+      "redistributable": true,
+      "license_file": "LICENSE"
+    },
+    {
+      "id": "bc26-the-complex-merlin",
+      "year": "bc26",
+      "repository": "https://github.com/battlecode-archive/2026-The-Complex-Merlin.git",
+      "revision": "76fe3873ccf6bad4510ca151f6415ffb6629de18",
+      "source": "java/src/TheComplexMerlin",
+      "package": "TheComplexMerlin",
+      "generate": false,
+      "redistributable": true,
+      "license_file": "LICENSE"
+    },
+    {
+      "id": "bc26-tspaark",
+      "year": "bc26",
+      "repository": "https://github.com/battlecode-archive/2026-TSPAARK.git",
+      "revision": "64c3257a929f52c9824e60a330a7acf5a3670ef1",
+      "source": "src/Delta",
+      "package": "Delta",
+      "generate": false,
+      "redistributable": true,
+      "license_file": "LICENSE"
+    },
+    {
+      "id": "bc26-old-but-gold",
+      "year": "bc26",
+      "repository": "https://github.com/battlecode-archive/2026-Old-But-Gold.git",
+      "revision": "70b3f40cebefcca9dc858771715d78088e7ae520",
+      "source": "basic51",
+      "package": "basic51",
+      "generate": false,
+      "redistributable": false,
+      "license_file": ""
+    }
+  ]
+}

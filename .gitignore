@@ -2,6 +2,8 @@
 /battlecode
 /battlecode-player
 /dist/
+/official-coworld/**/dist/
+/official-coworld/smoke/
 /replay-viewer/dist/
 /static-replay-viewer/
 nimcache/
