@@ -1633,7 +1633,7 @@ proc decide*(
         user.add("\n\nYour previous reply was not usable. Reply with ONLY " &
           "the JSON object described above, starting with '{'.")
       let request = client.requestFor(
-        preambleFor(config.year), userMessage(seats[slot].prompt, user))
+        preambleFor(config.year), userMessage(seats[slot].prompt, user), slot)
       batch.post(request.url, request.headers, request.body, $slot)
     let batchStart = getMonoTime()
     ## ONE parallel batch. curly hands the deadline to CURLOPT_TIMEOUT, whose

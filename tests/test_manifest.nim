@@ -469,9 +469,8 @@ block:
     "/bin/battlecode")
   checkEq("the game image lives on the runnable",
     game["runnable"]["image"].getStr(), "{{GAME_IMAGE}}")
-  checkEq("the server-side LLM secret",
-    game["runnable"]["env"]["ANTHROPIC_API_KEY_URI"].getStr(),
-    "secret://coworld/battlecode/anthropic_api_key")
+  doAssert game{"runnable"}{"env"}{"ANTHROPIC_API_KEY_URI"}.isNil,
+    "hosted LLM uses the platform sidecar without provider secrets"
   checkEq("the replay viewer is the STATIC bundle",
     game["replay_viewer"]["bundle"].getStr(), "static-replay-viewer")
   ## Two declared baselines, both seated by the certification fixture, and
