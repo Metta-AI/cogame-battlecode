@@ -8,10 +8,10 @@ must refer to that player's own immutable policy version.
 
 | Display name | `PLAYER_SCRIPTED` | Policy name |
 | --- | --- | --- |
-| BC25 confused (Nim) | `confused` | `battlecode-bc25-confused` |
-| BC25 Just Woke Up (Nim) | `just-woke-up` | `battlecode-bc25-just-woke-up` |
-| BC25 Om Nom (Nim) | `om-nom` | `battlecode-bc25-om-nom` |
-| BC25 SPAARK (Nim) | `spaark-2025` | `battlecode-bc25-spaark-2025` |
+| BC25 confused (strategy adaptation) | `confused` | `battlecode-bc25-confused` |
+| BC25 Just Woke Up (strategy adaptation) | `just-woke-up` | `battlecode-bc25-just-woke-up` |
+| BC25 Om Nom (strategy adaptation) | `om-nom` | `battlecode-bc25-om-nom` |
+| BC25 SPAARK (strategy adaptation) | `spaark-2025` | `battlecode-bc25-spaark-2025` |
 
 The existing `spaark` controller remains the doctrine-driven hybrid used by LLM
 seats and old replays. `spaark-2025` is a new controller with the archived team's
@@ -68,7 +68,11 @@ spawn locations/tie order, and several emergency branches are not reproduced.
 Consequently, neither game outcomes nor tournament strength are claimed to
 match the originals. Full functional duplication remains further work requiring
 per-robot ports and differential action traces against pinned Java controllers.
-The `(Nim)` display suffix and policy notes identify these as adaptations.
+The `(strategy adaptation)` display suffix and policy notes identify these as adaptations.
+
+The separate [archive runtime](../tools/official/README.md) executes complete
+selected archived implementations on the official engine. It does not change
+these native players or establish their playing strength against the originals.
 
 ## Release and registration
 

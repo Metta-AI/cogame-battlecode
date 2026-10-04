@@ -1,0 +1,52 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Battlecode archived bots — official engine</title>
+<style>
+body { margin: 24px; background: #10151c; color: #e3eaf5; font: 16px system-ui; }
+canvas { width: min(80vw, 720px); height: min(80vw, 720px); background: #19232e; }
+button, input { margin: 8px; } #status { min-height: 48px; }
+</style>
+<h1>Battlecode archived bots</h1>
+<p>Complete archived code running on the official engine. No translated robot tactics.</p>
+<div id="status">Waiting for the match…</div>
+<canvas id="board" width="720" height="720"></canvas><br>
+<button id="pause">Pause</button><input id="seek" aria-label="Round" type="range" min="0" value="0">
+<script>
+const canvas = document.getElementById('board');
+const context = canvas.getContext('2d');
+const status = document.getElementById('status');
+const seek = document.getElementById('seek');
+let paused = false;
+let tick = 0;
+document.getElementById('pause').onclick = () => { paused = !paused; };
+seek.oninput = () => { tick = Number(seek.value); };
+async function start() {
+  let response = await fetch('/replay');
+  while (response.status === 425) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    response = await fetch('/replay');
+  }
+  if (!response.ok) throw new Error(`Replay HTTP ${response.status}`);
+  const replay = await response.json();
+  seek.max = replay.frames.length - 1;
+  setInterval(() => {
+    const frame = replay.frames[tick % replay.frames.length];
+    context.clearRect(0, 0, 720, 720);
+    const dx = 720 / replay.result.width;
+    const dy = 720 / replay.result.height;
+    for (const [id, team, type, x, y, hp] of frame.robots) {
+      context.fillStyle = team === 'A' ? '#65c8ff' : team === 'B' ? '#ff8c7c' : '#e2ce72';
+      const large = type.includes('TOWER') || type.includes('KING') || type === 'CAT';
+      const radius = (large ? 0.48 : 0.3) * Math.min(dx, dy);
+      context.beginPath();
+      context.arc((x + 0.5) * dx, (replay.result.height - y - 0.5) * dy, radius, 0, Math.PI * 2);
+      context.fill();
+    }
+    status.textContent = `${replay.year} · ${replay.players.join(' vs ')} · Round ${frame.round}/${replay.result.rounds} · Winner ${replay.result.winner} (${replay.result.reason})`;
+    canvas.dataset.round = String(frame.round);
+    seek.value = tick % replay.frames.length;
+    if (!paused) tick = (tick + 1) % replay.frames.length;
+  }, 80);
+}
+start();
+</script>

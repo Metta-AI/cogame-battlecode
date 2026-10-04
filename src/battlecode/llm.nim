@@ -11,7 +11,7 @@
 ## sends both observations together and collects the complete sheets.
 ##
 ## Credentials, in order of preference:
-##   Bedrock sidecar (AWS_ENDPOINT_URL_BEDROCK_RUNTIME + AWS_BEARER_TOKEN_BEDROCK)
+##   COWORLD_LLM_ENDPOINT (hosted), or local Bedrock bearer token
 ##   ANTHROPIC_API_KEY
 ##   ANTHROPIC_API_KEY_URI
 ## With none of them the player reports no_credentials; the game applies its
@@ -29,13 +29,14 @@ const
 
 type
   LlmTransport* = enum
-    ltNone, ltBedrock, ltAnthropic
+    ltNone, ltSidecar, ltBedrock, ltAnthropic
 
   LlmClient* = ref object
     curl*: Curly
     slot: int
     transport*: LlmTransport
     apiKey: string
+    sidecarEndpoint: string
     bedrockEndpoint: string
     bedrockModels: seq[string]
     bedrockModel: int
@@ -94,6 +95,13 @@ proc newLlmClient*(config: GameConfig, slot: int): LlmClient =
             else: "claude-haiku-4-5-20251001"),
     maxOutputTokens: max(1, config.maxOutputTokens)
   )
+  let sidecarEndpoint = getEnv("COWORLD_LLM_ENDPOINT").strip()
+  if sidecarEndpoint.len > 0:
+    result.transport = ltSidecar
+    result.sidecarEndpoint = sidecarEndpoint.strip(chars = {'/'}, leading = false)
+    result.model = getEnv("COWORLD_LLM_MODEL", "anthropic/claude-haiku-4.5")
+    result.curl = newCurly()
+    return
   let
     bedrockEndpoint = getEnv("AWS_ENDPOINT_URL_BEDROCK_RUNTIME").strip()
     bedrockToken = getEnv("AWS_BEARER_TOKEN_BEDROCK").strip()
@@ -138,12 +146,17 @@ proc requestFor*(
   }
   var headers: HttpHeaders
   headers["content-type"] = "application/json"
-  if client.transport == ltBedrock:
+  if client.transport in {ltSidecar, ltBedrock}:
     headers["X-Coworld-Player-Slot"] = $client.slot
+  if client.transport == ltBedrock:
     body["anthropic_version"] = %BedrockAnthropicVersion
     if client.bedrockToken.len > 0:
       headers["authorization"] = "Bearer " & client.bedrockToken
     result.url = client.bedrockUrl()
+  elif client.transport == ltSidecar:
+    body["model"] = %client.model
+    headers["anthropic-version"] = AnthropicVersion
+    result.url = client.sidecarEndpoint & "/v1/messages"
   else:
     body["model"] = %client.model
     ## Only the Claude 5 / Opus tiers accept an effort setting; Haiku 4.5
