@@ -8,7 +8,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      network: host
   player:
     image: cogame-battlecode-player:latest
     platform: linux/amd64
@@ -16,4 +15,3 @@ services:
       context: .
       dockerfile: Dockerfile
       target: player
-      network: host
