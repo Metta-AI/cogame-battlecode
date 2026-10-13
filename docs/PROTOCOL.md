@@ -1,99 +1,58 @@
 # `cogame.battlecode.v1`
 
-## The player container
+## The player container and private doctrine exchange
 
-`/bin/battlecode-player` reads `COWORLD_PLAYER_WS_URL` (legacy alias
-`COGAMES_ENGINE_WS_URL`), dials its seat with a bounded retry
-(240 × 500 ms), sends **one** registration blob and then only receives until
-the socket closes, then exits **0** — a dead socket must exit 0, not raise.
-
-```json
-{"type":"register","slot":0,"prompt":"<PLAYER_PROMPT or empty>",
- "scripted":"awu"|"scaffold"|null,"policy":"<PLAYER_POLICY_LABEL>"}
-```
-
-sent as a Sprite v1 chat blob — a **binary** frame. The server does **not**
-filter non-text frames, and it keeps its `Ping → Pong` branch. `slot` rides in
-the blob, read by the player from its own socket URL, so the server never has
-to derive a seat from connection order.
-
-A seat that sets neither env var is `awu`. A seat whose registration never
-arrives is logged loudly, reported to `COGAME_PLAYER_FAILURE_URI`, and plays
-the scripted doctrine.
-
-## The doctrine exchange (server-side)
-
-Every decision happens inside the **game** container, because that is the only
-container the platform injects the `anthropic_api_key` coworld secret into,
-and because keeping the control layer server-side is what makes a recorded
-doctrine reproducible with no network in the loop.
-
-There is exactly **one decision turn per episode**, and both seats' provider
-calls are issued as **ONE parallel batch** (`curly.makeRequests`) with the same
-deadline. Seats are never queried one after another.
-
-The "observation" is the brief the server composes per seat:
+The platform starts one player container per seat and provides its own
+`COWORLD_PLAYER_WS_URL`. The player registers on `/player` with a Sprite v1
+binary chat frame. The WebSocket URL's validated slot and token bind its
+identity; a claimed slot inside a message cannot choose another seat.
 
 ```json
-{"protocol":"cogame.battlecode.v1","game_version":"GV03","year":"bc26",
- "slot":0,"alias":"Clan Ash","opponent_alias":"Clan Basil","team":"A",
- "seed":871345,
- "games":[{"map":"DefaultSmall","width":30,"height":30,"symmetry":"rotational",
-           "cheese_mines":4,"cats":2,"rounds":2000,"you_are":"A"}, …],
- "scoring":{"cooperation":{"cat_damage":0.5,"kings":0.3,"cheese":0.2},
-            "backstab":{"cat_damage":0.3,"kings":0.5,"cheese":0.2},
-            "win_bonus_per_game":100,"games":3,
-            "note":"shares are float32; points truncate to an integer"},
- "budget":{"attempt1_ms":20000,"retry_ms":12000,"one_shot":true}}
+{"type":"register","slot":0,"scripted":"awu","policy":"awu"}
 ```
 
-**Visible:** everything above — own alias and side, all the map cards, the
-seed, both weight sets, the full knob surface with defaults (in the system
-preamble), the deadlines.
+`scripted` selects the game's fixed chassis for a bundled baseline. An ordinary
+prompt, trained, or Jev player omits it and receives the year's champion
+chassis. The chassis is never a doctrine knob. A missing registration uses the
+year's default baseline and is reported as a seat failure.
 
-**Hidden:** the opponent's doctrine, sheet, notes and motto (sealed and
-simultaneous — never sent, in either direction, at any time); the opponent's
-real player name (only the alias); every in-match state (a cog receives **no**
-per-round observation — one sealed doctrine, then the war); the other seat's
-fallback status. The only cross-clan channel in the match is the sim's own
-squeaks and positions between robots.
-
-## Reply schema and caps
+The game constructs both sealed briefs from the same match plan and sends one
+observation to each socket. Neither player sees the other's doctrine or
+policy secret. The game sends the requests concurrently and waits under the
+`attempt1Ms`, `retryMs`, and `doctrineBudgetMs` limits.
 
 ```json
-{"sheet":{"backstab_policy":"at_round_N","backstab_round":700,
-          "cat_engagement":"hunt","cat_trap_budget":60,"rat_trap_budget":80,
-          "spawn_curve":"swarm","cheese_ferry_ratio":0.4,"king_count_target":4,
-          "dirt_wall_policy":"king_shell","throw_rats_to_feed_cats":false},
- "notes":"Farm cats to 700, then take their kings.",
- "motto":"Trust, briefly."}
+{"type":"observation","request_id":1,"slot":0,"year":"bc26",
+ "brief":{"protocol":"cogame.battlecode.v1","team":"A"},
+ "preamble":"<public year rules and sheet schema>",
+ "attempt":1,"deadline_ms":20000,"max_output_tokens":1200}
 ```
 
-| field | cap | on violation |
-| --- | --- | --- |
-| whole reply | 16 KB | unparseable → retry once → scripted doctrine |
-| model output cap sent as `max_tokens` | `maxOutputTokens` (1 200; bc19 **3 000**) | the reply stops mid-structure and reads as unparseable JSON |
-| `sheet` | ≤ 32 keys, each value type- and range-checked | bad field → that field's default |
-| `notes` | **280 runes** | truncated |
-| `motto` | **48 runes** | truncated |
-| unknown sheet keys recorded | ≤ 16 keys, each ≤ 40 runes | truncated |
-| provider error text stored in the replay | **200 runes** | truncated |
+The player replies with a complete doctrine envelope on the same socket. A
+scripted player sends its baseline sheet. A prompt player makes its own model
+call with policy-scoped credentials and attributes a Bedrock sidecar call to
+`X-Coworld-Player-Slot`. Other images can implement trained or Jev decisions
+using the same observation and action protocol.
 
-The assistant turn is **prefilled with `{`** and the prefix re-attached before
-parsing.
+```json
+{"type":"action","request_id":1,
+ "reply":"{\"sheet\":{\"backstab_policy\":\"at_round_N\"},\"notes\":\"...\",\"motto\":\"...\"}",
+ "cause":""}
+```
 
-## Degrade, never hang
+The game parses every reply with its year-specific validator, applies field
+defaults, fixes the chassis, resolves the match, and writes results and replay.
+An unreadable or missing reply gets one retry, then the year's scripted
+fallback. A credential-free prompt sends `cause: no_credentials` and takes
+that fallback immediately. The game never receives a model credential or
+strategy prompt. Results retain one fallback cause per unresolved seat.
 
-| failure | response |
-| --- | --- |
-| no reply within `attempt1Ms` (20 000; bc19 40 000) | one retry with `retryMs` (12 000; bc19 24 000), logged `will retry` |
-| second failure, unparseable JSON, or a throttle with no other candidate model | that seat plays its **scripted doctrine**, `results.fallbacks[seat] = 1`, a `doctrine_fallback` event names the cause, the log says `falling back` |
-| the phase exceeds `doctrineBudgetMs` (45 000; bc19 75 000) | whatever is unresolved takes the scripted doctrine; the match starts anyway |
-| a sheet field is unknown, mistyped or out of range | that field alone takes its default |
-| a seat never registers | it plays the scripted doctrine, is reported to `COGAME_PLAYER_FAILURE_URI`, and the server logs **loudly** |
-| a game exceeds `perGameBudgetSeconds`, or the match exceeds `matchBudgetSeconds` | the running game is abandoned, finished games are scored, `results.reason = deadline` |
-| the match finishes early (a side takes 2 games) | the episode settles immediately — no padding |
-| no credentials at all | the LLM client disables itself at construction; both seats are scripted and the episode completes in seconds |
+The whole reply is capped at 16 KB. `sheet` has at most 32 known keys; wrong
+types and values take their field defaults. `notes` is capped at 280 runes,
+`motto` at 48, and diagnostic detail at 200. The opponent's sheet remains
+sealed throughout the episode; no per-round observations are sent.
+After writing results and replay, the game sends `{"type":"final","reason":"complete"}`
+to connected players so one-turn policies can exit cleanly.
 
 ## Budget
 
@@ -102,7 +61,7 @@ caps and the worst case is **435 s**:
 
 ```
 container start, map load, seat connect              <=  30 s
-doctrine: ONE parallel batch of 2 LLM calls          <=  45 s
+doctrine: concurrent player socket decisions          <=  45 s
 match: 3 games x 2000 rounds                         <= 330 s
 score + replay write + shutdown grace                <=  30 s
                                                        ------
@@ -552,10 +511,10 @@ never honoured.
 
 ### `sheet_envelope`
 
-Every year's `results.games[]`/replay now carries a `sheet_envelope` object —
-the year-neutral resolver in `src/battlecode/sheet.nim` — recording, per seat,
-how the reply was obtained (`llm`, `fallback`, `scripted`), how many fields
-were defaulted, how many clamped and how many were unknown. It is in the bc22
+Every year's `results.games[]`/replay now carries a `sheet_envelope` value —
+the year-neutral resolver in `src/battlecode/sheet.nim` records whether the
+reply used `sheet`, `doctrine`, or another accepted envelope. The replay also
+records how many fields were defaulted, clamped, or unknown. It is in the bc22
 manifest's `required` list and in `tools/ci/docker_smoke.sh`'s `CLOSED_KEYS`,
 so a year that stops emitting it fails the smoke.
 

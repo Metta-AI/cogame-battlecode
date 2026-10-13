@@ -11,7 +11,7 @@ type
   SeatReport* = object
     name*: string
     alias*: string
-    policyKind*: string       ## "llm" | "scripted"
+    policyKind*: string       ## "player" | "scripted"
     sheet*: Sheet
     decisionMs*: int
     fallback*: string         ## "" when the seat's own doctrine was used

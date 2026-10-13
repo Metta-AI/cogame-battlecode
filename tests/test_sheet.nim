@@ -2,7 +2,7 @@
 ## unknown keys recorded and ignored; and RUNE-boundary truncation of
 ## `notes`/`motto` including astral-plane characters.
 
-import std/[json, os, strutils, unicode]
+import std/[json, strutils, unicode]
 import harness
 import battlecode/[baselines, decide, match, sheet, sim_types]
 
@@ -248,52 +248,28 @@ block:
     parseChassis(s.toJson(){"chassis"}.getStr()), chScaffold)
   check("plain words describe every sheet", s.plainWords().len >= 6)
 
-# --- the decision layer records ONE fallback per seat, naming its cause -----
+# --- ordinary player replies use the game validator and fallback ------------
 block:
-  ## A provider that cannot be reached at all (a closed local port -- no
-  ## network is touched): attempt 1 fails, and by the time the retry is
-  ## considered the 1 ms phase budget is spent. Whichever of the two paths
-  ## fires, the invariant is the same and it is what N3 broke: EXACTLY ONE
-  ## `doctrine_fallback` per seat, and the cause the seat keeps is the cause
-  ## the event names. Leaving the budget-timeout seats in `open` recorded a
-  ## second event for the same seat and left "parse" in `results`/the replay
-  ## for what was really a timeout.
-  putEnv("AWS_ENDPOINT_URL_BEDROCK_RUNTIME", "http://127.0.0.1:1")
-  putEnv("AWS_BEARER_TOKEN_BEDROCK", "test-not-a-real-token")
   var config = defaultGameConfig()
   config.pool = "small"
   config.gamesPerMatch = 1
-  config.attempt1Ms = 1000
-  config.retryMs = 1000
-  config.doctrineBudgetMs = 1
-  let sheets = [baselineSheet(blAwu), baselineSheet(blScaffold)]
-  let plan = buildPlan(config, sheets, 11)
-  var seats: array[2, SeatPolicy]
-  for slot in 0 .. 1:
-    seats[slot] = SeatPolicy(isLlm: true, prompt: "doctrine, please",
-      registered: true)
-  let decision = decide(config, plan, seats)
-  delEnv("AWS_ENDPOINT_URL_BEDROCK_RUNTIME")
-  delEnv("AWS_BEARER_TOKEN_BEDROCK")
-  for slot in 0 .. 1:
-    var causes: seq[string]
-    for e in decision.events:
-      if e.kind == "doctrine_fallback" and e.fields{"slot"}.getInt(-1) == slot:
-        causes.add(e.fields{"cause"}.getStr())
-    checkEq("seat " & $slot & " records exactly one doctrine_fallback",
-      causes.len, 1)
-    if causes.len == 1:
-      checkEq("and the cause it keeps is the cause the event names",
-        decision.fallback[slot], causes[0])
-    check("and the seat still has a legal doctrine",
-      decision.sheets[slot].plainWords().len >= 6)
-    ## r1-N10: the observation and the provider's own words are kept, so the
-    ## replay can record them.
-    check("the composed prompt payload is kept",
-      decision.briefs[slot].contains("opponent_alias"))
-    check("and the provider's own words, within the 200-rune cap",
-      decision.fallbackDetail[slot].len > 0 and
-      decision.fallbackDetail[slot].runeLen <= MaxFallbackDetailRunes)
+  let plan = buildPlan(config, [baselineSheet(blAwu),
+    baselineSheet(blScaffold)], 11)
+  let seats = [SeatPolicy(registered: true, label: "trained"),
+    SeatPolicy(registered: true, label: "jev")]
+  let actions = [PlayerAction(reply: "{\"sheet\":{\"cat_engagement\":\"hunt\"}}",
+    received: true, latencyMs: 7),
+    PlayerAction(reply: "invalid", received: true)]
+  let decision = decide(config, plan, seats, actions)
+  checkEq("first ordinary action is accepted", decision.fallback[0], "")
+  checkEq("and retains its latency", decision.decisionMs[0], 7)
+  checkEq("malformed second action falls back", decision.fallback[1], "parse")
+  check("both private briefs are recorded",
+    decision.briefs[0].contains("opponent_alias") and
+    decision.briefs[1].contains("opponent_alias"))
+  check("fallback retains a legal doctrine",
+    decision.sheets[1].plainWords().len >= 6)
+  checkEq("one fallback event is recorded", decision.events.len, 2)
 
 # --- THE YEAR-NEUTRAL ENVELOPE RESOLVER, from the other side ----------------
 block:

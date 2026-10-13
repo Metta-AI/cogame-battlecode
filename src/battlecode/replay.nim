@@ -43,9 +43,7 @@ type
     result*: JsonNode
     plan*: MatchPlan
     promptPreamble*: string
-      ## The system half of the doctrine prompt — identical for both seats, so
-      ## recorded once here and the per-seat half in `seats[].prompt`. Empty
-      ## when no seat ever composed one (an all-scripted episode).
+      ## Public year rules sent to both players, recorded once here.
 
 proc sha256Hex*(data: string): string =
   ## The provenance tag on each converted map, so a viewer can prove it is
@@ -79,8 +77,7 @@ proc seatJson(seat: SeatReport, slot: int): JsonNode =
     "motto": seat.sheet.motto,
     "decision_ms": seat.decisionMs
   }
-  ## The observation, verbatim: decisions are taken server-side, so the prompt
-  ## payload the server composed for this seat IS what the seat saw.
+  ## Keep the private brief sent to this player for postgame replay.
   if seat.brief.len > 0:
     result["prompt"] =
       try: parseJson(seat.brief) except CatchableError: %seat.brief

@@ -52,6 +52,7 @@
 #                              PLAYER_SCRIPTED values resolve per year to
 #                              bowl-of-chowder and examplefuncsplayer.
 #                              (empty = the certification fixture's seats)
+#   SMOKE_EXPECT_FALLBACKS     expected count of fallback seats (default 0)
 #   SMOKE_EXPECT_YEAR          if set, results.year and the replay's year must
 #                              equal it (empty)
 #   SMOKE_REQUIRE_STATS        a JSON object of {"<results.games[0] key>":
@@ -66,9 +67,9 @@
 #                              job loads it in a real browser -- that is the
 #                              only replay in CI that is known to be readable
 #                              by this game's own viewer.
-#   ANTHROPIC_API_KEY          if set, forwarded to the game so the LLM path
-#                              is exercised; if unset the game must fall back
-#                              to its scripted baselines and still complete
+#   ANTHROPIC_API_KEY          if set, forwarded only to player containers.
+#                              Prompt players without it report no_credentials;
+#                              the game applies its scripted fallback.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -88,6 +89,7 @@ require_replay_json="${SMOKE_REQUIRE_REPLAY_JSON:-1}"
 replay_out="${SMOKE_REPLAY_OUT:-${repo_dir}/dist/smoke/replay.json}"
 config_override="${SMOKE_CONFIG_OVERRIDE:-}"
 player_ids="${SMOKE_PLAYER_IDS:-}"
+expect_fallbacks="${SMOKE_EXPECT_FALLBACKS:-0}"
 expect_year="${SMOKE_EXPECT_YEAR:-}"
 require_stats="${SMOKE_REQUIRE_STATS:-}"
 
@@ -263,12 +265,12 @@ chmod 777 "${work_dir}"
 # --------------------------------------------------------------------------
 docker network create "${network}" >/dev/null
 
-game_env=()
+player_model_env=()
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-  game_env+=(-e "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}")
-  echo "ANTHROPIC_API_KEY present: the LLM path will be exercised"
+  player_model_env+=(-e ANTHROPIC_API_KEY)
+  echo "ANTHROPIC_API_KEY present: only player containers may use it"
 else
-  echo "no ANTHROPIC_API_KEY: the game must complete on its scripted baselines"
+  echo "no ANTHROPIC_API_KEY: prompt players use game-owned fallback"
 fi
 
 echo "starting game container (${image} ${game_bin}) ..."
@@ -281,7 +283,6 @@ docker run -d --name "${prefix}-game" \
   -e COGAME_RESULTS_URI=file:///coworld/results.json \
   -e COGAME_SAVE_REPLAY_URI=file:///coworld/replay.json \
   -e COGAME_PLAYER_FAILURE_URI=file:///coworld/player_failure.json \
-  ${game_env[@]+"${game_env[@]}"} \
   -v "${work_dir}:/coworld:rw" \
   "${image}" "${game_bin}" >/dev/null
 
@@ -334,6 +335,7 @@ for ((slot = 0; slot < seats; slot++)); do
   eval "pcmd=( $(cat "${work_dir}/cmd-${slot}.args") )"
   docker run -d --name "${prefix}-p${slot}" --network "${network}" \
     -e COWORLD_PLAYER_WS_URL="ws://${prefix}-game:${port}/player?slot=${slot}&token=token-${slot}" \
+    ${player_model_env[@]+"${player_model_env[@]}"} \
     ${penv[@]+"${penv[@]}"} \
     "${image}" ${pcmd[@]+"${pcmd[@]}"} >/dev/null
 done
@@ -390,7 +392,7 @@ echo "all ${seats} player containers exited 0"
 # --------------------------------------------------------------------------
 # Assert the artifacts.
 # --------------------------------------------------------------------------
-if ! python3 - "${work_dir}" "${seats}" "${require_replay_json}" "${expect_year}" "${require_stats}" <<'PY'
+if ! python3 - "${work_dir}" "${seats}" "${require_replay_json}" "${expect_year}" "${require_stats}" "${expect_fallbacks}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -400,6 +402,7 @@ seats = int(sys.argv[2])
 require_replay_json = sys.argv[3] not in ("0", "", "false", "no")
 expect_year = sys.argv[4] if len(sys.argv) > 4 else ""
 require_stats = sys.argv[5] if len(sys.argv) > 5 else ""
+expect_fallbacks = int(sys.argv[6])
 
 failure = work / "player_failure.json"
 if failure.exists():
@@ -445,9 +448,9 @@ if results["reason"] != "complete":
     raise SystemExit(
         f"the smoke episode must complete on its scripted baselines; "
         f"reason was {results['reason']!r}")
-if results["fallbacks"] != [0] * seats:
+if sum(results["fallbacks"]) != expect_fallbacks:
     raise SystemExit(
-        f"a scripted seat reported a fallback: {results['fallbacks']!r}")
+        f"expected {expect_fallbacks} fallback seats, got {results['fallbacks']!r}")
 if expect_year and results.get("year") != expect_year:
     raise SystemExit(
         f"results.year is {results.get('year')!r}, expected {expect_year!r}")

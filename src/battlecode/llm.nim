@@ -1,5 +1,5 @@
-## Claude-backed doctrine. A policy is just a prompt: the game server composes
-## each seat's brief and asks Claude for that clan's doctrine sheet.
+## Player-side Claude transport for an ordinary doctrine policy.
+## The game supplies the private brief; this module runs only in the player.
 ##
 ## Ported from `coworld-ctf/src/ctf/llm.nim` behaviour for behaviour — the
 ## credential ladder, the single Bedrock candidate, the fence-tolerant JSON
@@ -7,17 +7,15 @@
 ## all that file's, because they are all scar tissue from real hosted
 ## failures.
 ##
-## Battlecode has exactly ONE decision turn per episode, and both seats' calls
-## go out as ONE parallel batch (`curly.makeRequests`, `decide.nim`). Seats
-## are never queried one after another.
+## Each player independently answers its own one-turn observation. The game
+## sends both observations together and collects the complete sheets.
 ##
 ## Credentials, in order of preference:
 ##   COWORLD_LLM_ENDPOINT (hosted), or local Bedrock bearer token
 ##   ANTHROPIC_API_KEY
 ##   ANTHROPIC_API_KEY_URI
-## With none of them the client disables itself and both seats fall back to
-## their scripted doctrine INSTANTLY, which is what lets offline certification
-## finish in seconds.
+## With none of them the player reports no_credentials; the game applies its
+## scripted fallback without waiting for an inference timeout.
 
 import std/[json, os, strutils]
 import bitworld/runtime
@@ -35,6 +33,7 @@ type
 
   LlmClient* = ref object
     curl*: Curly
+    slot: int
     transport*: LlmTransport
     apiKey: string
     sidecarEndpoint: string
@@ -89,8 +88,9 @@ proc bedrockUrl(client: LlmClient): string =
   client.bedrockEndpoint & "/model/" &
     client.bedrockModels[client.bedrockModel] & "/invoke"
 
-proc newLlmClient*(config: GameConfig): LlmClient =
+proc newLlmClient*(config: GameConfig, slot: int): LlmClient =
   result = LlmClient(
+    slot: slot,
     model: (if config.model.len > 0: config.model
             else: "claude-haiku-4-5-20251001"),
     maxOutputTokens: max(1, config.maxOutputTokens)
@@ -132,7 +132,7 @@ proc newLlmClient*(config: GameConfig): LlmClient =
       "every seat is falling back to the scripted doctrine"
 
 proc requestFor*(
-  client: LlmClient, system, user: string, slot: int
+  client: LlmClient, system, user: string
 ): tuple[url: string, headers: HttpHeaders, body: string] =
   ## One Messages-API request. The assistant turn is PREFILLED with `{` and
   ## the prefix re-attached before parsing (the procgen 0.1.2 scar).
@@ -146,8 +146,8 @@ proc requestFor*(
   }
   var headers: HttpHeaders
   headers["content-type"] = "application/json"
-  if client.transport == ltSidecar and slot >= 0:
-    headers["X-Coworld-Player-Slot"] = $slot
+  if client.transport in {ltSidecar, ltBedrock}:
+    headers["X-Coworld-Player-Slot"] = $client.slot
   if client.transport == ltBedrock:
     body["anthropic_version"] = %BedrockAnthropicVersion
     if client.bedrockToken.len > 0:
