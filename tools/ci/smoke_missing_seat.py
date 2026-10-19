@@ -33,7 +33,9 @@ def main():
                             [player], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,
                             env={**os.environ, "PLAYER_SCRIPTED": "awu",
                                  "COWORLD_PLAYER_WS_URL": f"ws://127.0.0.1:18971/player?slot={slot}"}))
-                    assert server.wait(timeout=30) == 0
+                    status = server.wait(timeout=30)
+                    log.flush()
+                    assert status == 0, f"game exited {status}:\n{(output / 'game.log').read_text()}"
                     if seat_count == 1:
                         assert json.loads(failure.read_text()) == {
                             "failed_policy_index": 1, "message": "seat never registered"}
