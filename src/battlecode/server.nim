@@ -235,10 +235,9 @@ proc websocketHandler(
 #  The episode
 # ---------------------------------------------------------------------------
 
-proc waitForSeats(config: GameConfig) =
-  ## Bounded: `connectTimeoutMs`, then play anyway. A seat that never
-  ## registers plays the scripted doctrine, and the server says so LOUDLY
-  ## rather than defaulting in silence (the grf-football scar).
+proc waitForSeats(config: GameConfig): bool =
+  ## Missing required seats terminate the episode instead of submitting a
+  ## match played by replacement scripted doctrines.
   let deadline = getMonoTime() + initDuration(
     milliseconds = max(1000, config.connectTimeoutMs))
   while getMonoTime() < deadline:
@@ -247,23 +246,27 @@ proc waitForSeats(config: GameConfig) =
       withLock app.lock:
         for slot in 0 .. 1:
           if not app.registered[slot]: ready = false
-    if ready: return
+    if ready: return true
     sleep(100)
   {.gcsafe.}:
     withLock app.lock:
       for slot in 0 .. 1:
         if not app.registered[slot]:
           echo "::warning::battlecode: seat ", slot,
-            " never registered within ", config.connectTimeoutMs,
-            " ms; it plays the scripted doctrine"
+            " never registered within ", config.connectTimeoutMs, " ms"
           let uri = getEnv("COGAME_PLAYER_FAILURE_URI")
           if uri.len > 0:
-            try:
-              writeCogameUri(uri, $(%*{"slot": slot,
-                "reason": "seat never registered"}), "application/json",
+            let declaration = $(%*{"failed_policy_index": slot,
+              "message": "seat never registered"})
+            if uri.startsWith("file://"):
+              writeCogameUri(uri & ".tmp", declaration, "application/json",
                 "COGAME_PLAYER_FAILURE_URI")
-            except CatchableError as error:
-              echo "battlecode: could not report the seat failure: ", error.msg
+              moveFile(uri[7 .. ^1] & ".tmp", uri[7 .. ^1])
+            else:
+              writeCogameUri(uri, declaration, "application/json",
+                "COGAME_PLAYER_FAILURE_URI")
+          return false
+  true
 
 proc parseConfig*(text: string): GameConfig =
   result = defaultGameConfig()
@@ -334,7 +337,7 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
   var simSeconds = 0.0
 
   setPhase("waiting for seats")
-  waitForSeats(config)
+  if not waitForSeats(config): return
 
   var policy: array[2, SeatPolicy]
   {.gcsafe.}:
