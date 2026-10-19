@@ -680,11 +680,11 @@ jobs:
             echo "::error::expected all 70 .map17 files to parse, got ${parsed}"
             exit 1; }
 
-      - name: The GameVersion does not collide with main's
+      - name: The GameVersion does not collide with the target branch's
         if: github.ref != 'refs/heads/main'
         run: |
           set -euo pipefail
-          git fetch --depth=1 origin main
+          git fetch --depth=1 origin "${GITHUB_BASE_REF:-main}"
           tools/ci/check_gameversion.sh FETCH_HEAD HEAD
 
       # The manifest is validated by the CLI THAT WILL PUBLISH IT, not only
