@@ -277,8 +277,8 @@ jobs:
 
       - name: Verify missing-seat failure and healthy gameplay
         run: |
-          nim c -d:release --threads:on --out:/tmp/battlecode-seat-smoke src/battlecode.nim
-          nim c -d:release --out:/tmp/battlecode-player-seat-smoke src/battlecode_player.nim
+          nim c -d:release -d:useMalloc --stackTrace:on --threads:on --out:/tmp/battlecode-seat-smoke src/battlecode.nim
+          nim c -d:release -d:useMalloc --stackTrace:on --out:/tmp/battlecode-player-seat-smoke src/battlecode_player.nim
           python3 tools/ci/smoke_missing_seat.py /tmp/battlecode-seat-smoke /tmp/battlecode-player-seat-smoke
 
       # The constants generator and the map converter are checked against the
