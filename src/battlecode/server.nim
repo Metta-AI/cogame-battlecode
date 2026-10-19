@@ -447,18 +447,24 @@ proc runServer*(runtimeConfig: RuntimeConfig, config: GameConfig) =
   initAppState()
   initLock(viewerLock)
   seatTokens = config.tokens
-  var router: Router
-  router.get("/healthz", handleHealth)
-  router.get("/health", handleHealth)
-  router.get("/global", handleGlobal)
-  router.get("/client/global", handleClient)
-  router.get("/client/player", handleClient)
-  router.get("/player", handlePlayerSocket)
-  let server = newServer(router, websocketHandler)
-  var thread: Thread[tuple[s: Server, host: string, port: int]]
-  proc serve(args: tuple[s: Server, host: string, port: int]) {.thread.} =
-    args.s.serve(Port(args.port), args.host)
-  createThread(thread, serve, (server, runtimeConfig.host, runtimeConfig.port))
+  var ready: Channel[Server]
+  ready.open()
+  var thread: Thread[tuple[ready: ptr Channel[Server], host: string, port: int]]
+  proc serve(args: tuple[ready: ptr Channel[Server], host: string, port: int]) {.thread.} =
+    # Mummy destroys its router in serve(); create it on that same thread.
+    var router: Router
+    router.get("/healthz", handleHealth)
+    router.get("/health", handleHealth)
+    router.get("/global", handleGlobal)
+    router.get("/client/global", handleClient)
+    router.get("/client/player", handleClient)
+    router.get("/player", handlePlayerSocket)
+    let server = newServer(router, websocketHandler)
+    args.ready[].send(server)
+    server.serve(Port(args.port), args.host)
+  createThread(thread, serve, (addr ready, runtimeConfig.host, runtimeConfig.port))
+  let server = ready.recv()
+  ready.close()
   echo "battlecode: listening on ", runtimeConfig.host, ":", runtimeConfig.port
   sleep(200)
 
@@ -475,4 +481,6 @@ proc runServer*(runtimeConfig: RuntimeConfig, config: GameConfig) =
                 except CatchableError: 20000
   sleep(max(0, graceMs))
   viewersRunning = false
+  joinThread(heartbeatThread)
   server.close()
+  joinThread(thread)

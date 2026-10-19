@@ -4,6 +4,8 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.request
 from pathlib import Path
 
 
@@ -28,6 +30,13 @@ def main():
                      "--results:" + str(results), "--save-replay:" + str(replay)],
                     env=environment, stdout=log, stderr=subprocess.STDOUT)
                 try:
+                    deadline = time.monotonic() + 10
+                    while "waiting for seats" not in (output / "game.log").read_text():
+                        assert server.poll() is None and time.monotonic() < deadline
+                        time.sleep(0.05)
+                    for _ in range(20):
+                        with urllib.request.urlopen("http://127.0.0.1:18971/healthz", timeout=2) as response:
+                            assert response.status == 200
                     for slot in range(seat_count):
                         processes.append(subprocess.Popen(
                             [player], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,
