@@ -235,10 +235,9 @@ proc websocketHandler(
 #  The episode
 # ---------------------------------------------------------------------------
 
-proc waitForSeats(config: GameConfig) =
-  ## Bounded: `connectTimeoutMs`, then play anyway. A seat that never
-  ## registers plays the scripted doctrine, and the server says so LOUDLY
-  ## rather than defaulting in silence (the grf-football scar).
+proc waitForSeats(config: GameConfig): bool =
+  ## Missing required seats terminate the episode instead of submitting a
+  ## match played by replacement scripted doctrines.
   let deadline = getMonoTime() + initDuration(
     milliseconds = max(1000, config.connectTimeoutMs))
   while getMonoTime() < deadline:
@@ -247,23 +246,27 @@ proc waitForSeats(config: GameConfig) =
       withLock app.lock:
         for slot in 0 .. 1:
           if not app.registered[slot]: ready = false
-    if ready: return
+    if ready: return true
     sleep(100)
   {.gcsafe.}:
     withLock app.lock:
       for slot in 0 .. 1:
         if not app.registered[slot]:
           echo "::warning::battlecode: seat ", slot,
-            " never registered within ", config.connectTimeoutMs,
-            " ms; it plays the scripted doctrine"
+            " never registered within ", config.connectTimeoutMs, " ms"
           let uri = getEnv("COGAME_PLAYER_FAILURE_URI")
           if uri.len > 0:
-            try:
-              writeCogameUri(uri, $(%*{"slot": slot,
-                "reason": "seat never registered"}), "application/json",
+            let declaration = $(%*{"failed_policy_index": slot,
+              "message": "seat never registered"})
+            if uri.startsWith("file://"):
+              writeCogameUri(uri & ".tmp", declaration, "application/json",
                 "COGAME_PLAYER_FAILURE_URI")
-            except CatchableError as error:
-              echo "battlecode: could not report the seat failure: ", error.msg
+              moveFile(uri[7 .. ^1] & ".tmp", uri[7 .. ^1])
+            else:
+              writeCogameUri(uri, declaration, "application/json",
+                "COGAME_PLAYER_FAILURE_URI")
+          return false
+  true
 
 proc parseConfig*(text: string): GameConfig =
   result = defaultGameConfig()
@@ -334,7 +337,7 @@ proc runEpisode*(runtimeConfig: RuntimeConfig, config: GameConfig) =
   var simSeconds = 0.0
 
   setPhase("waiting for seats")
-  waitForSeats(config)
+  if not waitForSeats(config): return
 
   var policy: array[2, SeatPolicy]
   {.gcsafe.}:
@@ -444,18 +447,24 @@ proc runServer*(runtimeConfig: RuntimeConfig, config: GameConfig) =
   initAppState()
   initLock(viewerLock)
   seatTokens = config.tokens
-  var router: Router
-  router.get("/healthz", handleHealth)
-  router.get("/health", handleHealth)
-  router.get("/global", handleGlobal)
-  router.get("/client/global", handleClient)
-  router.get("/client/player", handleClient)
-  router.get("/player", handlePlayerSocket)
-  let server = newServer(router, websocketHandler)
-  var thread: Thread[tuple[s: Server, host: string, port: int]]
-  proc serve(args: tuple[s: Server, host: string, port: int]) {.thread.} =
-    args.s.serve(Port(args.port), args.host)
-  createThread(thread, serve, (server, runtimeConfig.host, runtimeConfig.port))
+  var ready: Channel[Server]
+  ready.open()
+  var thread: Thread[tuple[ready: ptr Channel[Server], host: string, port: int]]
+  proc serve(args: tuple[ready: ptr Channel[Server], host: string, port: int]) {.thread.} =
+    # Mummy destroys its router in serve(); create it on that same thread.
+    var router: Router
+    router.get("/healthz", handleHealth)
+    router.get("/health", handleHealth)
+    router.get("/global", handleGlobal)
+    router.get("/client/global", handleClient)
+    router.get("/client/player", handleClient)
+    router.get("/player", handlePlayerSocket)
+    let server = newServer(router, websocketHandler)
+    args.ready[].send(server)
+    server.serve(Port(args.port), args.host)
+  createThread(thread, serve, (addr ready, runtimeConfig.host, runtimeConfig.port))
+  let server = ready.recv()
+  ready.close()
   echo "battlecode: listening on ", runtimeConfig.host, ":", runtimeConfig.port
   sleep(200)
 
@@ -472,4 +481,6 @@ proc runServer*(runtimeConfig: RuntimeConfig, config: GameConfig) =
                 except CatchableError: 20000
   sleep(max(0, graceMs))
   viewersRunning = false
+  joinThread(heartbeatThread)
   server.close()
+  joinThread(thread)

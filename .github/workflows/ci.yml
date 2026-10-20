@@ -275,6 +275,12 @@ jobs:
           cat nim.cfg
           echo "::endgroup::"
 
+      - name: Verify missing-seat failure and deployed-player compatibility
+        run: |
+          nim c -d:release -d:useMalloc --stackTrace:on --threads:on --out:/tmp/battlecode-seat-smoke src/battlecode.nim
+          nim c -d:release -d:useMalloc --stackTrace:on --out:/tmp/battlecode-player-seat-smoke src/battlecode_player.nim
+          python3 tools/ci/smoke_missing_seat.py /tmp/battlecode-seat-smoke /tmp/battlecode-player-seat-smoke
+
       # The constants generator and the map converter are checked against the
       # PINNED ENGINE SOURCES, not against a second reading of the spec:
       # tests/test_constants.nim and tests/test_maps.nim re-run them and
@@ -674,11 +680,11 @@ jobs:
             echo "::error::expected all 70 .map17 files to parse, got ${parsed}"
             exit 1; }
 
-      - name: The GameVersion does not collide with main's
+      - name: The GameVersion does not collide with the target branch's
         if: github.ref != 'refs/heads/main'
         run: |
           set -euo pipefail
-          git fetch --depth=1 origin main
+          git fetch --depth=1 origin "${GITHUB_BASE_REF:-main}"
           tools/ci/check_gameversion.sh FETCH_HEAD HEAD
 
       # The manifest is validated by the CLI THAT WILL PUBLISH IT, not only
